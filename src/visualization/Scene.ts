@@ -20,7 +20,7 @@ export class Scene {
   private wheelGestureTimeout: number | null = null;
   private readonly wheelGestureTimeoutMs = 300;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, preloadedImages?: Map<string, HTMLImageElement>) {
     // Scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x000000);
@@ -63,7 +63,7 @@ export class Scene {
     this.controls.target.set(0, 0, 0); // Always look at scene origin
 
     // Earth (always at center)
-    this.earth = new Earth();
+    this.earth = new Earth(preloadedImages);
     this.scene.add(this.earth.mesh);
 
     // Sun

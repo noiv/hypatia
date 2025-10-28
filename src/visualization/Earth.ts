@@ -6,7 +6,7 @@ export class Earth {
   private textures: THREE.Texture[] = [];
   private materials: THREE.ShaderMaterial[] = [];
 
-  constructor() {
+  constructor(preloadedImages?: Map<string, HTMLImageElement>) {
     // Create box geometry with segments (like old implementation)
     const geometry = new THREE.BoxGeometry(1, 1, 1, 16, 16, 16);
 
@@ -71,13 +71,36 @@ export class Earth {
     `;
 
     // Load textures for 6 cube faces
-    const loader = new THREE.TextureLoader();
     const faceNames = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
 
     // Create 6 shader materials (one per face) with blending
     this.materials = faceNames.map(face => {
-      const texA = loader.load(`/images/rtopo2/${face}.png`);
-      const texB = loader.load(`/images/basemaps/gmlc/${face}.png`);
+      let texA: THREE.Texture;
+      let texB: THREE.Texture;
+
+      if (preloadedImages) {
+        // Use preloaded images
+        const imgA = preloadedImages.get(`/images/basemaps/rtopo2/${face}.png`);
+        const imgB = preloadedImages.get(`/images/basemaps/gmlc/${face}.png`);
+
+        if (imgA && imgB) {
+          texA = new THREE.Texture(imgA);
+          texA.needsUpdate = true;
+          texB = new THREE.Texture(imgB);
+          texB.needsUpdate = true;
+        } else {
+          // Fallback to loader if preloaded images not found
+          console.warn(`Preloaded image not found for ${face}, using loader`);
+          const loader = new THREE.TextureLoader();
+          texA = loader.load(`/images/basemaps/rtopo2/${face}.png`);
+          texB = loader.load(`/images/basemaps/gmlc/${face}.png`);
+        }
+      } else {
+        // Fallback to loader if no preloaded images provided
+        const loader = new THREE.TextureLoader();
+        texA = loader.load(`/images/basemaps/rtopo2/${face}.png`);
+        texB = loader.load(`/images/basemaps/gmlc/${face}.png`);
+      }
 
       this.textures.push(texA, texB);
 

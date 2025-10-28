@@ -114,8 +114,8 @@ export const App: AppComponent = {
       return;
     }
 
-    // Initialize Three.js scene
-    state.scene = new Scene(canvas);
+    // Initialize Three.js scene with preloaded images
+    state.scene = new Scene(canvas, state.preloadedImages ?? undefined);
     state.scene.updateTime(state.currentTime);
 
     // Apply URL state if available, otherwise use user location
@@ -231,6 +231,20 @@ export const App: AppComponent = {
             if (state.scene) {
               state.scene.setBlend(newBlend);
             }
+          },
+          onReferenceClick: () => {
+            // Update URL with reference state
+            m.route.set('/', { dt: '2025-10-29:12:00', alt: '12742000', ll: '0.000,0.000' });
+
+            // Parse and apply the reference state
+            const urlState = parseUrlState();
+            if (urlState && state.scene) {
+              state.currentTime = urlState.time;
+              state.scene.updateTime(urlState.time);
+              state.scene.setCameraState(urlState.cameraPosition, urlState.cameraDistance);
+            }
+
+            m.redraw();
           }
         }),
 

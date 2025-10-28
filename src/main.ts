@@ -1,5 +1,8 @@
 import m from 'mithril';
 import { App } from './app';
 
-// Mount Mithril app
-m.mount(document.getElementById('app')!, App);
+// Set up Mithril routing with browser history mode (no hash)
+m.route.prefix = '';
+m.route(document.getElementById('app')!, '/', {
+  '/': App
+});
