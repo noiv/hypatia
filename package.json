@@ -1,0 +1,25 @@
+{
+  "name": "hypatia",
+  "version": "1.0.0",
+  "description": "Interactive weather visualization with minute-accurate interpolation",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host --port 8080",
+    "build": "tsc && vite build",
+    "preview": "vite preview --host --port 8080",
+    "download-data": "python3 scripts/download_dev_data.py"
+  },
+  "dependencies": {
+    "mithril": "^2.2.2",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@types/mithril": "^2.2.7",
+    "@types/three": "^0.170.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
