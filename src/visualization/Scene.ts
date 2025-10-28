@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Earth } from './Earth';
 import { Sun } from './Sun';
-import { cartesianToLatLon, formatLatLon } from '../utils/coordinates';
+import { cartesianToLatLon, formatLatLon, latLonToCartesian } from '../utils/coordinates';
 
 export class Scene {
   private scene: THREE.Scene;
@@ -290,6 +290,21 @@ export class Scene {
     );
 
     this.camera.lookAt(0, 0, 0);
+  }
+
+  /**
+   * Set camera to look at a specific lat/lon location
+   * @param lat - Latitude in degrees
+   * @param lon - Longitude in degrees
+   * @param distance - Camera distance from center (default 3)
+   */
+  setCameraToLocation(lat: number, lon: number, distance: number = 3) {
+    const position = latLonToCartesian(lat, lon);
+    this.setCameraState(
+      { x: position.x, y: position.y, z: position.z },
+      distance
+    );
+    console.log(`📍 Camera set to ${lat.toFixed(4)}°, ${lon.toFixed(4)}° at distance ${distance.toFixed(2)}`);
   }
 
   /**

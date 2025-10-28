@@ -4,6 +4,9 @@ node_modules/
 # Build output
 dist/
 
+# Auto-generated
+src/manifest.ts
+
 # Data files
 public/data/*.bin
 
