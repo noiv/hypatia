@@ -3,7 +3,9 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Earth } from './Earth';
 import { Sun } from './Sun';
 import { Temp2mLayer } from './Temp2mLayer';
+import { PratesfcLayer } from './PratesfcLayer';
 import { Temp2mService, TimeStep } from '../services/Temp2mService';
+import { PratesfcService, TimeStep as PratesfcTimeStep } from '../services/PratesfcService';
 import { cartesianToLatLon, formatLatLon, latLonToCartesian } from '../utils/coordinates';
 
 export class Scene {
@@ -15,6 +17,8 @@ export class Scene {
   private sun: Sun;
   private temp2mLayer: Temp2mLayer | null = null;
   private temp2mTimeSteps: TimeStep[] = [];
+  private pratesfcLayer: PratesfcLayer | null = null;
+  private pratesfcTimeSteps: PratesfcTimeStep[] = [];
   private currentTime: Date;
   private animationId: number | null = null;
   private onCameraChangeCallback: (() => void) | null = null;
@@ -254,7 +258,7 @@ export class Scene {
   };
 
   /**
-   * Update time - rotates sun around earth and updates temp2m layer
+   * Update time - rotates sun around earth and updates data layers
    */
   updateTime(time: Date) {
     this.currentTime = time;
@@ -269,6 +273,12 @@ export class Scene {
       const timeIndex = Temp2mService.timeToIndex(time, this.temp2mTimeSteps);
       this.temp2mLayer.setTimeIndex(timeIndex);
       this.temp2mLayer.setSunDirection(sunDir);
+    }
+
+    // Update pratesfc layer if loaded
+    if (this.pratesfcLayer && this.pratesfcTimeSteps.length > 0) {
+      const timeIndex = PratesfcService.timeToIndex(time, this.pratesfcTimeSteps);
+      this.pratesfcLayer.setTimeIndex(timeIndex);
     }
   }
 
@@ -306,6 +316,29 @@ export class Scene {
   }
 
   /**
+   * Load pratesfc (precipitation) layer from manifest data
+   */
+  async loadPratesfcLayer(onProgress?: (loaded: number, total: number) => void): Promise<void> {
+    // Generate time steps from manifest
+    this.pratesfcTimeSteps = PratesfcService.generateTimeSteps();
+
+    // Load data texture
+    const dataTexture = await PratesfcService.loadTexture(this.pratesfcTimeSteps, onProgress);
+
+    // Create layer
+    this.pratesfcLayer = new PratesfcLayer(dataTexture, this.pratesfcTimeSteps.length);
+
+    // Add to scene
+    this.scene.add(this.pratesfcLayer.mesh);
+
+    // Update with current time
+    const timeIndex = PratesfcService.timeToIndex(this.currentTime, this.pratesfcTimeSteps);
+    this.pratesfcLayer.setTimeIndex(timeIndex);
+
+    console.log('Pratesfc layer loaded with', this.pratesfcTimeSteps.length, 'time steps');
+  }
+
+  /**
    * Toggle temp2m layer visibility
    */
   toggleTemp2m(visible: boolean) {
@@ -319,6 +352,22 @@ export class Scene {
    */
   isTemp2mLoaded(): boolean {
     return this.temp2mLayer !== null;
+  }
+
+  /**
+   * Toggle pratesfc layer visibility
+   */
+  toggleRain(visible: boolean) {
+    if (this.pratesfcLayer) {
+      this.pratesfcLayer.setVisible(visible);
+    }
+  }
+
+  /**
+   * Check if pratesfc layer is loaded
+   */
+  isRainLoaded(): boolean {
+    return this.pratesfcLayer !== null;
   }
 
   /**

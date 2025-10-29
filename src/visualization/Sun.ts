@@ -36,8 +36,9 @@ export class Sun {
   updatePosition(time: Date) {
     const pos = calculateSunPosition(time);
 
-    // Position sun at large distance from Earth for proper day/night
-    const distance = 100;
+    // Position sun at very large distance to minimize perspective distortion
+    // Sun should appear circular, not warped by perspective
+    const distance = 500;
     this.mesh.position.set(
       pos.x * distance,
       pos.y * distance,

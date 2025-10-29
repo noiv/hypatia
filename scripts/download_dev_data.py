@@ -19,6 +19,8 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import argparse
 import sys
+import urllib.request
+import xml.etree.ElementTree as ET
 
 try:
     from ecmwf.opendata import Client
@@ -32,8 +34,89 @@ DATA_DIR = Path("public/data")
 PARAMS = {
     'temp2m': '2t',      # 2m temperature
     'wind10m_u': '10u',  # 10m U wind component
-    'wind10m_v': '10v'   # 10m V wind component
+    'wind10m_v': '10v',  # 10m V wind component
+    'pratesfc': 'tprate' # Total precipitation rate (kg/m²/s)
 }
+
+S3_BUCKET_URL = 'https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com'
+
+def discover_latest_ecmwf_run():
+    """
+    Discover the latest available ECMWF run by querying S3 bucket.
+    Also verifies that forecast data is available (not just analysis).
+    Returns: (date, cycle) tuple or None
+    """
+    today = datetime.utcnow()
+
+    # Try today first, then yesterday
+    for days_back in range(2):
+        check_date = today - timedelta(days=days_back)
+        date_str = check_date.strftime('%Y%m%d')
+
+        try:
+            cycles = get_available_cycles(date_str)
+
+            # Check cycles in reverse order (most recent first)
+            for cycle in reversed(cycles):
+                # Verify this run has forecast data available
+                if check_forecast_available(date_str, cycle):
+                    return (date_str, cycle)
+                else:
+                    print(f"  ⚠️  {date_str} {cycle} exists but forecasts not ready yet")
+        except Exception as e:
+            print(f"  ⚠️  Failed to check {date_str}: {e}")
+
+    return None
+
+def check_forecast_available(date_str: str, cycle: str) -> bool:
+    """
+    Check if a run has forecast data available (not just analysis).
+    Tests if +36h forecast exists for temp2m.
+    """
+    # Determine stream type
+    hour = int(cycle[:-1])
+    stream = 'scda' if hour in [6, 18] else 'oper'
+
+    # Try to check if +36h forecast exists
+    url = f"https://data.ecmwf.int/forecasts/{date_str}/{cycle}/ifs/0p25/{stream}/{date_str}{hour:02d}0000-36h-{stream}-fc.index"
+
+    try:
+        with urllib.request.urlopen(url, timeout=3) as response:
+            return response.status == 200
+    except:
+        return False
+
+def get_available_cycles(date_str: str):
+    """
+    Query S3 bucket to get available cycles for a date.
+    Returns: list of cycle strings like ['00z', '06z', '12z']
+    """
+    url = f"{S3_BUCKET_URL}/?prefix={date_str}/&delimiter=/&max-keys=10"
+
+    try:
+        with urllib.request.urlopen(url, timeout=5) as response:
+            xml_data = response.read().decode('utf-8')
+
+        # Parse XML to extract cycles from CommonPrefixes
+        # Format: <Prefix>20251029/00z/</Prefix>
+        root = ET.fromstring(xml_data)
+
+        cycles = []
+        # XML namespace handling
+        ns = {'s3': 'http://s3.amazonaws.com/doc/2006-03-01/'}
+
+        for prefix_elem in root.findall('.//s3:CommonPrefixes/s3:Prefix', ns):
+            prefix = prefix_elem.text
+            # Extract cycle from format: "20251029/00z/"
+            parts = prefix.strip('/').split('/')
+            if len(parts) == 2 and parts[1].endswith('z'):
+                cycles.append(parts[1])
+
+        # Sort cycles chronologically
+        return sorted(cycles)
+
+    except Exception as e:
+        raise Exception(f"S3 query failed: {e}")
 
 def download_timestep(date: str, cycle: str):
     """Download all parameters for one timestep using ecmwf-opendata client"""
@@ -183,11 +266,6 @@ def download_latest_forecasts(latest_run_date: str, latest_run_cycle: str, targe
     while downloaded < needed and forecast_hour <= 240:  # ECMWF forecasts up to 10 days
         forecast_time = run_time + timedelta(hours=forecast_hour)
 
-        # Skip if we already have this timestep
-        if forecast_time in existing_times:
-            forecast_hour += 6
-            continue
-
         # Only download on 6-hour boundaries (00z, 06z, 12z, 18z)
         if forecast_time.hour % 6 != 0:
             forecast_hour += 6
@@ -196,6 +274,20 @@ def download_latest_forecasts(latest_run_date: str, latest_run_cycle: str, targe
         # Format as date_cycle for filename
         forecast_date = forecast_time.strftime('%Y%m%d')
         forecast_cycle = f"{forecast_time.hour:02d}z"
+
+        # Check if ANY parameter is missing this timestep
+        skip_download = True
+        for param_name in PARAMS.keys():
+            param_dir = DATA_DIR / param_name
+            output_file = param_dir / f"{forecast_date}_{forecast_cycle}.bin"
+            if not output_file.exists():
+                skip_download = False
+                break
+
+        # Skip if all parameters already have this timestep
+        if skip_download and forecast_time in existing_times:
+            forecast_hour += 6
+            continue
 
         print(f"\n   Downloading +{forecast_hour}h → {forecast_date} {forecast_cycle}")
 
@@ -327,22 +419,15 @@ Strategy:
     print(f"\n✅ Downloaded {success}/{total_analysis} analysis timesteps")
 
     # Determine latest available run for forecast data
-    # Use the most recent successful download as the latest run
-    latest_run = None
-    for date in reversed(dates):
-        for cycle in reversed(cycles):
-            # Check if this run's files exist
-            temp2m_dir = DATA_DIR / 'temp2m'
-            test_file = temp2m_dir / f"{date}_{cycle}.bin"
-            if test_file.exists():
-                latest_run = (date, cycle)
-                break
-        if latest_run:
-            break
+    # Query S3 bucket to find which runs actually exist on ECMWF
+    print("\n🔍 Discovering latest ECMWF run...")
+    latest_run = discover_latest_ecmwf_run()
 
     if not latest_run:
-        print("❌ No successful downloads, cannot extend with forecasts")
+        print("❌ Could not discover latest ECMWF run, cannot extend with forecasts")
         return 1
+
+    print(f"✅ Latest run found: {latest_run[0]} {latest_run[1]}")
 
     # Download forecast data to complete the target
     download_latest_forecasts(latest_run[0], latest_run[1], target_timesteps)

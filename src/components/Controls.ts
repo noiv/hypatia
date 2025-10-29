@@ -10,6 +10,8 @@ export interface ControlsAttrs {
   showTemp2m: boolean;
   onTemp2mToggle: () => void;
   temp2mLoading?: boolean;
+  showRain: boolean;
+  onRainToggle: () => void;
 }
 
 export const Controls: m.Component<ControlsAttrs> = {
@@ -22,7 +24,9 @@ export const Controls: m.Component<ControlsAttrs> = {
       onReferenceClick,
       showTemp2m,
       onTemp2mToggle,
-      temp2mLoading
+      temp2mLoading,
+      showRain,
+      onRainToggle
     } = vnode.attrs;
 
     return m('div.controls', [
@@ -42,6 +46,12 @@ export const Controls: m.Component<ControlsAttrs> = {
         disabled: temp2mLoading,
         class: showTemp2m ? 'active' : ''
       }, temp2mLoading ? '⏳ Loading...' : (showTemp2m ? '🌡️ Temp ON' : '🌡️ Temp OFF')),
+
+      // Rain toggle button (below temp)
+      m('button.btn', {
+        onclick: onRainToggle,
+        class: showRain ? 'active' : ''
+      }, showRain ? '🌧️ Rain ON' : '🌧️ Rain OFF'),
 
       // Blend slider
       m('div.blend-control', [

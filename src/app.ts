@@ -27,6 +27,8 @@ interface AppState {
   preloadedImages: Map<string, HTMLImageElement> | null;
   showTemp2m: boolean;
   temp2mLoading: boolean;
+  showRain: boolean;
+  rainLoading: boolean;
 }
 
 interface AppComponent extends m.Component {
@@ -52,7 +54,9 @@ export const App: AppComponent = {
       bootstrapError: null,
       preloadedImages: null,
       showTemp2m: sanitizedState.layers?.includes('temp2m') ?? false,
-      temp2mLoading: false
+      temp2mLoading: false,
+      showRain: sanitizedState.layers?.includes('rain') ?? false,
+      rainLoading: false
     };
 
     // Setup keyboard controls
@@ -229,12 +233,21 @@ export const App: AppComponent = {
       if (urlState.layers && urlState.layers.includes('temp2m')) {
         state.showTemp2m = true;
       }
+      if (urlState.layers && urlState.layers.includes('rain')) {
+        state.showRain = true;
+      }
 
       state.scene.setCameraState(urlState.cameraPosition, urlState.cameraDistance);
 
       // Load layers from URL (async, but state already set)
-      if (urlState.layers && urlState.layers.includes('temp2m')) {
-        this.loadTemp2mLayer();
+      // Each layer loads independently
+      if (urlState.layers) {
+        if (urlState.layers.includes('temp2m')) {
+          this.loadTemp2mLayer();
+        }
+        if (urlState.layers.includes('rain')) {
+          this.loadPratesfcLayer();
+        }
       }
     } else if (state.userLocation) {
       state.scene.setCameraToLocation(
@@ -271,19 +284,62 @@ export const App: AppComponent = {
     const state = this.state;
     if (!state.scene) return;
 
+    // Check if already loaded in Scene
+    if (state.scene.isTemp2mLoaded()) {
+      console.log('✓ Temp2m layer already loaded');
+      return;
+    }
+
+    // Prevent double-loading (race condition)
+    if (state.temp2mLoading) {
+      console.log('⏳ Temp2m layer already loading, skipping...');
+      return;
+    }
+
     state.temp2mLoading = true;
     m.redraw();
 
     try {
       console.log('📊 Loading temp2m layer...');
       await state.scene.loadTemp2mLayer(1);
-      state.showTemp2m = true;
       console.log('✅ Temp2m layer loaded');
     } catch (error) {
       console.error('❌ Failed to load temp2m layer:', error);
       alert('Failed to load temperature data. Please check the console for details.');
     } finally {
       state.temp2mLoading = false;
+      m.redraw();
+    }
+  },
+
+  async loadPratesfcLayer() {
+    const state = this.state;
+    if (!state.scene) return;
+
+    // Check if already loaded in Scene
+    if (state.scene.isRainLoaded()) {
+      console.log('✓ Pratesfc layer already loaded');
+      return;
+    }
+
+    // Prevent double-loading (race condition)
+    if (state.rainLoading) {
+      console.log('⏳ Pratesfc layer already loading, skipping...');
+      return;
+    }
+
+    state.rainLoading = true;
+    m.redraw();
+
+    try {
+      console.log('🌧️ Loading pratesfc layer...');
+      await state.scene.loadPratesfcLayer();
+      console.log('✅ Pratesfc layer loaded');
+    } catch (error) {
+      console.error('❌ Failed to load pratesfc layer:', error);
+      // Don't alert, just log - precipitation is optional
+    } finally {
+      state.rainLoading = false;
       m.redraw();
     }
   },
@@ -295,6 +351,9 @@ export const App: AppComponent = {
     const layers: string[] = [];
     if (state.showTemp2m) {
       layers.push('temp2m');
+    }
+    if (state.showRain) {
+      layers.push('rain');
     }
 
     debouncedUpdateUrlState({
@@ -412,15 +471,35 @@ export const App: AppComponent = {
               // Load temp2m layer if not already loaded
               if (!state.scene.isTemp2mLoaded()) {
                 await this.loadTemp2mLayer();
-              } else {
-                // Already loaded, just toggle visibility
-                state.scene.toggleTemp2m(true);
-                state.showTemp2m = true;
               }
+              // Toggle visibility and update state
+              state.scene.toggleTemp2m(true);
+              state.showTemp2m = true;
             } else {
               // Turning off
               state.scene.toggleTemp2m(false);
               state.showTemp2m = false;
+            }
+
+            // Update URL with new layer state
+            this.updateUrl();
+            m.redraw();
+          },
+          showRain: state.showRain,
+          onRainToggle: async () => {
+            if (!state.scene) return;
+
+            // Toggle visibility
+            if (!state.showRain) {
+              // Check if pratesfc layer is loaded, load if not
+              if (!state.scene.isRainLoaded()) {
+                await this.loadPratesfcLayer();
+              }
+              state.scene.toggleRain(true);
+              state.showRain = true;
+            } else {
+              state.scene.toggleRain(false);
+              state.showRain = false;
             }
 
             // Update URL with new layer state
