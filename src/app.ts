@@ -30,6 +30,7 @@ interface AppState {
   temp2mLoading: boolean;
   showRain: boolean;
   rainLoading: boolean;
+  showWind: boolean;
 }
 
 interface AppComponent extends m.Component {
@@ -57,7 +58,8 @@ export const App: AppComponent = {
       showTemp2m: sanitizedState.layers?.includes('temp2m') ?? false,
       temp2mLoading: false,
       showRain: sanitizedState.layers?.includes('rain') ?? false,
-      rainLoading: false
+      rainLoading: false,
+      showWind: sanitizedState.layers?.includes('wind') ?? false
     };
 
     // Setup keyboard controls
@@ -240,6 +242,9 @@ export const App: AppComponent = {
       if (urlState.layers && urlState.layers.includes('rain')) {
         state.showRain = true;
       }
+      if (urlState.layers && urlState.layers.includes('wind')) {
+        state.showWind = true;
+      }
 
       state.scene.setCameraState(urlState.cameraPosition, urlState.cameraDistance);
 
@@ -251,6 +256,9 @@ export const App: AppComponent = {
         }
         if (urlState.layers.includes('rain')) {
           this.loadPratesfcLayer();
+        }
+        if (urlState.layers.includes('wind')) {
+          this.loadWindLayer();
         }
       }
     } else if (state.userLocation) {
@@ -348,6 +356,28 @@ export const App: AppComponent = {
     }
   },
 
+  async loadWindLayer() {
+    const state = this.state;
+    if (!state.scene) return;
+
+    // Check if already loaded in Scene
+    if (state.scene.isWindLoaded()) {
+      console.log('✓ Wind layer already loaded');
+      return;
+    }
+
+    try {
+      console.log('🌬️  Loading wind layer...');
+      await state.scene.loadWindLayer();
+      console.log('✅ Wind layer loaded');
+    } catch (error) {
+      console.error('❌ Failed to load wind layer:', error);
+      alert('Failed to load wind layer. Please check the console for details.');
+    } finally {
+      m.redraw();
+    }
+  },
+
   updateUrl() {
     const state = this.state;
     if (!state.scene) return;
@@ -358,6 +388,9 @@ export const App: AppComponent = {
     }
     if (state.showRain) {
       layers.push('rain');
+    }
+    if (state.showWind) {
+      layers.push('wind');
     }
 
     debouncedUpdateUrlState({
@@ -504,6 +537,27 @@ export const App: AppComponent = {
             } else {
               state.scene.toggleRain(false);
               state.showRain = false;
+            }
+
+            // Update URL with new layer state
+            this.updateUrl();
+            m.redraw();
+          },
+          showWind: state.showWind,
+          onWindToggle: async () => {
+            if (!state.scene) return;
+
+            // Toggle visibility
+            if (!state.showWind) {
+              // Check if wind layer is loaded, load if not
+              if (!state.scene.isWindLoaded()) {
+                await this.loadWindLayer();
+              }
+              state.scene.toggleWind(true);
+              state.showWind = true;
+            } else {
+              state.scene.toggleWind(false);
+              state.showWind = false;
             }
 
             // Update URL with new layer state

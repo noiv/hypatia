@@ -5,6 +5,7 @@ import { Sun } from './Sun';
 import { AtmosphereLayer } from './AtmosphereLayer';
 import { Temp2mLayer } from './Temp2mLayer';
 import { PratesfcLayer } from './PratesfcLayer';
+import { WindLayer } from './WindLayer';
 import { Temp2mService, TimeStep } from '../services/Temp2mService';
 import { PratesfcService, TimeStep as PratesfcTimeStep } from '../services/PratesfcService';
 import { cartesianToLatLon, formatLatLon, latLonToCartesian } from '../utils/coordinates';
@@ -22,6 +23,7 @@ export class Scene {
   private temp2mTimeSteps: TimeStep[] = [];
   private pratesfcLayer: PratesfcLayer | null = null;
   private pratesfcTimeSteps: PratesfcTimeStep[] = [];
+  private windLayer: WindLayer | null = null;
   private currentTime: Date;
   private animationId: number | null = null;
   private onCameraChangeCallback: (() => void) | null = null;
@@ -384,6 +386,36 @@ export class Scene {
    */
   isRainLoaded(): boolean {
     return this.pratesfcLayer !== null;
+  }
+
+  /**
+   * Load wind layer (Stage 1: seed points only)
+   */
+  async loadWindLayer(): Promise<void> {
+    if (this.windLayer) {
+      console.log('Wind layer already loaded');
+      return;
+    }
+
+    this.windLayer = new WindLayer(1000);
+    this.scene.add(this.windLayer.getGroup());
+    console.log('🌬️  Wind layer loaded with', this.windLayer.getNumSeeds(), 'seed points');
+  }
+
+  /**
+   * Toggle wind layer visibility
+   */
+  toggleWind(visible: boolean) {
+    if (this.windLayer) {
+      this.windLayer.setVisible(visible);
+    }
+  }
+
+  /**
+   * Check if wind layer is loaded
+   */
+  isWindLoaded(): boolean {
+    return this.windLayer !== null;
   }
 
   /**
