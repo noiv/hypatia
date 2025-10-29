@@ -9,6 +9,10 @@ export interface UserOptions {
     enabled: boolean;
     comment?: string;
   };
+  atmosphere: {
+    enabled: boolean;
+    comment?: string;
+  };
 }
 
 let cachedOptions: UserOptions | null = null;
@@ -36,6 +40,9 @@ export async function getUserOptions(): Promise<UserOptions> {
     // Return defaults
     cachedOptions = {
       timeServer: {
+        enabled: false
+      },
+      atmosphere: {
         enabled: false
       }
     };

@@ -2,11 +2,13 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Earth } from './Earth';
 import { Sun } from './Sun';
+import { AtmosphereLayer } from './AtmosphereLayer';
 import { Temp2mLayer } from './Temp2mLayer';
 import { PratesfcLayer } from './PratesfcLayer';
 import { Temp2mService, TimeStep } from '../services/Temp2mService';
 import { PratesfcService, TimeStep as PratesfcTimeStep } from '../services/PratesfcService';
 import { cartesianToLatLon, formatLatLon, latLonToCartesian } from '../utils/coordinates';
+import { UserOptions } from '../services/UserOptionsService';
 
 export class Scene {
   private scene: THREE.Scene;
@@ -15,6 +17,7 @@ export class Scene {
   private controls: OrbitControls;
   private earth: Earth;
   private sun: Sun;
+  private atmosphereLayer: AtmosphereLayer | null = null;
   private temp2mLayer: Temp2mLayer | null = null;
   private temp2mTimeSteps: TimeStep[] = [];
   private pratesfcLayer: PratesfcLayer | null = null;
@@ -29,7 +32,7 @@ export class Scene {
   private wheelGestureTimeout: number | null = null;
   private readonly wheelGestureTimeoutMs = 300;
 
-  constructor(canvas: HTMLCanvasElement, preloadedImages?: Map<string, HTMLImageElement>) {
+  constructor(canvas: HTMLCanvasElement, preloadedImages?: Map<string, HTMLImageElement>, userOptions?: UserOptions) {
     // Scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x161616);
@@ -80,6 +83,13 @@ export class Scene {
     this.scene.add(this.sun.mesh);
     this.scene.add(this.sun.getLight());
     this.scene.add(this.sun.getLight().target);
+
+    // Atmosphere (conditional based on user options)
+    if (userOptions?.atmosphere.enabled) {
+      this.atmosphereLayer = new AtmosphereLayer();
+      this.scene.add(this.atmosphereLayer.mesh);
+      console.log('Atmosphere layer created');
+    }
 
     // Initialize sun direction for Earth's shader
     const sunDir = this.sun.mesh.position.clone().normalize();
@@ -252,6 +262,12 @@ export class Scene {
 
     // Update controls (damping)
     this.controls.update();
+
+    // Update atmosphere layer uniforms (if enabled)
+    if (this.atmosphereLayer) {
+      this.atmosphereLayer.setCameraPosition(this.camera.position);
+      this.atmosphereLayer.setSunPosition(this.sun.mesh.position);
+    }
 
     // Render
     this.renderer.render(this.scene, this.camera);

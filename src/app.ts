@@ -10,6 +10,7 @@ import { getCurrentTime } from './services/TimeService';
 import { getLatestRun, type ECMWFRun } from './services/ECMWFService';
 import { preloadImages, getTotalSize, type LoadProgress } from './services/ResourceManager';
 import { getUserLocation, type UserLocation } from './services/GeolocationService';
+import { getUserOptions } from './services/UserOptionsService';
 import { getDatasetRange } from './manifest';
 
 type BootstrapStatus = 'loading' | 'ready' | 'error';
@@ -213,7 +214,7 @@ export const App: AppComponent = {
     }
   },
 
-  initializeScene(dom: Element) {
+  async initializeScene(dom: Element) {
     const state = this.state;
     const canvas = dom.querySelector('.scene-canvas') as HTMLCanvasElement;
 
@@ -222,8 +223,11 @@ export const App: AppComponent = {
       return;
     }
 
-    // Initialize Three.js scene with preloaded images
-    state.scene = new Scene(canvas, state.preloadedImages ?? undefined);
+    // Load user options
+    const userOptions = await getUserOptions();
+
+    // Initialize Three.js scene with preloaded images and user options
+    state.scene = new Scene(canvas, state.preloadedImages ?? undefined, userOptions);
     state.scene.updateTime(state.currentTime);
 
     // Apply URL state if available, otherwise use user location

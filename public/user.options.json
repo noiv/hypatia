@@ -2,5 +2,9 @@
   "timeServer": {
     "enabled": false,
     "comment": "When enabled, fetches accurate time from timeapi.io (adds ~3s to startup). When disabled, uses browser's local time."
+  },
+  "atmosphere": {
+    "enabled": false,
+    "comment": "Atmospheric rim lighting effect around Earth. Toggle to enable/disable the blue atmospheric glow."
   }
 }
