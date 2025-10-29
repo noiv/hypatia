@@ -28,7 +28,7 @@ export class Scene {
   constructor(canvas: HTMLCanvasElement, preloadedImages?: Map<string, HTMLImageElement>) {
     // Scene
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x000000);
+    this.scene.background = new THREE.Color(0x161616);
 
     // Get size from parent container or window
     const container = canvas.parentElement;
@@ -102,7 +102,7 @@ export class Scene {
     // Start animation loop
     this.animate();
 
-    console.log('Scene initialized');
+    console.log(`✅ Scene initialized (${this.scene.children.length} objects)`);
   }
 
   private addAxesHelpers() {
@@ -224,9 +224,14 @@ export class Scene {
       e.preventDefault();
 
       if (this.onTimeScrollCallback) {
-        // Determine time delta (hours)
-        const hoursDelta = e.deltaX > 0 ? -1 : 1;
-        this.onTimeScrollCallback(hoursDelta);
+        // Determine time delta (hours) - 1 minute per 1 pixel of scroll
+        const minutesPerPixel = 1;
+        const hoursDelta = -(e.deltaX * minutesPerPixel) / 60;
+
+        // Only trigger if movement is significant enough (> 0.5 minutes)
+        if (Math.abs(hoursDelta) > (0.5 / 60)) {
+          this.onTimeScrollCallback(hoursDelta);
+        }
       }
     }
   };
@@ -275,20 +280,17 @@ export class Scene {
   }
 
   /**
-   * Load temp2m layer with specified delta (days before/after today)
+   * Load temp2m layer from manifest data
    */
   async loadTemp2mLayer(delta: number = 1, onProgress?: (loaded: number, total: number) => void): Promise<void> {
-    // TEMPORARY: Load land-sea mask for testing
-    const useLSM = true;
-
-    // Generate time steps
-    this.temp2mTimeSteps = Temp2mService.generateTimeSteps(delta, useLSM);
+    // Generate time steps from manifest
+    this.temp2mTimeSteps = Temp2mService.generateTimeSteps();
 
     // Load data texture
     const dataTexture = await Temp2mService.loadTexture(this.temp2mTimeSteps, onProgress);
 
     // Create layer
-    this.temp2mLayer = new Temp2mLayer(dataTexture, this.temp2mTimeSteps.length, useLSM);
+    this.temp2mLayer = new Temp2mLayer(dataTexture, this.temp2mTimeSteps.length);
 
     // Add to scene
     this.scene.add(this.temp2mLayer.mesh);
@@ -300,7 +302,7 @@ export class Scene {
     const sunDir = this.sun.mesh.position.clone().normalize();
     this.temp2mLayer.setSunDirection(sunDir);
 
-    console.log(useLSM ? 'LSM layer loaded for testing' : 'Temp2m layer loaded with', this.temp2mTimeSteps.length, 'time steps');
+    console.log('Temp2m layer loaded with', this.temp2mTimeSteps.length, 'time steps');
   }
 
   /**

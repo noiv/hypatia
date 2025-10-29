@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DATA_MANIFEST } from '../manifest';
 
 export interface TimeStep {
   date: string;    // YYYYMMDD
@@ -13,39 +14,46 @@ export class Temp2mService {
   private static readonly EXPECTED_SIZE = Temp2mService.WIDTH * Temp2mService.HEIGHT * Temp2mService.BYTES_PER_FLOAT;
 
   /**
-   * Generate list of time steps for the given delta
+   * Generate list of time steps from manifest data
    */
-  static generateTimeSteps(delta: number = 1, useLSM: boolean = false): TimeStep[] {
+  static generateTimeSteps(): TimeStep[] {
     const steps: TimeStep[] = [];
-    const cycles = ['00z', '06z', '12z', '18z'];
+    const temp2mData = DATA_MANIFEST['temp2m'];
 
-    // TEMPORARY: Load land-sea mask for testing
-    if (useLSM) {
-      steps.push({
-        date: '20251029',
-        cycle: '00z',
-        filePath: `/data/land_sea_mask/20251029_00z.bin`
-      });
+    if (!temp2mData) {
+      console.warn('No temp2m data found in manifest');
       return steps;
     }
 
-    // Calculate date range
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Parse start and end times from manifest
+    const startTime = new Date(temp2mData.startTime);
+    const endTime = new Date(temp2mData.endTime);
 
-    for (let offset = -delta; offset <= delta; offset++) {
-      const date = new Date(today);
-      date.setDate(date.getDate() + offset);
-      const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
+    console.log(`Generating timesteps from ${startTime.toISOString()} to ${endTime.toISOString()}`);
 
-      for (const cycle of cycles) {
-        steps.push({
-          date: dateStr,
-          cycle,
-          filePath: `/data/temp2m/${dateStr}_${cycle}.bin`
-        });
-      }
+    // Generate timesteps at 6-hour intervals
+    const current = new Date(startTime);
+    while (current <= endTime) {
+      const year = current.getUTCFullYear();
+      const month = String(current.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(current.getUTCDate()).padStart(2, '0');
+      const hour = String(current.getUTCHours()).padStart(2, '0');
+
+      const dateStr = `${year}${month}${day}`;
+      const cycle = `${hour}z`;
+      const filePath = `/data/temp2m/${dateStr}_${cycle}.bin`;
+
+      steps.push({
+        date: dateStr,
+        cycle,
+        filePath
+      });
+
+      // Increment by 6 hours
+      current.setUTCHours(current.getUTCHours() + 6);
     }
+
+    console.log(`Generated ${steps.length} timesteps (manifest says ${temp2mData.count} available)`);
 
     return steps;
   }
@@ -139,7 +147,7 @@ export class Temp2mService {
   }
 
   /**
-   * Parse time step into Date object
+   * Parse time step into Date object (in UTC)
    */
   private static parseTimeStep(step: TimeStep): Date {
     const year = parseInt(step.date.slice(0, 4));
@@ -147,6 +155,6 @@ export class Temp2mService {
     const day = parseInt(step.date.slice(6, 8));
     const hour = parseInt(step.cycle.slice(0, 2));
 
-    return new Date(year, month, day, hour, 0, 0, 0);
+    return new Date(Date.UTC(year, month, day, hour, 0, 0, 0));
   }
 }

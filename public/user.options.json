@@ -1,0 +1,6 @@
+{
+  "timeServer": {
+    "enabled": false,
+    "comment": "When enabled, fetches accurate time from timeapi.io (adds ~3s to startup). When disabled, uses browser's local time."
+  }
+}

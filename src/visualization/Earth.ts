@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { EARTH_RADIUS_UNITS } from '../utils/constants';
+import { EARTH_CONFIG } from '../config/earth.config';
 
 export class Earth {
   public mesh: THREE.Mesh;
@@ -8,7 +9,8 @@ export class Earth {
 
   constructor(preloadedImages?: Map<string, HTMLImageElement>) {
     // Create box geometry with segments (like old implementation)
-    const geometry = new THREE.BoxGeometry(1, 1, 1, 16, 16, 16);
+    const segments = EARTH_CONFIG.geometry.segments;
+    const geometry = new THREE.BoxGeometry(1, 1, 1, segments, segments, segments);
 
     // Normalize vertices to create sphere from cube (like old implementation)
     const positionAttr = geometry.attributes.position;
@@ -43,6 +45,8 @@ export class Earth {
       uniform sampler2D texA;
       uniform sampler2D texB;
       uniform vec3 sunDirection;
+      uniform float dayNightSharpness;
+      uniform float dayNightFactor;
 
       varying vec2 vUv;
       varying vec3 vPosition;
@@ -58,13 +62,15 @@ export class Earth {
         // Since Earth is centered at origin, normal = normalize(position)
         vec3 normal = normalize(vPosition);
         vec3 lightDir = normalize(sunDirection);
-        float diffuse = max(dot(normal, lightDir), 0.0);
+        float dotNL = dot(normal, lightDir);
 
-        // Add ambient light so night side isn't completely black
-        float ambient = 0.15;
-        float lightIntensity = ambient + diffuse * (1.0 - ambient);
+        // Sharpen day/night transition (from config)
+        float dnZone = clamp(dotNL * dayNightSharpness, -1.0, 1.0);
 
-        vec3 color = baseColor * lightIntensity;
+        // Dim night side (from config)
+        float lightMix = 0.5 + dnZone * dayNightFactor;
+
+        vec3 color = baseColor * lightMix;
 
         gl_FragColor = vec4(color, 1.0);
       }
@@ -72,6 +78,8 @@ export class Earth {
 
     // Load textures for 6 cube faces
     const faceNames = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
+    const basemapA = EARTH_CONFIG.basemaps.sets[0];
+    const basemapB = EARTH_CONFIG.basemaps.sets[1];
 
     // Create 6 shader materials (one per face) with blending
     this.materials = faceNames.map(face => {
@@ -80,8 +88,8 @@ export class Earth {
 
       if (preloadedImages) {
         // Use preloaded images
-        const imgA = preloadedImages.get(`/images/basemaps/rtopo2/${face}.png`);
-        const imgB = preloadedImages.get(`/images/basemaps/gmlc/${face}.png`);
+        const imgA = preloadedImages.get(`${basemapA.path}/${face}.png`);
+        const imgB = preloadedImages.get(`${basemapB.path}/${face}.png`);
 
         if (imgA && imgB) {
           texA = new THREE.Texture(imgA);
@@ -92,14 +100,14 @@ export class Earth {
           // Fallback to loader if preloaded images not found
           console.warn(`Preloaded image not found for ${face}, using loader`);
           const loader = new THREE.TextureLoader();
-          texA = loader.load(`/images/basemaps/rtopo2/${face}.png`);
-          texB = loader.load(`/images/basemaps/gmlc/${face}.png`);
+          texA = loader.load(`${basemapA.path}/${face}.png`);
+          texB = loader.load(`${basemapB.path}/${face}.png`);
         }
       } else {
         // Fallback to loader if no preloaded images provided
         const loader = new THREE.TextureLoader();
-        texA = loader.load(`/images/basemaps/rtopo2/${face}.png`);
-        texB = loader.load(`/images/basemaps/gmlc/${face}.png`);
+        texA = loader.load(`${basemapA.path}/${face}.png`);
+        texB = loader.load(`${basemapB.path}/${face}.png`);
       }
 
       this.textures.push(texA, texB);
@@ -109,7 +117,9 @@ export class Earth {
           blend: { value: 0.0 },
           texA: { value: texA },
           texB: { value: texB },
-          sunDirection: { value: new THREE.Vector3(1, 0, 0) }
+          sunDirection: { value: new THREE.Vector3(1, 0, 0) },
+          dayNightSharpness: { value: EARTH_CONFIG.visual.dayNightSharpness },
+          dayNightFactor: { value: EARTH_CONFIG.visual.dayNightFactor }
         },
         vertexShader,
         fragmentShader,
@@ -119,8 +129,6 @@ export class Earth {
 
     this.mesh = new THREE.Mesh(geometry, this.materials);
     this.mesh.name = 'Earth';
-
-    console.log('Earth created with ShaderMaterial blending');
   }
 
   /**

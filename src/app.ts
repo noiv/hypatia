@@ -4,10 +4,13 @@ import { TimeSlider } from './components/TimeSlider';
 import { Controls } from './components/Controls';
 import { BootstrapModal } from './components/BootstrapModal';
 import { parseUrlState, debouncedUpdateUrlState } from './utils/urlState';
+import { sanitizeUrl } from './utils/sanitizeUrl';
+import { clampTimeToDataRange } from './utils/timeUtils';
 import { getCurrentTime } from './services/TimeService';
 import { getLatestRun, type ECMWFRun } from './services/ECMWFService';
-import { preloadImages, type LoadProgress } from './services/ResourceManager';
+import { preloadImages, getTotalSize, type LoadProgress } from './services/ResourceManager';
 import { getUserLocation, type UserLocation } from './services/GeolocationService';
+import { getDatasetRange } from './manifest';
 
 type BootstrapStatus = 'loading' | 'ready' | 'error';
 
@@ -28,16 +31,17 @@ interface AppState {
 
 interface AppComponent extends m.Component {
   state: AppState;
+  _keydownHandler?: (e: KeyboardEvent) => void;
 }
 
 export const App: AppComponent = {
   oninit() {
-    // Try to parse URL state
-    const urlState = parseUrlState();
+    // Sanitize URL and get corrected state
+    const sanitizedState = sanitizeUrl();
 
     // Initialize state synchronously to avoid undefined access in view
     this.state = {
-      currentTime: urlState?.time ?? new Date(),
+      currentTime: sanitizedState.time,
       isFullscreen: false,
       blend: 0.0,
       scene: null,
@@ -47,9 +51,12 @@ export const App: AppComponent = {
       bootstrapProgress: null,
       bootstrapError: null,
       preloadedImages: null,
-      showTemp2m: false,
+      showTemp2m: sanitizedState.layers?.includes('temp2m') ?? false,
       temp2mLoading: false
     };
+
+    // Setup keyboard controls
+    this.setupKeyboardControls();
 
     // Bootstrap asynchronously
     this.runBootstrap();
@@ -59,20 +66,71 @@ export const App: AppComponent = {
     try {
       const urlState = parseUrlState();
 
+      // Define bootstrap steps with progress ranges
+      const STEPS = {
+        INIT: { start: 0, end: 0, label: 'Starting...' },
+        TIME: { start: 0, end: 10, label: 'Fetching server time...' },
+        FORECAST: { start: 10, end: 20, label: 'Checking latest forecast...' },
+        IMAGES: { start: 20, end: 100, label: 'Loading resources...' }
+      };
+
+      // Helper to update progress
+      const updateProgress = (step: typeof STEPS[keyof typeof STEPS], percentage?: number) => {
+        const percent = percentage ?? step.end;
+        this.state.bootstrapProgress = {
+          loaded: 0,
+          total: 100,
+          percentage: percent,
+          currentFile: step.label
+        };
+        m.redraw();
+      };
+
+      // Initialize progress bar
+      updateProgress(STEPS.INIT, STEPS.INIT.start);
+
       // Bootstrap step 1: Get accurate time from time server
+      updateProgress(STEPS.TIME, STEPS.TIME.start);
       const serverTime = await getCurrentTime();
+      updateProgress(STEPS.TIME, STEPS.TIME.end);
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Bootstrap step 2: Check ECMWF for latest IFS model run
+      updateProgress(STEPS.FORECAST, STEPS.FORECAST.start);
       const latestRun = await getLatestRun(serverTime);
+      updateProgress(STEPS.FORECAST, STEPS.FORECAST.end);
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Bootstrap step 3: Preload critical images (skip geolocation to avoid permission dialog)
+      // Bootstrap step 3: Preload critical images
+      const totalSize = getTotalSize('critical');
       const images = await preloadImages('critical', (progress) => {
-        this.state.bootstrapProgress = progress;
+        // Map image loading progress (0-100%) to allocated range (20-100%)
+        const mappedPercentage = STEPS.IMAGES.start +
+          (progress.percentage / 100) * (STEPS.IMAGES.end - STEPS.IMAGES.start);
+
+        this.state.bootstrapProgress = {
+          loaded: progress.loaded,
+          total: totalSize,
+          percentage: mappedPercentage,
+          currentFile: progress.currentFile
+        };
         m.redraw();
       });
 
       // Update state with bootstrap results
-      this.state.currentTime = urlState?.time ?? serverTime;
+      const desiredTime = urlState?.time ?? serverTime;
+
+      // Clamp time to available data range
+      const dataRange = getDatasetRange('temp2m');
+      if (dataRange) {
+        this.state.currentTime = new Date(Math.max(
+          dataRange.startTime.getTime(),
+          Math.min(dataRange.endTime.getTime(), desiredTime.getTime())
+        ));
+      } else {
+        this.state.currentTime = desiredTime;
+      }
+
       this.state.latestRun = latestRun;
       this.state.userLocation = null; // Skip geolocation
       this.state.preloadedImages = images;
@@ -88,6 +146,51 @@ export const App: AppComponent = {
       this.state.bootstrapError = error instanceof Error ? error.message : 'Unknown error';
       m.redraw();
     }
+  },
+
+  setupKeyboardControls() {
+    const handleKeydown = (e: KeyboardEvent) => {
+      const state = this.state;
+
+      // Only handle arrow keys
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') {
+        return;
+      }
+
+      // Ignore if user is typing in an input field
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      // Prevent default scrolling behavior
+      e.preventDefault();
+
+      // Calculate new time (±1 hour)
+      const hoursDelta = e.key === 'ArrowLeft' ? -1 : 1;
+      const newTime = new Date(state.currentTime.getTime() + hoursDelta * 3600000);
+
+      // Clamp to data range
+      const clampedTime = clampTimeToDataRange(newTime);
+
+      // Update state
+      state.currentTime = clampedTime;
+
+      // Update scene
+      if (state.scene) {
+        state.scene.updateTime(clampedTime);
+        this.updateUrl();
+      }
+
+      // Redraw UI
+      m.redraw();
+    };
+
+    // Store reference for cleanup
+    this._keydownHandler = handleKeydown;
+
+    // Add event listener
+    window.addEventListener('keydown', handleKeydown);
   },
 
   oncreate(vnode) {
@@ -149,10 +252,12 @@ export const App: AppComponent = {
     // Register time scroll listener (when scrolling over Earth)
     state.scene.onTimeScroll((hoursDelta: number) => {
       const newTime = new Date(state.currentTime.getTime() + hoursDelta * 3600000);
-      state.currentTime = newTime;
+      const clampedTime = clampTimeToDataRange(newTime);
+
+      state.currentTime = clampedTime;
 
       if (state.scene) {
-        state.scene.updateTime(newTime);
+        state.scene.updateTime(clampedTime);
         this.updateUrl();
       }
 
@@ -170,12 +275,12 @@ export const App: AppComponent = {
     m.redraw();
 
     try {
-      await state.scene.loadTemp2mLayer(1, (loaded, total) => {
-        console.log(`Loading temp2m: ${loaded}/${total}`);
-      });
+      console.log('📊 Loading temp2m layer...');
+      await state.scene.loadTemp2mLayer(1);
       state.showTemp2m = true;
+      console.log('✅ Temp2m layer loaded');
     } catch (error) {
-      console.error('Failed to load temp2m layer:', error);
+      console.error('❌ Failed to load temp2m layer:', error);
       alert('Failed to load temperature data. Please check the console for details.');
     } finally {
       state.temp2mLoading = false;
@@ -201,6 +306,12 @@ export const App: AppComponent = {
   },
 
   onremove() {
+    // Clean up keyboard event listener
+    if (this._keydownHandler) {
+      window.removeEventListener('keydown', this._keydownHandler);
+    }
+
+    // Clean up scene
     if (this.state.scene) {
       this.state.scene.dispose();
     }
@@ -236,7 +347,14 @@ export const App: AppComponent = {
       m('div.ui-overlay', [
         // Header
         m('div.header', [
-          m('h1', 'Hypatia'),
+          m('h1', [
+            m('a[href=/]', {
+              onclick: (e: Event) => {
+                e.preventDefault();
+                window.location.href = '/';
+              }
+            }, 'Hypatia')
+          ]),
           m('p.time-display',
             state.currentTime.toLocaleString('en-US', {
               year: 'numeric',
@@ -314,6 +432,14 @@ export const App: AppComponent = {
         // Time Slider
         m(TimeSlider, {
           currentTime: state.currentTime,
+          startTime: (() => {
+            const range = getDatasetRange('temp2m');
+            return range ? range.startTime : new Date();
+          })(),
+          endTime: (() => {
+            const range = getDatasetRange('temp2m');
+            return range ? range.endTime : new Date();
+          })(),
           onTimeChange: (newTime: Date) => {
             state.currentTime = newTime;
             if (state.scene) {

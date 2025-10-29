@@ -20,8 +20,6 @@ export class Sun {
 
     // Initial position
     this.updatePosition(new Date());
-
-    console.log('Sun created');
   }
 
   /**

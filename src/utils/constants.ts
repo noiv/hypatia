@@ -5,6 +5,12 @@
 // Earth's radius in meters (mean radius)
 export const EARTH_RADIUS_METERS = 6371000;
 
+/**
+ * ECMWF IFS forecast duration (hours)
+ * Standard IFS forecasts extend 240 hours (10 days) from model run time
+ */
+export const FORECAST_DURATION_HOURS = 240;
+
 // Earth's radius in our 3D coordinate system (units)
 export const EARTH_RADIUS_UNITS = 1;
 

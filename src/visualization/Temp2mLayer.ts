@@ -1,23 +1,22 @@
 import * as THREE from 'three';
 import { EARTH_RADIUS_UNITS } from '../utils/constants';
+import { TEMP2M_CONFIG } from '../config/temp2m.config';
 
 export class Temp2mLayer {
   public mesh: THREE.Mesh;
   private material: THREE.ShaderMaterial;
   private timeStepCount: number;
-  private isLSM: boolean;
 
-  constructor(dataTexture: THREE.Data3DTexture, timeStepCount: number, isLSM: boolean = false) {
+  constructor(dataTexture: THREE.Data3DTexture, timeStepCount: number) {
     this.timeStepCount = timeStepCount;
-    this.isLSM = isLSM;
 
     // Use SphereGeometry for better vertex distribution
     // This avoids triangles spanning across the dateline
-    const radius = EARTH_RADIUS_UNITS * 1.002; // 2km above surface
+    const radius = EARTH_RADIUS_UNITS * (1 + TEMP2M_CONFIG.visual.altitudeKm / 6371); // altitude above surface
     const geometry = new THREE.SphereGeometry(
       radius,
-      128, // widthSegments - high resolution for smooth dateline
-      64   // heightSegments
+      TEMP2M_CONFIG.geometry.widthSegments,
+      TEMP2M_CONFIG.geometry.heightSegments
     );
 
     // Create shader material
@@ -27,24 +26,24 @@ export class Temp2mLayer {
         timeIndex: { value: 0.0 },
         maxTimeIndex: { value: timeStepCount - 1 },
         sunDirection: { value: new THREE.Vector3(1, 0, 0) },
-        opacity: { value: 0.8 }
+        opacity: { value: TEMP2M_CONFIG.visual.opacity },
+        dayNightSharpness: { value: TEMP2M_CONFIG.visual.dayNightSharpness },
+        dayNightFactor: { value: TEMP2M_CONFIG.visual.dayNightFactor }
       },
       vertexShader: this.getVertexShader(),
       fragmentShader: this.getFragmentShader(),
       transparent: true,
       side: THREE.FrontSide,
       depthWrite: false,
-      defines: {
-        ...(isLSM ? { LSM_MODE: true } : {}),
-        // DEBUG_UV: true // Temporary debug mode - disabled
-      }
+      // Use polygon offset to avoid z-fighting with Earth surface (from config)
+      polygonOffset: TEMP2M_CONFIG.depth.polygonOffset,
+      polygonOffsetFactor: TEMP2M_CONFIG.depth.polygonOffsetFactor,
+      polygonOffsetUnits: TEMP2M_CONFIG.depth.polygonOffsetUnits
     });
 
     this.mesh = new THREE.Mesh(geometry, this.material);
     this.mesh.name = 'Temp2mLayer';
     this.mesh.renderOrder = 1; // Render after Earth
-
-    console.log('Temp2mLayer created with Data3DTexture');
   }
 
   /**
@@ -114,6 +113,8 @@ export class Temp2mLayer {
       uniform float maxTimeIndex;
       uniform vec3 sunDirection;
       uniform float opacity;
+      uniform float dayNightSharpness;
+      uniform float dayNightFactor;
 
       varying vec2 vUv;
       varying vec3 vPosition;
@@ -122,29 +123,21 @@ export class Temp2mLayer {
       const float NODATA = -9999.0;
       const float MIN_TEMP = -30.0;
       const float MAX_TEMP = 40.0;
-      const float TEMP_RANGE = 70.0;
 
-      // Temperature color palette (meteorological standard)
+      // Temperature color palette - discrete bands (legacy behavior)
+      // Colors from TEMP2M_CONFIG.palette
       vec3 getTempColor(float tempC) {
-        // Normalized 0-1 across -30 to +40
-        float t = (tempC - MIN_TEMP) / TEMP_RANGE;
-
-        // Multi-stop gradient
-        if (t < 0.14) { // -30 to -20
-          return mix(vec3(0.3, 0.0, 0.5), vec3(0.0, 0.0, 1.0), t / 0.14);
-        } else if (t < 0.28) { // -20 to -10
-          return mix(vec3(0.0, 0.0, 1.0), vec3(0.0, 0.5, 1.0), (t - 0.14) / 0.14);
-        } else if (t < 0.42) { // -10 to 0
-          return mix(vec3(0.0, 0.5, 1.0), vec3(0.0, 1.0, 1.0), (t - 0.28) / 0.14);
-        } else if (t < 0.57) { // 0 to 10
-          return mix(vec3(0.0, 1.0, 1.0), vec3(0.0, 1.0, 0.0), (t - 0.42) / 0.15);
-        } else if (t < 0.71) { // 10 to 20
-          return mix(vec3(0.0, 1.0, 0.0), vec3(1.0, 1.0, 0.0), (t - 0.57) / 0.14);
-        } else if (t < 0.85) { // 20 to 30
-          return mix(vec3(1.0, 1.0, 0.0), vec3(1.0, 0.5, 0.0), (t - 0.71) / 0.14);
-        } else { // 30 to 40
-          return mix(vec3(1.0, 0.5, 0.0), vec3(1.0, 0.0, 0.0), (t - 0.85) / 0.15);
-        }
+        // Discrete color bands - no interpolation
+        // Returns single color for each temperature range
+        return
+          tempC < -20.0 ? vec3(0.667, 0.400, 0.667) : // #aa66aa violet dark
+          tempC < -10.0 ? vec3(0.808, 0.608, 0.898) : // #ce9be5 violet
+          tempC <   0.0 ? vec3(0.463, 0.808, 0.886) : // #76cee2 blue
+          tempC <  10.0 ? vec3(0.424, 0.937, 0.424) : // #6cef6c green
+          tempC <  20.0 ? vec3(0.929, 0.976, 0.424) : // #edf96c yellow
+          tempC <  30.0 ? vec3(1.000, 0.733, 0.333) : // #ffbb55 orange
+          tempC <  40.0 ? vec3(0.984, 0.396, 0.306) : // #fb654e red
+                          vec3(0.800, 0.251, 0.251);  // #cc4040 dark red
       }
 
       void main() {
@@ -167,40 +160,33 @@ export class Temp2mLayer {
           gl_FragColor = vec4(color, opacity);
           return;
         #else
-        // Normal rendering mode (LSM or temp data)
+        // Normal rendering mode
 
         float val1, val2, frac;
 
-        #ifdef LSM_MODE
-          // For LSM, always use the first (and only) layer
-          val1 = texture(dataTexture, vec3(vUv, 0.5)).r;
-          val2 = val1; // No interpolation needed for LSM
-          frac = 0.0;
-        #else
-          // Check if time is out of range
-          if (timeIndex < 0.0 || timeIndex > maxTimeIndex) {
-            // No data - red in dev, transparent in prod
-            #ifdef DEVELOPMENT
-              gl_FragColor = vec4(1.0, 0.0, 0.0, 0.2);
-            #else
-              discard;
-            #endif
-            return;
-          }
+        // Check if time is out of range
+        if (timeIndex < 0.0 || timeIndex > maxTimeIndex) {
+          // No data - red in dev, transparent in prod
+          #ifdef DEVELOPMENT
+            gl_FragColor = vec4(1.0, 0.0, 0.0, 0.2);
+          #else
+            discard;
+          #endif
+          return;
+        }
 
-          // Get the two adjacent time indices for interpolation
-          float t1 = floor(timeIndex);
-          float t2 = min(t1 + 1.0, maxTimeIndex);
-          frac = fract(timeIndex);
+        // Get the two adjacent time indices for interpolation
+        float t1 = floor(timeIndex);
+        float t2 = min(t1 + 1.0, maxTimeIndex);
+        frac = fract(timeIndex);
 
-          // Sample the 3D texture at both time steps
-          // Note: vUv is already calculated as spherical coordinates in vertex shader
-          float z1 = (t1 + 0.5) / (maxTimeIndex + 1.0); // Center of voxel
-          float z2 = (t2 + 0.5) / (maxTimeIndex + 1.0);
+        // Sample the 3D texture at both time steps
+        // Note: vUv is already calculated as spherical coordinates in vertex shader
+        float z1 = (t1 + 0.5) / (maxTimeIndex + 1.0); // Center of voxel
+        float z2 = (t2 + 0.5) / (maxTimeIndex + 1.0);
 
-          val1 = texture(dataTexture, vec3(vUv, z1)).r;
-          val2 = texture(dataTexture, vec3(vUv, z2)).r;
-        #endif
+        val1 = texture(dataTexture, vec3(vUv, z1)).r;
+        val2 = texture(dataTexture, vec3(vUv, z2)).r;
 
         // Check for no data
         if (val1 == NODATA || val2 == NODATA) {
@@ -216,33 +202,20 @@ export class Temp2mLayer {
         // Interpolate between time steps
         float value = mix(val1, val2, frac);
 
-        vec3 color;
-
-        #ifdef LSM_MODE
-          // Land-sea mask mode: 0=ocean (blue), 1=land (green)
-          if (value < 0.5) {
-            color = vec3(0.0, 0.3, 0.8); // Ocean blue
-          } else {
-            color = vec3(0.2, 0.8, 0.2); // Land green
-          }
-        #else
-          // Convert from Kelvin to Celsius
-          float tempC = value - 273.15;
-          // Get color from palette
-          color = getTempColor(tempC);
-        #endif
+        // Convert from Kelvin to Celsius
+        float tempC = value - 273.15;
+        // Get color from palette
+        vec3 color = getTempColor(tempC);
 
         // Calculate sun lighting for day/night
         vec3 lightDir = normalize(sunDirection);
         float dotNL = dot(vNormal, lightDir);
 
-        // Sharpen day/night transition
-        float dnSharpness = 4.0;
-        float dnZone = clamp(dotNL * dnSharpness, -1.0, 1.0);
+        // Sharpen day/night transition (from config)
+        float dnZone = clamp(dotNL * dayNightSharpness, -1.0, 1.0);
 
-        // Dim night side
-        float dnFactor = 0.3;
-        float lightMix = 0.5 + dnZone * dnFactor;
+        // Dim night side (from config)
+        float lightMix = 0.5 + dnZone * dayNightFactor;
 
         // Apply lighting to color
         vec3 finalColor = color * lightMix;

@@ -31,24 +31,27 @@ export async function preloadImages(
   console.log(`📦 Preloading ${resources.length} ${priority} resources (${(total / 1024 / 1024).toFixed(2)} MB)...`);
 
   for (const resource of resources) {
-    const img = await loadImage(resource.path);
-    images.set(resource.path, img);
+    try {
+      const img = await loadImage(resource.path);
+      images.set(resource.path, img);
 
-    loaded += resource.size;
+      loaded += resource.size;
 
-    if (onProgress) {
-      onProgress({
-        loaded,
-        total,
-        percentage: (loaded / total) * 100,
-        currentFile: resource.path
-      });
+      if (onProgress) {
+        onProgress({
+          loaded,
+          total,
+          percentage: (loaded / total) * 100,
+          currentFile: resource.path
+        });
+      }
+    } catch (error) {
+      console.error(`   ✗ ${resource.path}:`, error);
+      // Continue loading other resources even if one fails
     }
-
-    console.log(`   ✓ ${resource.path} (${(resource.size / 1024).toFixed(0)} KB)`);
   }
 
-  console.log(`✅ Preloaded ${resources.length} ${priority} resources`);
+  console.log(`✅ Preloaded ${images.size}/${resources.length} ${priority} resources`);
 
   return images;
 }
