@@ -7,11 +7,23 @@ export interface ControlsAttrs {
   blend: number;
   onBlendChange: (blend: number) => void;
   onReferenceClick: () => void;
+  showTemp2m: boolean;
+  onTemp2mToggle: () => void;
+  temp2mLoading?: boolean;
 }
 
 export const Controls: m.Component<ControlsAttrs> = {
   view(vnode) {
-    const { isFullscreen, onFullscreenToggle, blend, onBlendChange, onReferenceClick } = vnode.attrs;
+    const {
+      isFullscreen,
+      onFullscreenToggle,
+      blend,
+      onBlendChange,
+      onReferenceClick,
+      showTemp2m,
+      onTemp2mToggle,
+      temp2mLoading
+    } = vnode.attrs;
 
     return m('div.controls', [
       // Fullscreen button
@@ -23,6 +35,13 @@ export const Controls: m.Component<ControlsAttrs> = {
       m('button.btn', {
         onclick: onReferenceClick
       }, '↺ Reference'),
+
+      // Temp2m toggle button
+      m('button.btn', {
+        onclick: onTemp2mToggle,
+        disabled: temp2mLoading,
+        class: showTemp2m ? 'active' : ''
+      }, temp2mLoading ? '⏳ Loading...' : (showTemp2m ? '🌡️ Temp ON' : '🌡️ Temp OFF')),
 
       // Blend slider
       m('div.blend-control', [

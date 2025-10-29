@@ -7,8 +7,13 @@ dist/
 # Auto-generated
 src/manifest.ts
 
-# Data files
-public/data/*.bin
+# Data files (symlink to sister folder)
+public/data
+
+# Python
+../venv/
+*.pyc
+__pycache__/
 
 # Environment
 .env

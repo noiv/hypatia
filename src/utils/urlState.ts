@@ -2,10 +2,11 @@
  * URL State Management
  *
  * Manages application state in URL search params for shareability and persistence
- * Format: ?dt=2015-12-25:19:48&alt=12742000&ll=36.012,-180.4
+ * Format: ?dt=2015-12-25:19:48&alt=12742000&ll=36.012,-180.4&layers=temp2m
  * - dt: datetime in UTC (YYYY-MM-DD:HH:MM)
  * - alt: altitude above surface in meters
  * - ll: latitude,longitude of camera look direction
+ * - layers: comma-separated list of active layers (optional)
  */
 
 import { formatDateForUrl, parseDateFromUrl } from './dateFormat';
@@ -17,6 +18,7 @@ export interface AppUrlState {
   time: Date;
   cameraPosition: { x: number; y: number; z: number };
   cameraDistance: number;
+  layers?: string[];
 }
 
 /**
@@ -33,8 +35,9 @@ export function parseUrlState(): AppUrlState | null {
   const dtStr = params.get('dt');
   const altStr = params.get('alt');
   const llStr = params.get('ll');
+  const layersStr = params.get('layers');
 
-  // All parameters required for valid state
+  // dt, alt, ll parameters required for valid state
   if (!dtStr || !altStr || !llStr) {
     return null;
   }
@@ -66,7 +69,10 @@ export function parseUrlState(): AppUrlState | null {
     z: cameraPositionVec.z
   };
 
-  return { time, cameraPosition, cameraDistance };
+  // Parse layers (optional)
+  const layers = layersStr ? layersStr.split(',').map(l => l.trim()).filter(l => l.length > 0) : undefined;
+
+  return { time, cameraPosition, cameraDistance, layers };
 }
 
 /**
@@ -91,7 +97,12 @@ export function updateUrlState(state: AppUrlState): void {
   const alt = Math.round(altitudeMeters).toString();
 
   // Build URL manually to avoid encoding colons and commas
-  const url = `?dt=${dt}&alt=${alt}&ll=${ll}`;
+  let url = `?dt=${dt}&alt=${alt}&ll=${ll}`;
+
+  // Add layers if present
+  if (state.layers && state.layers.length > 0) {
+    url += `&layers=${state.layers.join(',')}`;
+  }
 
   // Use replaceState to avoid creating history entries for every update
   window.history.replaceState(null, '', url);

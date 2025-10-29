@@ -22,6 +22,8 @@ interface AppState {
   bootstrapProgress: LoadProgress | null;
   bootstrapError: string | null;
   preloadedImages: Map<string, HTMLImageElement> | null;
+  showTemp2m: boolean;
+  temp2mLoading: boolean;
 }
 
 interface AppComponent extends m.Component {
@@ -44,7 +46,9 @@ export const App: AppComponent = {
       bootstrapStatus: 'loading',
       bootstrapProgress: null,
       bootstrapError: null,
-      preloadedImages: null
+      preloadedImages: null,
+      showTemp2m: false,
+      temp2mLoading: false
     };
 
     // Bootstrap asynchronously
@@ -61,10 +65,7 @@ export const App: AppComponent = {
       // Bootstrap step 2: Check ECMWF for latest IFS model run
       const latestRun = await getLatestRun(serverTime);
 
-      // Bootstrap step 3: Get user location
-      const userLocation = await getUserLocation();
-
-      // Bootstrap step 4: Preload critical images
+      // Bootstrap step 3: Preload critical images (skip geolocation to avoid permission dialog)
       const images = await preloadImages('critical', (progress) => {
         this.state.bootstrapProgress = progress;
         m.redraw();
@@ -73,7 +74,7 @@ export const App: AppComponent = {
       // Update state with bootstrap results
       this.state.currentTime = urlState?.time ?? serverTime;
       this.state.latestRun = latestRun;
-      this.state.userLocation = userLocation;
+      this.state.userLocation = null; // Skip geolocation
       this.state.preloadedImages = images;
 
       // Keep modal visible for 1 second to show completion
@@ -121,7 +122,17 @@ export const App: AppComponent = {
     // Apply URL state if available, otherwise use user location
     const urlState = parseUrlState();
     if (urlState) {
+      // Set layer state BEFORE camera change to preserve URL params
+      if (urlState.layers && urlState.layers.includes('temp2m')) {
+        state.showTemp2m = true;
+      }
+
       state.scene.setCameraState(urlState.cameraPosition, urlState.cameraDistance);
+
+      // Load layers from URL (async, but state already set)
+      if (urlState.layers && urlState.layers.includes('temp2m')) {
+        this.loadTemp2mLayer();
+      }
     } else if (state.userLocation) {
       state.scene.setCameraToLocation(
         state.userLocation.latitude,
@@ -132,13 +143,7 @@ export const App: AppComponent = {
 
     // Register camera change listener for URL updates
     state.scene.onCameraChange(() => {
-      if (state.scene) {
-        debouncedUpdateUrlState({
-          time: state.currentTime,
-          cameraPosition: state.scene.getCameraPosition(),
-          cameraDistance: state.scene.getCameraDistance()
-        });
-      }
+      this.updateUrl();
     });
 
     // Register time scroll listener (when scrolling over Earth)
@@ -148,18 +153,51 @@ export const App: AppComponent = {
 
       if (state.scene) {
         state.scene.updateTime(newTime);
-
-        debouncedUpdateUrlState({
-          time: newTime,
-          cameraPosition: state.scene.getCameraPosition(),
-          cameraDistance: state.scene.getCameraDistance()
-        });
+        this.updateUrl();
       }
 
       m.redraw();
     });
 
     console.log('Hypatia initialized');
+  },
+
+  async loadTemp2mLayer() {
+    const state = this.state;
+    if (!state.scene) return;
+
+    state.temp2mLoading = true;
+    m.redraw();
+
+    try {
+      await state.scene.loadTemp2mLayer(1, (loaded, total) => {
+        console.log(`Loading temp2m: ${loaded}/${total}`);
+      });
+      state.showTemp2m = true;
+    } catch (error) {
+      console.error('Failed to load temp2m layer:', error);
+      alert('Failed to load temperature data. Please check the console for details.');
+    } finally {
+      state.temp2mLoading = false;
+      m.redraw();
+    }
+  },
+
+  updateUrl() {
+    const state = this.state;
+    if (!state.scene) return;
+
+    const layers: string[] = [];
+    if (state.showTemp2m) {
+      layers.push('temp2m');
+    }
+
+    debouncedUpdateUrlState({
+      time: state.currentTime,
+      cameraPosition: state.scene.getCameraPosition(),
+      cameraDistance: state.scene.getCameraDistance(),
+      layers: layers.length > 0 ? layers : undefined
+    });
   },
 
   onremove() {
@@ -245,6 +283,31 @@ export const App: AppComponent = {
             }
 
             m.redraw();
+          },
+          showTemp2m: state.showTemp2m,
+          temp2mLoading: state.temp2mLoading,
+          onTemp2mToggle: async () => {
+            if (!state.scene) return;
+
+            // If turning on
+            if (!state.showTemp2m) {
+              // Load temp2m layer if not already loaded
+              if (!state.scene.isTemp2mLoaded()) {
+                await this.loadTemp2mLayer();
+              } else {
+                // Already loaded, just toggle visibility
+                state.scene.toggleTemp2m(true);
+                state.showTemp2m = true;
+              }
+            } else {
+              // Turning off
+              state.scene.toggleTemp2m(false);
+              state.showTemp2m = false;
+            }
+
+            // Update URL with new layer state
+            this.updateUrl();
+            m.redraw();
           }
         }),
 
@@ -255,13 +318,7 @@ export const App: AppComponent = {
             state.currentTime = newTime;
             if (state.scene) {
               state.scene.updateTime(newTime);
-
-              // Update URL with new time
-              debouncedUpdateUrlState({
-                time: newTime,
-                cameraPosition: state.scene.getCameraPosition(),
-                cameraDistance: state.scene.getCameraDistance()
-              });
+              this.updateUrl();
             }
             m.redraw();
           }

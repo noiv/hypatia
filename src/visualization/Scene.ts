@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Earth } from './Earth';
 import { Sun } from './Sun';
+import { Temp2mLayer } from './Temp2mLayer';
+import { Temp2mService, TimeStep } from '../services/Temp2mService';
 import { cartesianToLatLon, formatLatLon, latLonToCartesian } from '../utils/coordinates';
 
 export class Scene {
@@ -11,6 +13,9 @@ export class Scene {
   private controls: OrbitControls;
   private earth: Earth;
   private sun: Sun;
+  private temp2mLayer: Temp2mLayer | null = null;
+  private temp2mTimeSteps: TimeStep[] = [];
+  private currentTime: Date;
   private animationId: number | null = null;
   private onCameraChangeCallback: (() => void) | null = null;
   private raycaster: THREE.Raycaster;
@@ -91,6 +96,9 @@ export class Scene {
     canvas.addEventListener('click', this.onClick);
     canvas.addEventListener('wheel', this.onWheel, { passive: false });
 
+    // Initialize current time
+    this.currentTime = new Date();
+
     // Start animation loop
     this.animate();
 
@@ -120,10 +128,12 @@ export class Scene {
     );
     this.scene.add(southPoleLine);
 
-    // Prime Meridian at 0° lon, 0° lat (green line from center to surface at +Z)
+    // Prime Meridian at 0° lon, 0° lat (green line through entire sphere)
+    // +Z direction: 0° lon, 0° lat
+    // -Z direction: 180° lon, 0° lat (dateline)
     const primeMeridianGeometry = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(0, 0, 1.2)
+      new THREE.Vector3(0, 0, -1.2), // Through to 180° lon
+      new THREE.Vector3(0, 0, 1.2)   // To 0° lon
     ]);
     const primeMeridianLine = new THREE.Line(
       primeMeridianGeometry,
@@ -239,14 +249,22 @@ export class Scene {
   };
 
   /**
-   * Update time - rotates sun around earth
+   * Update time - rotates sun around earth and updates temp2m layer
    */
   updateTime(time: Date) {
+    this.currentTime = time;
     this.sun.updatePosition(time);
 
     // Update sun direction for Earth's shader lighting
     const sunDir = this.sun.mesh.position.clone().normalize();
     this.earth.setSunDirection(sunDir);
+
+    // Update temp2m layer if loaded
+    if (this.temp2mLayer && this.temp2mTimeSteps.length > 0) {
+      const timeIndex = Temp2mService.timeToIndex(time, this.temp2mTimeSteps);
+      this.temp2mLayer.setTimeIndex(timeIndex);
+      this.temp2mLayer.setSunDirection(sunDir);
+    }
   }
 
   /**
@@ -254,6 +272,51 @@ export class Scene {
    */
   setBlend(blend: number) {
     this.earth.setBlend(blend);
+  }
+
+  /**
+   * Load temp2m layer with specified delta (days before/after today)
+   */
+  async loadTemp2mLayer(delta: number = 1, onProgress?: (loaded: number, total: number) => void): Promise<void> {
+    // TEMPORARY: Load land-sea mask for testing
+    const useLSM = true;
+
+    // Generate time steps
+    this.temp2mTimeSteps = Temp2mService.generateTimeSteps(delta, useLSM);
+
+    // Load data texture
+    const dataTexture = await Temp2mService.loadTexture(this.temp2mTimeSteps, onProgress);
+
+    // Create layer
+    this.temp2mLayer = new Temp2mLayer(dataTexture, this.temp2mTimeSteps.length, useLSM);
+
+    // Add to scene
+    this.scene.add(this.temp2mLayer.mesh);
+
+    // Update with current time and sun direction
+    const timeIndex = Temp2mService.timeToIndex(this.currentTime, this.temp2mTimeSteps);
+    this.temp2mLayer.setTimeIndex(timeIndex);
+
+    const sunDir = this.sun.mesh.position.clone().normalize();
+    this.temp2mLayer.setSunDirection(sunDir);
+
+    console.log(useLSM ? 'LSM layer loaded for testing' : 'Temp2m layer loaded with', this.temp2mTimeSteps.length, 'time steps');
+  }
+
+  /**
+   * Toggle temp2m layer visibility
+   */
+  toggleTemp2m(visible: boolean) {
+    if (this.temp2mLayer) {
+      this.temp2mLayer.setVisible(visible);
+    }
+  }
+
+  /**
+   * Check if temp2m layer is loaded
+   */
+  isTemp2mLoaded(): boolean {
+    return this.temp2mLayer !== null;
   }
 
   /**
