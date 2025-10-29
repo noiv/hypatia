@@ -59,11 +59,11 @@ export class Temp2mService {
   }
 
   /**
-   * Load a single binary file as Float32Array
-   * Note: Data files are stored as fp16 for efficiency, converted to fp32 here
+   * Load a single binary file as Uint16Array (fp16)
+   * Note: Data files are stored as fp16, we keep them as-is for GPU
    * Note: Data files already include wrapping column (1441 columns)
    */
-  private static async loadBinaryFile(path: string): Promise<Float32Array> {
+  private static async loadBinaryFile(path: string): Promise<Uint16Array> {
     const response = await fetch(path);
     if (!response.ok) {
       throw new Error(`Failed to load ${path}: ${response.statusText}`);
@@ -77,62 +77,17 @@ export class Temp2mService {
       );
     }
 
-    // Load as fp16 (Uint16Array) and convert to fp32 (Float32Array)
-    const uint16Array = new Uint16Array(buffer);
-    const float32Array = new Float32Array(uint16Array.length);
-
-    // Convert each fp16 value to fp32 using DataView
-    const dataView = new DataView(buffer);
-    for (let i = 0; i < uint16Array.length; i++) {
-      const fp16 = uint16Array[i];
-      float32Array[i] = this.float16ToFloat32(fp16);
-    }
-
-    return float32Array;
+    // Return as Uint16Array - WebGL will handle fp16 natively
+    return new Uint16Array(buffer);
   }
 
   /**
-   * Convert IEEE 754 half-precision (fp16) to single-precision (fp32)
-   */
-  private static float16ToFloat32(fp16: number): number {
-    const sign = (fp16 & 0x8000) >> 15;
-    const exponent = (fp16 & 0x7C00) >> 10;
-    const fraction = fp16 & 0x03FF;
-
-    // Handle special cases
-    if (exponent === 0) {
-      // Zero or subnormal
-      if (fraction === 0) {
-        return sign ? -0 : 0;
-      }
-      // Subnormal number
-      return (sign ? -1 : 1) * Math.pow(2, -14) * (fraction / 1024);
-    } else if (exponent === 0x1F) {
-      // Infinity or NaN
-      return fraction === 0
-        ? (sign ? -Infinity : Infinity)
-        : NaN;
-    }
-
-    // Normal number
-    const fp32Exponent = exponent - 15 + 127;
-    const fp32Fraction = fraction << 13;
-    const fp32Bits = (sign << 31) | (fp32Exponent << 23) | fp32Fraction;
-
-    // Convert bits to float
-    const buffer = new ArrayBuffer(4);
-    const view = new DataView(buffer);
-    view.setUint32(0, fp32Bits, true);
-    return view.getFloat32(0, true);
-  }
-
-  /**
-   * Load all time steps and create a Data3DTexture
+   * Load all time steps and create a Data3DTexture with native fp16 support
    */
   static async loadTexture(steps: TimeStep[], onProgress?: (loaded: number, total: number) => void): Promise<THREE.Data3DTexture> {
     const depth = steps.length;
     const totalSize = this.WIDTH * this.HEIGHT * depth;
-    const data = new Float32Array(totalSize);
+    const data = new Uint16Array(totalSize);
 
     // Load each time step
     for (let i = 0; i < steps.length; i++) {
@@ -152,10 +107,11 @@ export class Temp2mService {
       }
     }
 
-    // Create Data3DTexture
+    // Create Data3DTexture with HalfFloatType for native fp16 support
+    // This saves 50% GPU memory compared to FloatType
     const texture = new THREE.Data3DTexture(data, this.WIDTH, this.HEIGHT, depth);
     texture.format = THREE.RedFormat;
-    texture.type = THREE.FloatType;
+    texture.type = THREE.HalfFloatType; // Use fp16 natively
     texture.minFilter = THREE.LinearFilter;
     texture.magFilter = THREE.LinearFilter;
     texture.wrapS = THREE.RepeatWrapping; // Use repeat to handle dateline wrapping
