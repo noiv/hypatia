@@ -23,9 +23,10 @@ export function calculateSunPosition(time: Date): THREE.Vector3 {
 
   // Convert to Cartesian coordinates
   // Sun at (0,0,0) at solar noon on equator
-  const x = Math.cos(declinationRad) * Math.sin(hourAngleRad);
+  // Negate hourAngle so sun moves westward as time advances (Earth rotates east)
+  const x = Math.cos(declinationRad) * Math.sin(-hourAngleRad);
   const y = Math.sin(declinationRad);
-  const z = Math.cos(declinationRad) * Math.cos(hourAngleRad);
+  const z = Math.cos(declinationRad) * Math.cos(-hourAngleRad);
 
   return new THREE.Vector3(x, y, z).normalize();
 }
