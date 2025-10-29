@@ -21,9 +21,11 @@ export class WindLayer {
   private windDataV: Uint16Array | null = null;
 
   private static readonly LINE_STEPS = 32;  // Number of vertices per line
-  private static readonly STEP_FACTOR = 0.000075; // Controls step size in spherical coordinates (half of 0.00015)
+  private static readonly STEP_FACTOR = 0.00015; // Controls step size in spherical coordinates (doubled from 0.000075)
   private static readonly LINE_WIDTH = 2.0; // Line width in pixels
   private static readonly TAPER_SEGMENTS = 4; // Number of segments to taper at the end
+  private static readonly SNAKE_LENGTH = 10; // Number of segments in the animated snake
+  private animationPhase: number = 0; // Current animation phase (0 to cycleLength)
 
   constructor(numSeeds: number = 16384) {
     this.group = new THREE.Group();
@@ -95,7 +97,11 @@ export class WindLayer {
     for (const seed of this.seeds) {
       const line = this.traceLine(seed);
 
-      // Add line segments (pairs of consecutive vertices) with colors for tapering
+      // Random offset for this line's animation (0 to cycleLength)
+      const cycleLength = WindLayer.LINE_STEPS + WindLayer.SNAKE_LENGTH;
+      const randomOffset = Math.random() * cycleLength;
+
+      // Add line segments (pairs of consecutive vertices) with segment index data
       for (let i = 0; i < line.length - 1; i++) {
         const segmentIndex = i;
         const totalSegments = line.length - 1;
@@ -115,11 +121,15 @@ export class WindLayer {
           line[i + 1].x, line[i + 1].y, line[i + 1].z
         );
 
-        // Store taper factor in color channels (we'll use R channel for width scaling)
-        // White color with alpha in R channel for taper
+        // Store segment data in color channels:
+        // R: segment index (normalized 0-1)
+        // G: random offset for this line (normalized 0-1)
+        // B: taper factor
+        const normalizedIndex = segmentIndex / totalSegments;
+        const normalizedOffset = randomOffset / cycleLength;
         colors.push(
-          taperFactor, 1.0, 1.0,  // Start vertex
-          taperFactor, 1.0, 1.0   // End vertex
+          normalizedIndex, normalizedOffset, taperFactor,  // Start vertex
+          normalizedIndex, normalizedOffset, taperFactor   // End vertex
         );
       }
     }
@@ -143,6 +153,77 @@ export class WindLayer {
 
     // Set initial resolution (will be updated by Scene on resize)
     this.material.resolution.set(window.innerWidth, window.innerHeight);
+
+    // Add uniforms directly to material
+    (this.material as any).uniforms = {
+      ...this.material.uniforms,
+      animationPhase: { value: 0.0 },
+      snakeLength: { value: WindLayer.SNAKE_LENGTH },
+      lineSteps: { value: WindLayer.LINE_STEPS }
+    };
+
+    // Add custom shader code for snake animation
+    this.material.onBeforeCompile = (shader) => {
+      // Link shader uniforms to material uniforms
+      shader.uniforms.animationPhase = (this.material as any).uniforms.animationPhase;
+      shader.uniforms.snakeLength = (this.material as any).uniforms.snakeLength;
+      shader.uniforms.lineSteps = (this.material as any).uniforms.lineSteps;
+
+      // Modify fragment shader to add snake animation
+      shader.fragmentShader = shader.fragmentShader.replace(
+        'void main() {',
+        `
+        uniform float animationPhase;
+        uniform float snakeLength;
+        uniform float lineSteps;
+
+        void main() {
+        `
+      );
+
+      // Try to find where to inject the animation code - look for gl_FragColor assignment
+      if (shader.fragmentShader.includes('gl_FragColor =')) {
+        shader.fragmentShader = shader.fragmentShader.replace(
+          /gl_FragColor = vec4\( diffuseColor\.rgb, alpha \);/,
+          `
+          // Extract segment data from vColor (RGB channels)
+          float normalizedIndex = vColor.r;
+          float normalizedOffset = vColor.g;
+          float taperFactor = vColor.b;
+
+          // Calculate cycle length (lineSteps + snakeLength)
+          float cycleLength = lineSteps + snakeLength;
+
+          // Denormalize values
+          float segmentIndex = normalizedIndex * (lineSteps - 1.0);
+          float randomOffset = normalizedOffset * cycleLength;
+
+          // Calculate position of snake head (wraps around) with random offset
+          float snakeHead = mod(animationPhase + randomOffset, cycleLength);
+
+          // Calculate distance from segment to snake head
+          float distanceFromHead = segmentIndex - snakeHead;
+
+          // Handle wrapping (snake can wrap around the end)
+          if (distanceFromHead < -snakeLength) {
+            distanceFromHead += cycleLength;
+          }
+
+          // Calculate opacity based on distance from head
+          float segmentOpacity = 0.0;
+          if (distanceFromHead >= -snakeLength && distanceFromHead <= 0.0) {
+            // Inside snake: fade from 0 at tail to 1 at head
+            float positionInSnake = (distanceFromHead + snakeLength) / snakeLength;
+            segmentOpacity = positionInSnake;
+          }
+
+          // Apply opacity and taper factor, reset color to white
+          float finalAlpha = alpha * segmentOpacity * taperFactor;
+          gl_FragColor = vec4( vec3(1.0), finalAlpha );
+          `
+        );
+      }
+    };
 
     // Create LineSegments2
     this.lines = new LineSegments2(geometry, this.material);
@@ -288,6 +369,27 @@ export class WindLayer {
    */
   getLineWidth(): number | undefined {
     return this.material?.linewidth;
+  }
+
+  /**
+   * Update animation phase for snake effect
+   * Call this every frame with deltaTime in seconds
+   */
+  updateAnimation(deltaTime: number): void {
+    if (!this.material) return;
+
+    // Animation speed: segments per second
+    const animationSpeed = 20.0;
+
+    // Update phase
+    const cycleLength = WindLayer.LINE_STEPS + WindLayer.SNAKE_LENGTH;
+    this.animationPhase = (this.animationPhase + deltaTime * animationSpeed) % cycleLength;
+
+    // Update uniform on material
+    const uniforms = (this.material as any).uniforms;
+    if (uniforms?.animationPhase) {
+      uniforms.animationPhase.value = this.animationPhase;
+    }
   }
 
   /**

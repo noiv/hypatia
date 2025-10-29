@@ -36,6 +36,8 @@ export class Scene {
   private lastDistance: number = 0;
   private zoomEndTimeout: number | null = null;
   private readonly zoomEndTimeoutMs = 500;
+  private lastFrameTime: number = performance.now();
+  private stats: any;
 
   constructor(canvas: HTMLCanvasElement, preloadedImages?: Map<string, HTMLImageElement>, userOptions?: UserOptions) {
     // Scene
@@ -68,6 +70,12 @@ export class Scene {
     });
     this.renderer.setSize(width, height);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    // Stats.js for FPS monitoring
+    // @ts-ignore - Stats is loaded via script tag
+    this.stats = new Stats();
+    this.stats.showPanel(0); // 0: fps, 1: ms, 2: mb
+    document.body.appendChild(this.stats.dom);
 
     // Controls - smooth with damping for "mass" feeling
     this.controls = new OrbitControls(this.camera, canvas);
@@ -261,7 +269,14 @@ export class Scene {
   };
 
   private animate = () => {
+    this.stats.begin();
+
     this.animationId = requestAnimationFrame(this.animate);
+
+    // Calculate delta time
+    const currentTime = performance.now();
+    const deltaTime = (currentTime - this.lastFrameTime) / 1000; // Convert to seconds
+    this.lastFrameTime = currentTime;
 
     // Adjust rotation speed based on altitude above surface
     // Makes mouse pointer "stick" to same location while dragging
@@ -279,9 +294,10 @@ export class Scene {
       this.atmosphereLayer.setSunPosition(this.sun.mesh.position);
     }
 
-    // Update wind layer line width based on camera altitude
+    // Update wind layer line width and animation based on camera altitude
     if (this.windLayer) {
       this.windLayer.updateLineWidth(distance);
+      this.windLayer.updateAnimation(deltaTime);
 
       // Detect zoom changes and log when zoom ends
       if (Math.abs(distance - this.lastDistance) > 0.001) {
@@ -301,6 +317,8 @@ export class Scene {
 
     // Render
     this.renderer.render(this.scene, this.camera);
+
+    this.stats.end();
   };
 
   /**
