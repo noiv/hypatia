@@ -389,7 +389,7 @@ export class Scene {
   }
 
   /**
-   * Load wind layer (Stage 1: seed points only)
+   * Load wind layer (Stage 2: flow lines from vector field)
    */
   async loadWindLayer(): Promise<void> {
     if (this.windLayer) {
@@ -397,7 +397,8 @@ export class Scene {
       return;
     }
 
-    this.windLayer = new WindLayer(1000);
+    this.windLayer = new WindLayer(16384);
+    await this.windLayer.loadWindData(this.currentTime);
     this.scene.add(this.windLayer.getGroup());
     console.log('🌬️  Wind layer loaded with', this.windLayer.getNumSeeds(), 'seed points');
   }
