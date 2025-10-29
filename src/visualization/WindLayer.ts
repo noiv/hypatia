@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { EARTH_RADIUS_UNITS } from '../utils/constants';
 import { generateRandomSphere } from '../utils/sphereSeeds';
 import { Wind10mService } from '../services/Wind10mService';
@@ -12,12 +15,15 @@ import { Wind10mService } from '../services/Wind10mService';
 export class WindLayer {
   public group: THREE.Group;
   private seeds: THREE.Vector3[];
-  private lines: THREE.LineSegments | null = null;
+  private lines: LineSegments2 | null = null;
+  private material: LineMaterial | null = null;
   private windDataU: Uint16Array | null = null;
   private windDataV: Uint16Array | null = null;
 
   private static readonly LINE_STEPS = 32;  // Number of vertices per line
   private static readonly STEP_FACTOR = 0.000075; // Controls step size in spherical coordinates (half of 0.00015)
+  private static readonly LINE_WIDTH = 2.0; // Line width in pixels
+  private static readonly TAPER_SEGMENTS = 4; // Number of segments to taper at the end
 
   constructor(numSeeds: number = 16384) {
     this.group = new THREE.Group();
@@ -83,35 +89,63 @@ export class WindLayer {
     }
 
     const positions: number[] = [];
+    const colors: number[] = [];
 
     // Trace from each seed
     for (const seed of this.seeds) {
       const line = this.traceLine(seed);
 
-      // Add line segments (pairs of consecutive vertices)
+      // Add line segments (pairs of consecutive vertices) with colors for tapering
       for (let i = 0; i < line.length - 1; i++) {
+        const segmentIndex = i;
+        const totalSegments = line.length - 1;
+
+        // Calculate taper factor for this segment (1.0 = full width, 0.0 = zero width)
+        const remainingSegments = totalSegments - segmentIndex;
+        let taperFactor = 1.0;
+
+        if (remainingSegments <= WindLayer.TAPER_SEGMENTS) {
+          // Linear taper in the last N segments
+          taperFactor = remainingSegments / WindLayer.TAPER_SEGMENTS;
+        }
+
+        // Add segment start and end positions
         positions.push(
           line[i].x, line[i].y, line[i].z,
           line[i + 1].x, line[i + 1].y, line[i + 1].z
         );
+
+        // Store taper factor in color channels (we'll use R channel for width scaling)
+        // White color with alpha in R channel for taper
+        colors.push(
+          taperFactor, 1.0, 1.0,  // Start vertex
+          taperFactor, 1.0, 1.0   // End vertex
+        );
       }
     }
 
-    // Create line geometry
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    // Create LineSegmentsGeometry
+    const geometry = new LineSegmentsGeometry();
+    geometry.setPositions(positions);
+    geometry.setColors(colors);
 
-    // Create material - simple white lines
-    const material = new THREE.LineBasicMaterial({
+    // Create LineMaterial
+    this.material = new LineMaterial({
       color: 0xffffff,
+      linewidth: WindLayer.LINE_WIDTH,
+      vertexColors: true,
       transparent: true,
       opacity: 0.6,
       depthWrite: false,
-      depthTest: true
+      depthTest: true,
+      alphaToCoverage: false
     });
 
-    // Create line segments
-    this.lines = new THREE.LineSegments(geometry, material);
+    // Set initial resolution (will be updated by Scene on resize)
+    this.material.resolution.set(window.innerWidth, window.innerHeight);
+
+    // Create LineSegments2
+    this.lines = new LineSegments2(geometry, this.material);
     this.group.add(this.lines);
 
     console.log(`🌬️  Created ${this.seeds.length} flow lines with ${positions.length / 6} segments`);
@@ -209,10 +243,51 @@ export class WindLayer {
   }
 
   /**
+   * Update resolution for LineMaterial (call on window resize)
+   */
+  setResolution(width: number, height: number): void {
+    if (this.material) {
+      this.material.resolution.set(width, height);
+    }
+  }
+
+  /**
+   * Update line width based on camera altitude
+   * @param cameraDistance Distance from camera to origin (Earth center)
+   */
+  updateLineWidth(cameraDistance: number): void {
+    if (!this.material) return;
+
+    // Earth radius is 1.0 in our units
+    // Camera distance ranges from ~1.157 (min) to 10 (max)
+    // Map this to line width: 2px at low altitude, 0.02px at high altitude
+    const minDistance = 1.157;
+    const maxDistance = 10.0;
+    const minWidth = 2.0;
+    const maxWidth = 0.02;
+
+    // Logarithmic interpolation for more natural feel
+    // Use log scale since altitude changes exponentially with zoom
+    const t = (Math.log(cameraDistance) - Math.log(minDistance)) /
+              (Math.log(maxDistance) - Math.log(minDistance));
+    const clampedT = Math.max(0, Math.min(1, t));
+    const lineWidth = minWidth + (maxWidth - minWidth) * clampedT;
+
+    this.material.linewidth = lineWidth;
+  }
+
+  /**
    * Get number of seed points
    */
   getNumSeeds(): number {
     return this.seeds.length;
+  }
+
+  /**
+   * Get current line width
+   */
+  getLineWidth(): number | undefined {
+    return this.material?.linewidth;
   }
 
   /**
@@ -221,7 +296,9 @@ export class WindLayer {
   dispose(): void {
     if (this.lines) {
       this.lines.geometry.dispose();
-      (this.lines.material as THREE.Material).dispose();
+    }
+    if (this.material) {
+      this.material.dispose();
     }
   }
 }

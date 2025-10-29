@@ -33,6 +33,9 @@ export class Scene {
   private wheelGestureMode: 'none' | 'vertical' | 'horizontal' = 'none';
   private wheelGestureTimeout: number | null = null;
   private readonly wheelGestureTimeoutMs = 300;
+  private lastDistance: number = 0;
+  private zoomEndTimeout: number | null = null;
+  private readonly zoomEndTimeoutMs = 500;
 
   constructor(canvas: HTMLCanvasElement, preloadedImages?: Map<string, HTMLImageElement>, userOptions?: UserOptions) {
     // Scene
@@ -167,6 +170,11 @@ export class Scene {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
+
+    // Update Line2 material resolution for wind layer
+    if (this.windLayer) {
+      this.windLayer.setResolution(width, height);
+    }
   };
 
   private onMouseDown = (e: MouseEvent) => {
@@ -269,6 +277,26 @@ export class Scene {
     if (this.atmosphereLayer) {
       this.atmosphereLayer.setCameraPosition(this.camera.position);
       this.atmosphereLayer.setSunPosition(this.sun.mesh.position);
+    }
+
+    // Update wind layer line width based on camera altitude
+    if (this.windLayer) {
+      this.windLayer.updateLineWidth(distance);
+
+      // Detect zoom changes and log when zoom ends
+      if (Math.abs(distance - this.lastDistance) > 0.001) {
+        // Distance changed, reset timeout
+        if (this.zoomEndTimeout !== null) {
+          window.clearTimeout(this.zoomEndTimeout);
+        }
+        this.zoomEndTimeout = window.setTimeout(() => {
+          // Zoom has ended, log the final values
+          const altitudeKm = altitude * 6371; // Earth radius = 6371 km
+          const lineWidth = this.windLayer?.getLineWidth();
+          console.log(`🌬️  Zoom ended: altitude=${altitudeKm.toFixed(0)}km, lineWidth=${lineWidth?.toFixed(3)}px`);
+        }, this.zoomEndTimeoutMs);
+        this.lastDistance = distance;
+      }
     }
 
     // Render
