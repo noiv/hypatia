@@ -6,6 +6,7 @@ import { AtmosphereLayer } from './AtmosphereLayer';
 import { Temp2mLayer } from './Temp2mLayer';
 import { PratesfcLayer } from './PratesfcLayer';
 import { WindLayer } from './WindLayer';
+import { WindLayerInterp } from './WindLayerInterp';
 import { Temp2mService, TimeStep } from '../services/Temp2mService';
 import { PratesfcService, TimeStep as PratesfcTimeStep } from '../services/PratesfcService';
 import { cartesianToLatLon, formatLatLon, latLonToCartesian } from '../utils/coordinates';
@@ -24,6 +25,7 @@ export class Scene {
   private pratesfcLayer: PratesfcLayer | null = null;
   private pratesfcTimeSteps: PratesfcTimeStep[] = [];
   private windLayer: WindLayer | null = null;
+  private windLayerInterp: WindLayerInterp | null = null;
   private currentTime: Date;
   private animationId: number | null = null;
   private onCameraChangeCallback: (() => void) | null = null;
@@ -75,6 +77,8 @@ export class Scene {
     // @ts-ignore - Stats is loaded via script tag
     this.stats = new Stats();
     this.stats.showPanel(0); // 0: fps, 1: ms, 2: mb
+    this.stats.dom.style.left = 'auto';
+    this.stats.dom.style.right = '0px';
     document.body.appendChild(this.stats.dom);
 
     // Controls - smooth with damping for "mass" feeling
@@ -295,9 +299,9 @@ export class Scene {
     }
 
     // Update wind layer line width and animation based on camera altitude
-    if (this.windLayer) {
-      this.windLayer.updateLineWidth(distance);
-      this.windLayer.updateAnimation(deltaTime);
+    if (this.windLayerInterp) {
+      this.windLayerInterp.updateLineWidth(distance);
+      this.windLayerInterp.updateAnimation(deltaTime);
 
       // Detect zoom changes and log when zoom ends
       if (Math.abs(distance - this.lastDistance) > 0.001) {
@@ -308,7 +312,7 @@ export class Scene {
         this.zoomEndTimeout = window.setTimeout(() => {
           // Zoom has ended, log the final values
           const altitudeKm = altitude * 6371; // Earth radius = 6371 km
-          const lineWidth = this.windLayer?.getLineWidth();
+          const lineWidth = this.windLayerInterp?.getLineWidth();
           console.log(`🌬️  Zoom ended: altitude=${altitudeKm.toFixed(0)}km, lineWidth=${lineWidth?.toFixed(3)}px`);
         }, this.zoomEndTimeoutMs);
         this.lastDistance = distance;
@@ -343,6 +347,13 @@ export class Scene {
     if (this.pratesfcLayer && this.pratesfcTimeSteps.length > 0) {
       const timeIndex = PratesfcService.timeToIndex(time, this.pratesfcTimeSteps);
       this.pratesfcLayer.setTimeIndex(timeIndex);
+    }
+
+    // Update wind layer if loaded (async, but non-blocking)
+    if (this.windLayerInterp) {
+      this.windLayerInterp.updateTime(time).catch(err => {
+        console.error('Failed to update wind layer:', err);
+      });
     }
   }
 
@@ -435,26 +446,40 @@ export class Scene {
   }
 
   /**
-   * Load wind layer (Stage 2: flow lines from vector field)
+   * Load wind layer with time interpolation
    */
   async loadWindLayer(): Promise<void> {
-    if (this.windLayer) {
+    if (this.windLayerInterp) {
       console.log('Wind layer already loaded');
       return;
     }
 
-    this.windLayer = new WindLayer(16384);
-    await this.windLayer.loadWindData(this.currentTime);
-    this.scene.add(this.windLayer.getGroup());
-    console.log('🌬️  Wind layer loaded with', this.windLayer.getNumSeeds(), 'seed points');
+    console.log('🌬️  Loading WindLayerInterp...');
+
+    this.windLayerInterp = new WindLayerInterp(16384);
+
+    // Load all wind data timesteps
+    await this.windLayerInterp.loadWindData((loaded, total) => {
+      if (loaded % 10 === 0 || loaded === total) {
+        console.log(`🌬️  Loading wind data: ${loaded}/${total}`);
+      }
+    });
+
+    // Add to scene
+    this.scene.add(this.windLayerInterp.getGroup());
+
+    // Initial time update
+    await this.windLayerInterp.updateTime(this.currentTime);
+
+    console.log('✅ WindLayerInterp loaded with', this.windLayerInterp.getNumSeeds(), 'seed points');
   }
 
   /**
    * Toggle wind layer visibility
    */
   toggleWind(visible: boolean) {
-    if (this.windLayer) {
-      this.windLayer.setVisible(visible);
+    if (this.windLayerInterp) {
+      this.windLayerInterp.setVisible(visible);
     }
   }
 
@@ -462,7 +487,7 @@ export class Scene {
    * Check if wind layer is loaded
    */
   isWindLoaded(): boolean {
-    return this.windLayer !== null;
+    return this.windLayerInterp !== null;
   }
 
   /**
