@@ -7,6 +7,7 @@ import { Temp2mLayer } from './Temp2mLayer';
 import { PratesfcLayer } from './PratesfcLayer';
 import { WindLayer } from './WindLayer';
 import { WindLayerInterp } from './WindLayerInterp';
+import { WindLayerGPUCompute } from './WindLayerGPUCompute';
 import { Temp2mService, TimeStep } from '../services/Temp2mService';
 import { PratesfcService, TimeStep as PratesfcTimeStep } from '../services/PratesfcService';
 import { cartesianToLatLon, formatLatLon, latLonToCartesian } from '../utils/coordinates';
@@ -26,6 +27,7 @@ export class Scene {
   private pratesfcTimeSteps: PratesfcTimeStep[] = [];
   private windLayer: WindLayer | null = null;
   private windLayerInterp: WindLayerInterp | null = null;
+  private windLayerGPU: WindLayerGPUCompute | null = null;
   private currentTime: Date;
   private animationId: number | null = null;
   private onCameraChangeCallback: (() => void) | null = null;
@@ -184,8 +186,8 @@ export class Scene {
     this.renderer.setSize(width, height);
 
     // Update Line2 material resolution for wind layer
-    if (this.windLayer) {
-      this.windLayer.setResolution(width, height);
+    if (this.windLayerGPU) {
+      this.windLayerGPU.setResolution(width, height);
     }
   };
 
@@ -299,9 +301,9 @@ export class Scene {
     }
 
     // Update wind layer line width and animation based on camera altitude
-    if (this.windLayerInterp) {
-      this.windLayerInterp.updateLineWidth(distance);
-      this.windLayerInterp.updateAnimation(deltaTime);
+    if (this.windLayerGPU) {
+      this.windLayerGPU.updateLineWidth(distance);
+      this.windLayerGPU.updateAnimation(deltaTime);
 
       // Detect zoom changes and log when zoom ends
       if (Math.abs(distance - this.lastDistance) > 0.001) {
@@ -312,7 +314,7 @@ export class Scene {
         this.zoomEndTimeout = window.setTimeout(() => {
           // Zoom has ended, log the final values
           const altitudeKm = altitude * 6371; // Earth radius = 6371 km
-          const lineWidth = this.windLayerInterp?.getLineWidth();
+          const lineWidth = this.windLayerGPU?.getLineWidth();
           console.log(`🌬️  Zoom ended: altitude=${altitudeKm.toFixed(0)}km, lineWidth=${lineWidth?.toFixed(3)}px`);
         }, this.zoomEndTimeoutMs);
         this.lastDistance = distance;
@@ -350,8 +352,8 @@ export class Scene {
     }
 
     // Update wind layer if loaded (async, but non-blocking)
-    if (this.windLayerInterp) {
-      this.windLayerInterp.updateTime(time).catch(err => {
+    if (this.windLayerGPU) {
+      this.windLayerGPU.updateTime(time).catch(err => {
         console.error('Failed to update wind layer:', err);
       });
     }
@@ -446,40 +448,43 @@ export class Scene {
   }
 
   /**
-   * Load wind layer with time interpolation
+   * Load wind layer with GPU compute
    */
   async loadWindLayer(): Promise<void> {
-    if (this.windLayerInterp) {
+    if (this.windLayerGPU) {
       console.log('Wind layer already loaded');
       return;
     }
 
-    console.log('🌬️  Loading WindLayerInterp...');
+    console.log('🌬️  Loading WindLayerGPUCompute...');
 
-    this.windLayerInterp = new WindLayerInterp(16384);
+    this.windLayerGPU = new WindLayerGPUCompute(8192);
 
-    // Load all wind data timesteps
-    await this.windLayerInterp.loadWindData((loaded, total) => {
+    // Initialize WebGPU
+    await this.windLayerGPU.initGPU(this.renderer);
+
+    // Load all wind data timesteps and upload to GPU
+    await this.windLayerGPU.loadWindData((loaded, total) => {
       if (loaded % 10 === 0 || loaded === total) {
         console.log(`🌬️  Loading wind data: ${loaded}/${total}`);
       }
     });
 
+    // Trace initial geometry
+    await this.windLayerGPU.updateTime(this.currentTime);
+
     // Add to scene
-    this.scene.add(this.windLayerInterp.getGroup());
+    this.scene.add(this.windLayerGPU.getGroup());
 
-    // Initial time update
-    await this.windLayerInterp.updateTime(this.currentTime);
-
-    console.log('✅ WindLayerInterp loaded with', this.windLayerInterp.getNumSeeds(), 'seed points');
+    console.log('🌬️  WindLayerGPUCompute loaded');
   }
 
   /**
    * Toggle wind layer visibility
    */
   toggleWind(visible: boolean) {
-    if (this.windLayerInterp) {
-      this.windLayerInterp.setVisible(visible);
+    if (this.windLayerGPU) {
+      this.windLayerGPU.setVisible(visible);
     }
   }
 
@@ -487,7 +492,7 @@ export class Scene {
    * Check if wind layer is loaded
    */
   isWindLoaded(): boolean {
-    return this.windLayerInterp !== null;
+    return this.windLayerGPU !== null;
   }
 
   /**

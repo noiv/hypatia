@@ -54,8 +54,8 @@ export function generateRandomSphere(numPoints: number, radius: number = 1.0): T
     const phi = Math.acos(2 * Math.random() - 1); // 0 to π (uniform on sphere)
 
     const x = radius * Math.sin(phi) * Math.cos(theta);
-    const y = radius * Math.sin(phi) * Math.sin(theta);
-    const z = radius * Math.cos(phi);
+    const y = radius * Math.cos(phi);  // Y is UP in Three.js
+    const z = radius * Math.sin(phi) * Math.sin(theta);
 
     points.push(new THREE.Vector3(x, y, z));
   }
