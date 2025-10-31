@@ -29,8 +29,6 @@ export class Temp2mService {
     const startTime = new Date(temp2mData.startTime);
     const endTime = new Date(temp2mData.endTime);
 
-    console.log(`Generating timesteps from ${startTime.toISOString()} to ${endTime.toISOString()}`);
-
     // Generate timesteps at 6-hour intervals
     const current = new Date(startTime);
     while (current <= endTime) {
@@ -53,7 +51,7 @@ export class Temp2mService {
       current.setUTCHours(current.getUTCHours() + 6);
     }
 
-    console.log(`Generated ${steps.length} timesteps (manifest says ${temp2mData.count} available)`);
+    console.log(`Temp2m: ${steps.length} timesteps (${startTime.toISOString()} to ${endTime.toISOString()})`);
 
     return steps;
   }

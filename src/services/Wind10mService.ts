@@ -40,8 +40,6 @@ export class Wind10mService {
     const startTime = new Date(wind10m_uData.startTime);
     const endTime = new Date(wind10m_uData.endTime);
 
-    console.log(`Generating wind timesteps from ${startTime.toISOString()} to ${endTime.toISOString()}`);
-
     // Generate timesteps at 6-hour intervals
     const current = new Date(startTime);
     while (current <= endTime) {
@@ -64,7 +62,7 @@ export class Wind10mService {
       current.setUTCHours(current.getUTCHours() + 6);
     }
 
-    console.log(`Generated ${steps.length} wind timesteps`);
+    console.log(`Wind: ${steps.length} timesteps (${startTime.toISOString()} to ${endTime.toISOString()})`);
 
     return steps;
   }

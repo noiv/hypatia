@@ -29,8 +29,6 @@ export class PratesfcService {
     const startTime = new Date(pratesfcData.startTime);
     const endTime = new Date(pratesfcData.endTime);
 
-    console.log(`Generating pratesfc timesteps from ${startTime.toISOString()} to ${endTime.toISOString()}`);
-
     // Generate timesteps at 6-hour intervals
     const current = new Date(startTime);
     while (current <= endTime) {
@@ -53,7 +51,7 @@ export class PratesfcService {
       current.setUTCHours(current.getUTCHours() + 6);
     }
 
-    console.log(`Generated ${steps.length} pratesfc timesteps (manifest says ${pratesfcData.count} available)`);
+    console.log(`Pratesfc: ${steps.length} timesteps (${startTime.toISOString()} to ${endTime.toISOString()})`);
 
     return steps;
   }

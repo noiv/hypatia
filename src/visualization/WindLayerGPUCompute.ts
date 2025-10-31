@@ -17,8 +17,11 @@ import { WindGPUService } from '../services/WindGPUService';
 export class WindLayerGPUCompute {
   public group: THREE.Group;
   private seeds: THREE.Vector3[];
-  private lines: LineSegments2 | null = null;
-  private material: LineMaterial | null = null;
+  private lines: LineSegments2 | THREE.Mesh | null = null;
+  private material: LineMaterial | THREE.ShaderMaterial | null = null;
+
+  // Performance mode: 'linesegments2' or 'custom'
+  private static readonly USE_CUSTOM_GEOMETRY = false;
 
   // Wind data
   private timesteps: TimeStep[] = [];
@@ -38,7 +41,9 @@ export class WindLayerGPUCompute {
   private lastTimeIndex: number = -1;
   private animationPhase: number = 0;
   private updatePromise: Promise<void> | null = null;
-  private cachedRandomOffsets: Float32Array | null = null; // Cache random offsets to avoid regenerating
+  private cachedRandomOffsets: Float32Array | null = null;
+  private cachedPositions: Float32Array | null = null;
+  private cachedColors: Float32Array | null = null;
 
   private static readonly LINE_STEPS = 32;
   private static readonly STEP_FACTOR = 0.00045;
@@ -329,13 +334,11 @@ export class WindLayerGPUCompute {
       throw new Error('No wind timesteps available');
     }
 
-    console.log(`🌬️  Loading ${this.timesteps.length} wind timesteps...`);
     const { uData, vData } = await WindGPUService.loadAllTimeSteps(this.timesteps, onProgress);
     this.windDataU = uData;
     this.windDataV = vData;
 
     // Upload all timesteps to GPU
-    console.log('📤 Uploading wind data to GPU...');
     for (let i = 0; i < this.timesteps.length; i++) {
       const u_u32 = new Uint32Array(uData[i]);
       const v_u32 = new Uint32Array(vData[i]);
@@ -355,7 +358,7 @@ export class WindLayerGPUCompute {
       this.windBuffers.push(uBuffer, vBuffer);
     }
 
-    console.log(`✅ Uploaded ${this.timesteps.length} timesteps to GPU`);
+    console.log(`Wind GPU: uploaded ${this.timesteps.length} timesteps`);
   }
 
   /**
@@ -382,8 +385,6 @@ export class WindLayerGPUCompute {
       this.lastTimeIndex = timeIndex;
 
       const { index0, index1, blend } = WindGPUService.getAdjacentTimesteps(timeIndex);
-
-      console.log(`🌬️  GPU tracing: t=${timeIndex.toFixed(2)} (${index0}→${index1}, blend=${blend.toFixed(2)})`);
 
       await this.doUpdate(index0, index1, blend);
     };
@@ -435,27 +436,45 @@ export class WindLayerGPUCompute {
     commandEncoder.copyBufferToBuffer(this.outputBuffer!, 0, this.stagingBuffer!, 0, outputSize);
     this.device.queue.submit([commandEncoder.finish()]);
 
+    const submitTime = performance.now();
+
     // Read results
     await this.stagingBuffer!.mapAsync(GPUMapMode.READ);
+    const mapTime = performance.now();
+
     const resultData = new Float32Array(this.stagingBuffer!.getMappedRange());
 
     // Convert to positions and colors for LineSegments2
     this.updateGeometry(resultData);
+    const geometryTime = performance.now();
 
     this.stagingBuffer!.unmap();
 
-    const gpuTime = performance.now() - startTime;
-    console.log(`✅ GPU traced ${this.seeds.length} lines in ${gpuTime.toFixed(2)}ms`);
+    const totalTime = performance.now() - startTime;
+    const submitMs = submitTime - startTime;
+    const mapMs = mapTime - submitTime;
+    const geomMs = geometryTime - mapTime;
+    console.log(`GPU ${this.seeds.length} lines: tot ${totalTime.toFixed(1)}, sub: ${submitMs.toFixed(1)}, map: ${mapMs.toFixed(1)}, geo: ${geomMs.toFixed(1)}`);
   }
 
   /**
    * Update LineSegments2 geometry with computed vertices
    */
   private updateGeometry(vertices: Float32Array): void {
-    const positions: number[] = [];
-    const colors: number[] = [];
+    // Allocate arrays once and reuse them
+    const numSegments = this.seeds.length * (WindLayerGPUCompute.LINE_STEPS - 1);
+    const arraySize = numSegments * 6;
+
+    if (!this.cachedPositions || this.cachedPositions.length !== arraySize) {
+      this.cachedPositions = new Float32Array(arraySize);
+      this.cachedColors = new Float32Array(arraySize);
+    }
+
+    const positions = this.cachedPositions;
+    const colors = this.cachedColors;
 
     const cycleLength = WindLayerGPUCompute.LINE_STEPS + WindLayerGPUCompute.SNAKE_LENGTH;
+    const totalSegments = WindLayerGPUCompute.LINE_STEPS - 1;
 
     // Generate random offsets once and cache them
     if (!this.cachedRandomOffsets) {
@@ -465,50 +484,99 @@ export class WindLayerGPUCompute {
       }
     }
 
+    let posIdx = 0;
+    let colorIdx = 0;
+
     for (let lineIdx = 0; lineIdx < this.seeds.length; lineIdx++) {
       const randomOffset = this.cachedRandomOffsets[lineIdx];
       const offset = lineIdx * WindLayerGPUCompute.LINE_STEPS * 4; // vec4 = 4 floats
+      const normalizedOffset = randomOffset / cycleLength;
 
       for (let i = 0; i < WindLayerGPUCompute.LINE_STEPS - 1; i++) {
         const idx0 = offset + i * 4;       // vec4 stride
         const idx1 = offset + (i + 1) * 4; // vec4 stride
 
-        positions.push(
-          vertices[idx0], vertices[idx0 + 1], vertices[idx0 + 2],  // xyz from vec4
-          vertices[idx1], vertices[idx1 + 1], vertices[idx1 + 2]   // xyz from vec4
-        );
+        // Write positions directly to typed array
+        positions[posIdx++] = vertices[idx0];
+        positions[posIdx++] = vertices[idx0 + 1];
+        positions[posIdx++] = vertices[idx0 + 2];
+        positions[posIdx++] = vertices[idx1];
+        positions[posIdx++] = vertices[idx1 + 1];
+        positions[posIdx++] = vertices[idx1 + 2];
 
-        const totalSegments = WindLayerGPUCompute.LINE_STEPS - 1;
         const remainingSegments = totalSegments - i;
-        let taperFactor = 1.0;
-        if (remainingSegments <= WindLayerGPUCompute.TAPER_SEGMENTS) {
-          taperFactor = remainingSegments / WindLayerGPUCompute.TAPER_SEGMENTS;
-        }
+        const taperFactor = remainingSegments <= WindLayerGPUCompute.TAPER_SEGMENTS
+          ? remainingSegments / WindLayerGPUCompute.TAPER_SEGMENTS
+          : 1.0;
 
         // Encode segment data in color channels for snake animation
         const normalizedIndex = i / totalSegments;
-        const normalizedOffset = randomOffset / cycleLength;
 
-        colors.push(
-          normalizedIndex, normalizedOffset, taperFactor,
-          normalizedIndex, normalizedOffset, taperFactor
-        );
+        colors[colorIdx++] = normalizedIndex;
+        colors[colorIdx++] = normalizedOffset;
+        colors[colorIdx++] = taperFactor;
+        colors[colorIdx++] = normalizedIndex;
+        colors[colorIdx++] = normalizedOffset;
+        colors[colorIdx++] = taperFactor;
       }
     }
 
     if (this.lines) {
-      const geometry = this.lines.geometry as LineSegmentsGeometry;
-      geometry.setPositions(positions);
-      geometry.setColors(colors);
+      if (WindLayerGPUCompute.USE_CUSTOM_GEOMETRY) {
+        this.updateCustomGeometry(positions, colors);
+      } else {
+        const geometry = this.lines.geometry as LineSegmentsGeometry;
+        geometry.setPositions(positions as any);
+        geometry.setColors(colors as any);
+      }
     } else {
       this.createLines(positions, colors);
     }
   }
 
   /**
+   * Update custom geometry buffers directly (zero-copy)
+   */
+  private updateCustomGeometry(positions: Float32Array, colors: Float32Array): void {
+    const geometry = (this.lines as THREE.Mesh).geometry;
+    const instanceStart = geometry.getAttribute('instanceStart') as THREE.BufferAttribute;
+    const instanceEnd = geometry.getAttribute('instanceEnd') as THREE.BufferAttribute;
+    const instanceColorStart = geometry.getAttribute('instanceColorStart') as THREE.BufferAttribute;
+    const instanceColorEnd = geometry.getAttribute('instanceColorEnd') as THREE.BufferAttribute;
+
+    // Update buffer arrays directly - just copy references since we control the data
+    const numSegments = positions.length / 6;
+    for (let i = 0; i < numSegments; i++) {
+      const posIdx = i * 6;
+      const attrIdx = i * 3;
+
+      instanceStart.setXYZ(i, positions[posIdx], positions[posIdx + 1], positions[posIdx + 2]);
+      instanceEnd.setXYZ(i, positions[posIdx + 3], positions[posIdx + 4], positions[posIdx + 5]);
+      instanceColorStart.setXYZ(i, colors[posIdx], colors[posIdx + 1], colors[posIdx + 2]);
+      instanceColorEnd.setXYZ(i, colors[posIdx + 3], colors[posIdx + 4], colors[posIdx + 5]);
+    }
+
+    instanceStart.needsUpdate = true;
+    instanceEnd.needsUpdate = true;
+    instanceColorStart.needsUpdate = true;
+    instanceColorEnd.needsUpdate = true;
+  }
+
+  /**
+   * Create LineSegments2 or custom geometry based on USE_CUSTOM_GEOMETRY flag
+   */
+  private createLines(positions: Float32Array | number[], colors: Float32Array | number[]): void {
+    if (WindLayerGPUCompute.USE_CUSTOM_GEOMETRY) {
+      this.createCustomGeometry(positions as Float32Array, colors as Float32Array);
+    } else {
+      this.createLineSegments2(positions, colors);
+    }
+  }
+
+  /**
    * Create LineSegments2 with given positions and colors
    */
-  private createLines(positions: number[], colors: number[]): void {
+  private createLineSegments2(positions: Float32Array | number[], colors: Float32Array | number[]): void {
     const geometry = new LineSegmentsGeometry();
     geometry.setPositions(positions);
     geometry.setColors(colors);
@@ -597,6 +665,153 @@ export class WindLayerGPUCompute {
     console.log(`✅ Created wind lines: ${this.seeds.length} lines, ${positions.length / 6} segments`);
   }
 
+  /**
+   * Create custom instanced geometry for zero-copy performance
+   */
+  private createCustomGeometry(positions: Float32Array, colors: Float32Array): void {
+    const numSegments = positions.length / 6;
+
+    // Create instanced geometry for line segments
+    const geometry = new THREE.InstancedBufferGeometry();
+
+    // Base quad geometry (will be instanced for each segment)
+    const quadPositions = new Float32Array([
+      -0.5, -1, 0,
+      -0.5,  1, 0,
+       0.5,  1, 0,
+       0.5, -1, 0,
+    ]);
+    const quadIndices = new Uint16Array([0, 1, 2, 0, 2, 3]);
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(quadPositions, 3));
+    geometry.setIndex(new THREE.BufferAttribute(quadIndices, 1));
+
+    // Create instance attributes from our data
+    const instanceStarts = new Float32Array(numSegments * 3);
+    const instanceEnds = new Float32Array(numSegments * 3);
+    const instanceColorStarts = new Float32Array(numSegments * 3);
+    const instanceColorEnds = new Float32Array(numSegments * 3);
+
+    for (let i = 0; i < numSegments; i++) {
+      const posIdx = i * 6;
+      const attrIdx = i * 3;
+
+      instanceStarts[attrIdx] = positions[posIdx];
+      instanceStarts[attrIdx + 1] = positions[posIdx + 1];
+      instanceStarts[attrIdx + 2] = positions[posIdx + 2];
+
+      instanceEnds[attrIdx] = positions[posIdx + 3];
+      instanceEnds[attrIdx + 1] = positions[posIdx + 4];
+      instanceEnds[attrIdx + 2] = positions[posIdx + 5];
+
+      instanceColorStarts[attrIdx] = colors[posIdx];
+      instanceColorStarts[attrIdx + 1] = colors[posIdx + 1];
+      instanceColorStarts[attrIdx + 2] = colors[posIdx + 2];
+
+      instanceColorEnds[attrIdx] = colors[posIdx + 3];
+      instanceColorEnds[attrIdx + 1] = colors[posIdx + 4];
+      instanceColorEnds[attrIdx + 2] = colors[posIdx + 5];
+    }
+
+    geometry.setAttribute('instanceStart', new THREE.InstancedBufferAttribute(instanceStarts, 3));
+    geometry.setAttribute('instanceEnd', new THREE.InstancedBufferAttribute(instanceEnds, 3));
+    geometry.setAttribute('instanceColorStart', new THREE.InstancedBufferAttribute(instanceColorStarts, 3));
+    geometry.setAttribute('instanceColorEnd', new THREE.InstancedBufferAttribute(instanceColorEnds, 3));
+
+    // Custom shader material (similar to LineMaterial but optimized)
+    this.material = new THREE.ShaderMaterial({
+      vertexShader: `
+        attribute vec3 instanceStart;
+        attribute vec3 instanceEnd;
+        attribute vec3 instanceColorStart;
+        attribute vec3 instanceColorEnd;
+
+        varying vec3 vColor;
+
+        uniform vec2 resolution;
+        uniform float linewidth;
+
+        void main() {
+          // Interpolate color along segment
+          vColor = mix(instanceColorStart, instanceColorEnd, position.y * 0.5 + 0.5);
+
+          // Interpolate position along segment
+          vec3 start = instanceStart;
+          vec3 end = instanceEnd;
+          vec3 pointPos = mix(start, end, position.y * 0.5 + 0.5);
+
+          // Calculate line direction in screen space
+          vec4 startClip = projectionMatrix * modelViewMatrix * vec4(start, 1.0);
+          vec4 endClip = projectionMatrix * modelViewMatrix * vec4(end, 1.0);
+
+          vec2 startScreen = startClip.xy / startClip.w;
+          vec2 endScreen = endClip.xy / endClip.w;
+
+          vec2 dir = normalize(endScreen - startScreen);
+          vec2 normal = vec2(-dir.y, dir.x);
+
+          // Apply line width in screen space
+          vec4 clip = projectionMatrix * modelViewMatrix * vec4(pointPos, 1.0);
+          vec2 offset = normal * linewidth / resolution.y * clip.w;
+          clip.xy += offset * position.x;
+
+          gl_Position = clip;
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vColor;
+
+        uniform float animationPhase;
+        uniform float snakeLength;
+        uniform float lineSteps;
+        uniform float opacity;
+
+        void main() {
+          // Extract segment data from color
+          float normalizedIndex = vColor.r;
+          float normalizedOffset = vColor.g;
+          float taperFactor = vColor.b;
+
+          // Calculate snake animation
+          float cycleLength = lineSteps + snakeLength;
+          float segmentIndex = normalizedIndex * (lineSteps - 1.0);
+          float randomOffset = normalizedOffset * cycleLength;
+          float snakeHead = mod(animationPhase + randomOffset, cycleLength);
+          float distanceFromHead = segmentIndex - snakeHead;
+
+          if (distanceFromHead < -snakeLength) {
+            distanceFromHead += cycleLength;
+          }
+
+          float segmentOpacity = 0.0;
+          if (distanceFromHead >= 0.0 && distanceFromHead <= snakeLength) {
+            float normalizedDistance = distanceFromHead / snakeLength;
+            segmentOpacity = 1.0 - normalizedDistance;
+          }
+
+          float finalAlpha = opacity * segmentOpacity * taperFactor;
+          gl_FragColor = vec4(vec3(1.0), finalAlpha);
+        }
+      `,
+      uniforms: {
+        resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+        linewidth: { value: WindLayerGPUCompute.LINE_WIDTH },
+        opacity: { value: 0.6 },
+        animationPhase: { value: 0.0 },
+        snakeLength: { value: WindLayerGPUCompute.SNAKE_LENGTH },
+        lineSteps: { value: WindLayerGPUCompute.LINE_STEPS }
+      },
+      transparent: true,
+      depthWrite: false,
+      depthTest: true,
+    });
+
+    this.lines = new THREE.Mesh(geometry, this.material);
+    this.group.add(this.lines);
+
+    console.log(`✅ Created custom wind lines: ${this.seeds.length} lines, ${numSegments} segments`);
+  }
+
   getGroup(): THREE.Group {
     return this.group;
   }
@@ -606,8 +821,12 @@ export class WindLayerGPUCompute {
   }
 
   setResolution(width: number, height: number): void {
-    if (this.material) {
-      this.material.resolution.set(width, height);
+    if (!this.material) return;
+
+    if (WindLayerGPUCompute.USE_CUSTOM_GEOMETRY) {
+      (this.material as THREE.ShaderMaterial).uniforms.resolution.value.set(width, height);
+    } else {
+      (this.material as LineMaterial).resolution.set(width, height);
     }
   }
 
@@ -624,7 +843,11 @@ export class WindLayerGPUCompute {
     const clampedT = Math.max(0, Math.min(1, t));
     const lineWidth = minWidth + (maxWidth - minWidth) * clampedT;
 
-    this.material.linewidth = lineWidth;
+    if (WindLayerGPUCompute.USE_CUSTOM_GEOMETRY) {
+      (this.material as THREE.ShaderMaterial).uniforms.linewidth.value = lineWidth;
+    } else {
+      (this.material as LineMaterial).linewidth = lineWidth;
+    }
   }
 
   updateAnimation(deltaTime: number): void {

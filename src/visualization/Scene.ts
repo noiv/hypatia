@@ -136,6 +136,7 @@ export class Scene {
     this.animate();
 
     console.log(`✅ Scene initialized (${this.scene.children.length} objects)`);
+    console.log('[PAGE_LOADED]'); // Signal for automation tools
   }
 
   private addAxesHelpers() {
@@ -465,8 +466,8 @@ export class Scene {
 
     // Load all wind data timesteps and upload to GPU
     await this.windLayerGPU.loadWindData((loaded, total) => {
-      if (loaded % 10 === 0 || loaded === total) {
-        console.log(`🌬️  Loading wind data: ${loaded}/${total}`);
+      if (loaded === total) {
+        console.log(`Wind: loaded ${total} files`);
       }
     });
 
