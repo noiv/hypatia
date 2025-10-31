@@ -28,7 +28,42 @@ except ImportError:
     print("ERROR: ecmwf-opendata not installed. Install with: pip install ecmwf-opendata")
     sys.exit(1)
 
-DATA_DIR = Path("public/data")
+def check_working_directory():
+    """
+    Ensure script is run from correct directory (code/ root).
+    Checks for existence of public/data symlink.
+    """
+    data_dir = Path("public/data")
+
+    # Check if public/data exists
+    if not data_dir.exists():
+        print("❌ ERROR: public/data not found!")
+        print("   This script must be run from the 'code/' directory")
+        print()
+        print("   Current directory:", Path.cwd())
+        print("   Expected directory: /Users/noiv/Projects/hypatia/code")
+        print()
+        print("   Run: cd /Users/noiv/Projects/hypatia/code")
+        print("        python scripts/download_dev_data.py")
+        sys.exit(1)
+
+    # Check if it's a symlink (should point to ../data)
+    if not data_dir.is_symlink():
+        print("⚠️  WARNING: public/data is not a symlink")
+        print("   Expected: symlink to /Users/noiv/Projects/hypatia/data")
+        print("   Found: regular directory")
+        print()
+        response = input("Continue anyway? [y/N] ")
+        if response.lower() != 'y':
+            print("Aborted.")
+            sys.exit(0)
+    else:
+        target = data_dir.resolve()
+        print(f"✅ Data directory: {data_dir} -> {target}")
+
+    return data_dir
+
+DATA_DIR = check_working_directory()
 
 # Parameters to download
 PARAMS = {

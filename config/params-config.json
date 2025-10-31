@@ -1,0 +1,197 @@
+{
+  "$schema": "./schemas/params-config.schema.json",
+  "version": "1.0.0",
+  "source": "ECMWF Open Data - Real-time IFS Forecasts",
+  "updated": "2025-10-31",
+  "parameters": {
+    "2t": {
+      "name": "2 Metre Temperature",
+      "description": "Temperature at 2 meters above surface",
+      "units": "K",
+      "category": "temperature",
+      "level": "surface"
+    },
+    "10u": {
+      "name": "10 Metre U Wind Component",
+      "description": "Zonal (east-west) wind component at 10 meters",
+      "units": "m s**-1",
+      "category": "wind",
+      "level": "surface"
+    },
+    "10v": {
+      "name": "10 Metre V Wind Component",
+      "description": "Meridional (north-south) wind component at 10 meters",
+      "units": "m s**-1",
+      "category": "wind",
+      "level": "surface"
+    },
+    "msl": {
+      "name": "Mean Sea Level Pressure",
+      "description": "Atmospheric pressure reduced to mean sea level",
+      "units": "Pa",
+      "category": "pressure",
+      "level": "surface"
+    },
+    "sp": {
+      "name": "Surface Pressure",
+      "description": "Pressure at the surface",
+      "units": "Pa",
+      "category": "pressure",
+      "level": "surface"
+    },
+    "tp": {
+      "name": "Total Precipitation",
+      "description": "Accumulated total precipitation",
+      "units": "m",
+      "category": "precipitation",
+      "level": "surface"
+    },
+    "tprate": {
+      "name": "Total Precipitation Rate",
+      "description": "Instantaneous rate of total precipitation",
+      "units": "kg m**-2 s**-1",
+      "category": "precipitation",
+      "level": "surface"
+    },
+    "skt": {
+      "name": "Skin Temperature",
+      "description": "Temperature of the surface skin layer",
+      "units": "K",
+      "category": "temperature",
+      "level": "surface"
+    },
+    "stl1": {
+      "name": "Soil Temperature Level 1",
+      "description": "Temperature of first soil layer (0-7cm)",
+      "units": "K",
+      "category": "surface",
+      "level": "soil"
+    },
+    "tcwv": {
+      "name": "Total Column Water Vapour",
+      "description": "Vertically integrated water vapour",
+      "units": "kg m**-2",
+      "category": "humidity",
+      "level": "column"
+    },
+    "ro": {
+      "name": "Runoff",
+      "description": "Surface and subsurface runoff",
+      "units": "m",
+      "category": "surface",
+      "level": "surface"
+    },
+    "st": {
+      "name": "Soil Temperature",
+      "description": "Temperature of soil",
+      "units": "K",
+      "category": "surface",
+      "level": "soil"
+    },
+    "t": {
+      "name": "Temperature",
+      "description": "Air temperature at pressure levels",
+      "units": "K",
+      "category": "temperature",
+      "level": "pressure"
+    },
+    "u": {
+      "name": "U Component of Wind",
+      "description": "Zonal wind component at pressure levels",
+      "units": "m s**-1",
+      "category": "wind",
+      "level": "pressure"
+    },
+    "v": {
+      "name": "V Component of Wind",
+      "description": "Meridional wind component at pressure levels",
+      "units": "m s**-1",
+      "category": "wind",
+      "level": "pressure"
+    },
+    "gh": {
+      "name": "Geopotential Height",
+      "description": "Geopotential height at pressure levels",
+      "units": "gpm",
+      "category": "pressure",
+      "level": "pressure"
+    },
+    "q": {
+      "name": "Specific Humidity",
+      "description": "Mass of water vapour per unit mass of air",
+      "units": "kg kg**-1",
+      "category": "humidity",
+      "level": "pressure"
+    },
+    "r": {
+      "name": "Relative Humidity",
+      "description": "Relative humidity at pressure levels",
+      "units": "%",
+      "category": "humidity",
+      "level": "pressure"
+    },
+    "d": {
+      "name": "Divergence",
+      "description": "Horizontal divergence of wind field",
+      "units": "s**-1",
+      "category": "wind",
+      "level": "pressure"
+    },
+    "vo": {
+      "name": "Vorticity",
+      "description": "Relative vorticity",
+      "units": "s**-1",
+      "category": "wind",
+      "level": "pressure"
+    },
+    "swh": {
+      "name": "Significant Wave Height",
+      "description": "Average height of highest 1/3 of waves",
+      "units": "m",
+      "category": "ocean",
+      "level": "surface"
+    },
+    "mwd": {
+      "name": "Mean Wave Direction",
+      "description": "Direction of wave propagation",
+      "units": "degrees",
+      "category": "ocean",
+      "level": "surface"
+    },
+    "mwp": {
+      "name": "Mean Wave Period",
+      "description": "Mean period of waves",
+      "units": "s",
+      "category": "ocean",
+      "level": "surface"
+    },
+    "mp2": {
+      "name": "Mean Zero-Crossing Wave Period",
+      "description": "Mean period between successive wave crests",
+      "units": "s",
+      "category": "ocean",
+      "level": "surface"
+    },
+    "pp1d": {
+      "name": "Peak Wave Period",
+      "description": "Period of most energetic waves",
+      "units": "s",
+      "category": "ocean",
+      "level": "surface"
+    },
+    "lsm": {
+      "name": "Land-Sea Mask",
+      "description": "Fraction of land (0=sea, 1=land)",
+      "units": "(0 - 1)",
+      "category": "static",
+      "level": "surface"
+    },
+    "z": {
+      "name": "Geopotential",
+      "description": "Gravitational potential energy",
+      "units": "m**2 s**-2",
+      "category": "static",
+      "level": "surface"
+    }
+  }
+}

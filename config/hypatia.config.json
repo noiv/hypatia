@@ -1,0 +1,25 @@
+{
+  "$schema": "./schemas/hypatia-config.schema.json",
+  "app": {
+    "name": "Hypatia",
+    "version": "0.1.0",
+    "description": "Real-time global weather visualization"
+  },
+  "data": {
+    "maxRangeDays": 15,
+    "dataDirectory": "public/data",
+    "updateIntervalMs": 300000,
+    "defaultResolution": "0p25"
+  },
+  "visualization": {
+    "defaultCenter": [0, 0],
+    "defaultZoom": 2,
+    "maxZoom": 8,
+    "minZoom": 1
+  },
+  "performance": {
+    "workerCount": 4,
+    "cacheStrategy": "progressive",
+    "preloadCritical": true
+  }
+}

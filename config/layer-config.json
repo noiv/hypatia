@@ -1,0 +1,196 @@
+{
+  "$schema": "./schemas/layer-config.schema.json",
+  "version": "1.0.0",
+  "layers": [
+    {
+      "id": "temp2m",
+      "urlKey": "temp",
+      "label": {
+        "short": "Temp",
+        "long": "Temperature"
+      },
+      "description": "Surface air temperature at 2 meters above ground",
+      "ecmwfParams": ["2t"],
+      "visualization": {
+        "colormap": "temperature",
+        "range": {
+          "min": 233,
+          "max": 313
+        },
+        "opacity": 0.7
+      },
+      "ui": {
+        "icon": "thermometer",
+        "group": "surface",
+        "order": 1,
+        "defaultEnabled": true
+      }
+    },
+    {
+      "id": "wind10m",
+      "urlKey": "wind",
+      "label": {
+        "short": "Wind",
+        "long": "Wind Speed"
+      },
+      "description": "Wind speed and direction at 10 meters above ground",
+      "ecmwfParams": ["10u", "10v"],
+      "visualization": {
+        "colormap": "wind",
+        "range": {
+          "min": 0,
+          "max": 25
+        },
+        "opacity": 0.6,
+        "vectors": true
+      },
+      "ui": {
+        "icon": "wind",
+        "group": "surface",
+        "order": 2,
+        "defaultEnabled": false
+      }
+    },
+    {
+      "id": "precipitation",
+      "urlKey": "rain",
+      "label": {
+        "short": "Rain",
+        "long": "Precipitation"
+      },
+      "description": "Total precipitation rate",
+      "ecmwfParams": ["tprate"],
+      "visualization": {
+        "colormap": "precipitation",
+        "range": {
+          "min": 0,
+          "max": 0.001
+        },
+        "opacity": 0.8
+      },
+      "ui": {
+        "icon": "droplet",
+        "group": "surface",
+        "order": 3,
+        "defaultEnabled": false
+      }
+    },
+    {
+      "id": "pressure_msl",
+      "urlKey": "pressure",
+      "label": {
+        "short": "Pressure",
+        "long": "Sea Level Pressure"
+      },
+      "description": "Mean sea level pressure",
+      "ecmwfParams": ["msl"],
+      "visualization": {
+        "colormap": "pressure",
+        "range": {
+          "min": 96000,
+          "max": 104000
+        },
+        "opacity": 0.5,
+        "contours": true
+      },
+      "ui": {
+        "icon": "gauge",
+        "group": "surface",
+        "order": 4,
+        "defaultEnabled": false
+      }
+    },
+    {
+      "id": "humidity",
+      "urlKey": "humidity",
+      "label": {
+        "short": "Humid",
+        "long": "Humidity"
+      },
+      "description": "Total column water vapour",
+      "ecmwfParams": ["tcwv"],
+      "visualization": {
+        "colormap": "humidity",
+        "range": {
+          "min": 0,
+          "max": 70
+        },
+        "opacity": 0.6
+      },
+      "ui": {
+        "icon": "droplets",
+        "group": "surface",
+        "order": 5,
+        "defaultEnabled": false
+      }
+    },
+    {
+      "id": "clouds",
+      "urlKey": "clouds",
+      "label": {
+        "short": "Clouds",
+        "long": "Cloud Cover"
+      },
+      "description": "Total cloud cover (when available)",
+      "ecmwfParams": ["tcc"],
+      "visualization": {
+        "colormap": "cloud",
+        "range": {
+          "min": 0,
+          "max": 1
+        },
+        "opacity": 0.5
+      },
+      "ui": {
+        "icon": "cloud",
+        "group": "surface",
+        "order": 6,
+        "defaultEnabled": false
+      },
+      "availability": "limited"
+    },
+    {
+      "id": "waves",
+      "urlKey": "waves",
+      "label": {
+        "short": "Waves",
+        "long": "Wave Height"
+      },
+      "description": "Significant wave height over oceans",
+      "ecmwfParams": ["swh"],
+      "visualization": {
+        "colormap": "waves",
+        "range": {
+          "min": 0,
+          "max": 10
+        },
+        "opacity": 0.7,
+        "oceanOnly": true
+      },
+      "ui": {
+        "icon": "waves",
+        "group": "ocean",
+        "order": 7,
+        "defaultEnabled": false
+      },
+      "availability": "limited"
+    }
+  ],
+  "groups": {
+    "surface": {
+      "name": "Surface",
+      "description": "Surface-level atmospheric parameters",
+      "order": 1
+    },
+    "ocean": {
+      "name": "Ocean",
+      "description": "Ocean wave and current parameters",
+      "order": 2
+    },
+    "upper": {
+      "name": "Upper Air",
+      "description": "Pressure-level atmospheric parameters",
+      "order": 3
+    }
+  }
+}
