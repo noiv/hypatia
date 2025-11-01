@@ -17,7 +17,8 @@ import type { LayerData, TimeStep, LoadProgress } from '../config/types';
 import { Temp2mService } from './Temp2mService';
 import { PratesfcService } from './PratesfcService';
 
-export type LayerId = 'temp2m' | 'precipitation' | 'wind10m';
+// Re-export LayerId for convenience
+export type { LayerId } from '../visualization/ILayer';
 
 export class DataService {
   private cache: Map<LayerId, LayerData> = new Map();
@@ -76,10 +77,11 @@ export class DataService {
         break;
 
       case 'wind10m':
-        // Wind layer uses WindLayerGPUCompute directly - not through DataService yet
-        // Future: refactor wind loading to use DataService
-        throw new Error('Wind layer not yet supported in DataService - use Scene.createLayer directly');
-        break;
+      case 'earth':
+      case 'sun':
+      case 'atmosphere':
+        // These layers handle their own data loading
+        throw new Error(`Layer ${layerId} does not use DataService for data loading`);
 
       default:
         throw new Error(`Unknown layer: ${layerId}`);
