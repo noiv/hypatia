@@ -1,7 +1,7 @@
 /**
  * App Bootstrap Service
  *
- * Handles application initialization sequence
+ * Handles application initialization sequence with explicit error handling
  */
 
 import { getCurrentTime } from './TimeService';
@@ -38,20 +38,205 @@ export interface AppInstance {
   activate: () => void;
 }
 
+interface StepResult {
+  success: boolean;
+  error?: string;
+}
+
+interface BootstrapStepConfig {
+  start: number;
+  end: number;
+  label: string;
+  run: (state: BootstrapState, app: AppInstance, onProgress?: BootstrapProgressCallback) => Promise<void>;
+}
+
 export class AppBootstrapService {
-  private static readonly STEPS = {
-    INIT: { start: 0, end: 0, label: 'Starting...' },
-    CAPABILITIES: { start: 0, end: 5, label: 'Checking browser capabilities...' },
-    CONFIG: { start: 5, end: 15, label: 'Loading configurations...' },
-    TIME: { start: 15, end: 25, label: 'Fetching server time...' },
-    FORECAST: { start: 25, end: 35, label: 'Checking latest forecast...' },
-    IMAGES: { start: 35, end: 90, label: 'Loading resources...' },
-    LAYERS: { start: 90, end: 93, label: 'Initializing layers...' },
-    SCENE: { start: 93, end: 95, label: 'Initializing scene...' },
-    LOAD_LAYERS: { start: 95, end: 97, label: 'Loading enabled layers...' },
-    ACTIVATE: { start: 97, end: 99, label: 'Activating...' },
-    READY: { start: 99, end: 100, label: 'Ready' }
+  private static readonly STEPS: Record<string, BootstrapStepConfig> = {
+    CAPABILITIES: {
+      start: 0,
+      end: 5,
+      label: 'Checking browser capabilities...',
+      async run() {
+        const capabilities = checkBrowserCapabilities();
+        if (!capabilities.supported) {
+          const helpUrls = getCapabilityHelpUrls();
+          const missing = capabilities.missing.join(', ');
+          throw new Error(
+            `Your browser does not support required features: ${missing}.\n\n` +
+            `Please check:\n` +
+            `• WebGL2: ${helpUrls.webgl}\n` +
+            `• WebGPU: ${helpUrls.webgpu}`
+          );
+        }
+      }
+    },
+
+    CONFIG: {
+      start: 5,
+      end: 15,
+      label: 'Loading configurations...',
+      async run() {
+        await configLoader.loadAll();
+        await LayerStateService.initialize();
+      }
+    },
+
+    TIME: {
+      start: 15,
+      end: 25,
+      label: 'Fetching server time...',
+      async run(state) {
+        state.currentTime = await getCurrentTime();
+      }
+    },
+
+    FORECAST: {
+      start: 25,
+      end: 35,
+      label: 'Checking latest forecast...',
+      async run(state) {
+        state.latestRun = await getLatestRun(state.currentTime!);
+      }
+    },
+
+    IMAGES: {
+      start: 35,
+      end: 90,
+      label: 'Loading resources...',
+      async run(state, _app, onProgress) {
+        const progressUpdater = (progress: LoadProgress) => {
+          const imagesStart = this.start;
+          const imagesRange = this.end - imagesStart;
+          const percentage = imagesStart + (progress.loaded / progress.total) * imagesRange;
+
+          state.bootstrapProgress = {
+            loaded: progress.loaded,
+            total: progress.total,
+            percentage,
+            currentFile: progress.currentFile || ''
+          };
+
+          if (onProgress) {
+            onProgress({ percentage, label: progress.currentFile || '' });
+          }
+        };
+
+        state.preloadedImages = await preloadImages('critical', progressUpdater);
+      }
+    },
+
+    GEOLOCATION: {
+      start: 90,
+      end: 90,
+      label: 'Getting location...',
+      async run(state) {
+        // Optional - fire and forget
+        const hypatiaConfig = configLoader.getHypatiaConfig();
+        if (hypatiaConfig.features.enableGeolocation) {
+          getUserLocation()
+            .then(location => {
+              state.userLocation = location;
+            })
+            .catch(() => {
+              // Silently fail - geolocation is optional
+            });
+        }
+      }
+    },
+
+    LAYERS: {
+      start: 90,
+      end: 93,
+      label: 'Initializing layers...',
+      async run() {
+        const layerState = LayerStateService.getInstance();
+        await UrlLayerSyncService.initializeLayersFromUrl(layerState);
+      }
+    },
+
+    SCENE: {
+      start: 93,
+      end: 95,
+      label: 'Initializing scene...',
+      async run(_state, app) {
+        await app.initializeScene();
+      }
+    },
+
+    LOAD_LAYERS: {
+      start: 95,
+      end: 97,
+      label: 'Loading enabled layers...',
+      async run(_state, app) {
+        await app.loadEnabledLayers();
+      }
+    },
+
+    ACTIVATE: {
+      start: 97,
+      end: 99,
+      label: 'Activating...',
+      async run(_state, app) {
+        app.activate();
+      }
+    },
+
+    READY: {
+      start: 99,
+      end: 100,
+      label: 'Ready',
+      async run() {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
   };
+
+  /**
+   * Run a single bootstrap step with explicit error handling
+   */
+  private static async runStep(
+    step: BootstrapStepConfig,
+    state: BootstrapState,
+    app: AppInstance,
+    onProgress?: BootstrapProgressCallback
+  ): Promise<StepResult> {
+    try {
+      // Update progress to start
+      this.updateProgress(step, step.start, state, onProgress);
+
+      // Run step logic
+      await step.run(state, app, onProgress);
+
+      // Update progress to end
+      this.updateProgress(step, step.end, state, onProgress);
+
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { success: false, error: message };
+    }
+  }
+
+  /**
+   * Update progress state
+   */
+  private static updateProgress(
+    step: BootstrapStepConfig,
+    percentage: number,
+    state: BootstrapState,
+    onProgress?: BootstrapProgressCallback
+  ): void {
+    state.bootstrapProgress = {
+      loaded: 0,
+      total: 100,
+      percentage,
+      currentFile: step.label
+    };
+
+    if (onProgress) {
+      onProgress({ percentage, label: step.label });
+    }
+  }
 
   /**
    * Run full bootstrap sequence
@@ -70,128 +255,24 @@ export class AppBootstrapService {
       preloadedImages: null
     };
 
-    try {
-      const updateProgress = (step: typeof this.STEPS[keyof typeof this.STEPS], percentage?: number) => {
-        const percent = percentage ?? step.end;
-        state.bootstrapProgress = {
-          loaded: 0,
-          total: 100,
-          percentage: percent,
-          currentFile: step.label
-        };
-        if (onProgress) {
-          onProgress({ percentage: percent, label: step.label });
-        }
-      };
+    console.log('Bootstrap.start');
 
-      console.log('Bootstrap.start');
+    // Run each step in sequence
+    for (const [name, step] of Object.entries(this.STEPS)) {
+      const { success, error } = await this.runStep(step, state, app, onProgress);
 
-      // Step 0: Check browser capabilities
-      updateProgress(this.STEPS.CAPABILITIES, this.STEPS.CAPABILITIES.start);
-      const capabilities = checkBrowserCapabilities();
-      if (!capabilities.supported) {
-        const helpUrls = getCapabilityHelpUrls();
-        const missing = capabilities.missing.join(', ');
-        const errorMessage = `Your browser does not support required features: ${missing}.\n\n` +
-          `Please check:\n` +
-          `• WebGL2: ${helpUrls.webgl}\n` +
-          `• WebGPU: ${helpUrls.webgpu}`;
-
-        throw new Error(errorMessage);
+      if (!success) {
+        console.error(`Bootstrap failed at ${name}:`, error);
+        state.bootstrapStatus = 'error';
+        state.bootstrapError = error ?? null;
+        return state;
       }
-      updateProgress(this.STEPS.CAPABILITIES, this.STEPS.CAPABILITIES.end);
-
-      // Step 1: Load configurations
-      updateProgress(this.STEPS.CONFIG, this.STEPS.CONFIG.start);
-      await configLoader.loadAll();
-      await LayerStateService.initialize();
-      updateProgress(this.STEPS.CONFIG, this.STEPS.CONFIG.end);
-
-      // Step 2: Get server time
-      updateProgress(this.STEPS.TIME, this.STEPS.TIME.start);
-      state.currentTime = await getCurrentTime();
-      updateProgress(this.STEPS.TIME, this.STEPS.TIME.end);
-
-      // Step 3: Get latest forecast
-      updateProgress(this.STEPS.FORECAST, this.STEPS.FORECAST.start);
-      state.latestRun = await getLatestRun(state.currentTime!);
-      updateProgress(this.STEPS.FORECAST, this.STEPS.FORECAST.end);
-
-      // Step 4: Preload resources
-      updateProgress(this.STEPS.IMAGES, this.STEPS.IMAGES.start);
-
-      const progressUpdater = (progress: LoadProgress) => {
-        const imagesStart = this.STEPS.IMAGES.start;
-        const imagesRange = this.STEPS.IMAGES.end - imagesStart;
-        const percentage = imagesStart + (progress.loaded / progress.total) * imagesRange;
-
-        state.bootstrapProgress = {
-          loaded: progress.loaded,
-          total: progress.total,
-          percentage,
-          currentFile: progress.currentFile || ''
-        };
-
-        if (onProgress) {
-          onProgress({ percentage, label: progress.currentFile || '' });
-        }
-      };
-
-      state.preloadedImages = await preloadImages('critical', progressUpdater);
-
-      updateProgress(this.STEPS.IMAGES, this.STEPS.IMAGES.end);
-
-      // Step 5: Optional - Get user location (if enabled in config)
-      const hypatiaConfig = configLoader.getHypatiaConfig();
-      if (hypatiaConfig.features.enableGeolocation) {
-        getUserLocation().then(location => {
-          state.userLocation = location;
-        }).catch(() => {
-          // Silently fail - geolocation is optional
-        });
-      }
-
-      // Step 6: Initialize layers from URL
-      updateProgress(this.STEPS.LAYERS, this.STEPS.LAYERS.start);
-      const layerState = LayerStateService.getInstance();
-      await UrlLayerSyncService.initializeLayersFromUrl(layerState);
-      updateProgress(this.STEPS.LAYERS, this.STEPS.LAYERS.end);
-
-      // Step 7: Initialize scene
-      updateProgress(this.STEPS.SCENE, this.STEPS.SCENE.start);
-      await app.initializeScene();
-      updateProgress(this.STEPS.SCENE, this.STEPS.SCENE.end);
-
-      // Step 8: Load enabled layers
-      updateProgress(this.STEPS.LOAD_LAYERS, this.STEPS.LOAD_LAYERS.start);
-      await app.loadEnabledLayers();
-      updateProgress(this.STEPS.LOAD_LAYERS, this.STEPS.LOAD_LAYERS.end);
-
-      // Step 9: Activate event handlers
-      updateProgress(this.STEPS.ACTIVATE, this.STEPS.ACTIVATE.start);
-      app.activate();
-      updateProgress(this.STEPS.ACTIVATE, this.STEPS.ACTIVATE.end);
-
-      // Step 10: Ready
-      updateProgress(this.STEPS.READY, this.STEPS.READY.start);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      updateProgress(this.STEPS.READY, this.STEPS.READY.end);
-
-      state.bootstrapStatus = 'ready';
-
-      console.log('Bootstrap.done');
-
-      return state;
-
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error('Bootstrap failed:', message);
-
-      state.bootstrapStatus = 'error';
-      state.bootstrapError = message;
-
-      return state;
     }
+
+    state.bootstrapStatus = 'ready';
+    console.log('Bootstrap.done');
+
+    return state;
   }
 
   /**

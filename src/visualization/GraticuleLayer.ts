@@ -76,7 +76,8 @@ export class GraticuleLayer implements ILayer {
     // Determine LOD level
     let lodLevel = 0;
     for (let i = 0; i < LOD_LEVELS.length; i++) {
-      if (distance <= LOD_LEVELS[i].maxDistance) {
+      const level = LOD_LEVELS[i];
+      if (level && distance <= level.maxDistance) {
         lodLevel = i;
         break;
       }
@@ -142,6 +143,8 @@ export class GraticuleLayer implements ILayer {
     }
 
     const config = LOD_LEVELS[lodLevel];
+    if (!config) return;
+
     const geometry = this.createGraticuleGeometry(config.latStep, config.lonStep);
 
     this.lineSegments = new THREE.LineSegments(geometry, this.material);

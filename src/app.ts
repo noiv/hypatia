@@ -121,7 +121,10 @@ export const App: AppComponent = {
         if (this.state.isFullscreen) {
           document.documentElement.requestFullscreen();
         } else {
-          document.exitFullscreen();
+          // Only exit fullscreen if document is actually in fullscreen mode
+          if (document.fullscreenElement) {
+            document.exitFullscreen();
+          }
         }
         m.redraw();
       }
