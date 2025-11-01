@@ -1,6 +1,8 @@
 import m from 'mithril';
 import { App } from './app';
 
+console.log('[HYPATIA_LOADING]');
+
 // Log initial memory on page load
 if ((performance as any).memory) {
   const mem = (performance as any).memory;
@@ -18,6 +20,18 @@ document.addEventListener('keydown', (e) => {
     }
   }
 });
+
+// Custom query string builder to avoid encoding colons and commas
+(m as any).buildQueryString = (obj: Record<string, string>) => {
+  const pairs: string[] = [];
+  for (const key in obj) {
+    if (obj.hasOwnProperty(key)) {
+      // Don't encode - use raw values
+      pairs.push(`${key}=${obj[key]}`);
+    }
+  }
+  return pairs.join('&');
+};
 
 // Set up Mithril routing with browser history mode (no hash)
 m.route.prefix = '';

@@ -18,30 +18,32 @@ export class LayerLoaderService {
    */
   static async loadLayer(
     entry: LayerStateEntry,
-    scene: Scene,
-    currentTime: Date
+    scene: Scene
   ): Promise<LayerLoadResult> {
     const layerId = entry.layer.id;
 
     try {
+      console.log(`LayerLoaderService: Loading layer ${layerId}`);
+
       // Route to appropriate loader based on layer ID
       switch (layerId) {
         case 'temp2m':
-          await scene.loadTemp2mLayer(currentTime);
+          await scene.loadTemp2mLayer();
           break;
 
         case 'precipitation':
-          await scene.loadPratesfcLayer(currentTime);
+          await scene.loadPratesfcLayer();
           break;
 
         case 'wind10m':
-          await scene.loadWindLayer(currentTime);
+          await scene.loadWindLayer();
           break;
 
         default:
           throw new Error(`No loader implemented for layer: ${layerId}`);
       }
 
+      console.log(`LayerLoaderService: Successfully loaded layer ${layerId}`);
       return { success: true };
 
     } catch (error) {
@@ -60,22 +62,26 @@ export class LayerLoaderService {
   static unloadLayer(entry: LayerStateEntry, scene: Scene): void {
     const layerId = entry.layer.id;
 
+    console.log(`LayerLoaderService: Unloading layer ${layerId}`);
+
     switch (layerId) {
       case 'temp2m':
-        scene.temp2mLayer = null;
+        scene.toggleTemp2m(false);
         break;
 
       case 'precipitation':
-        scene.pratesfcLayer = null;
+        scene.toggleRain(false);
         break;
 
       case 'wind10m':
-        scene.windLayer = null;
+        scene.toggleWind(false);
         break;
 
       default:
         console.warn(`No unloader implemented for layer: ${layerId}`);
     }
+
+    console.log(`LayerLoaderService: Layer ${layerId} hidden`);
   }
 
   /**
@@ -84,10 +90,10 @@ export class LayerLoaderService {
   static async updateLayerTime(
     entry: LayerStateEntry,
     scene: Scene,
-    newTime: Date
+    _newTime: Date
   ): Promise<LayerLoadResult> {
     // For now, reload the layer with new time
     // Future: implement incremental updates
-    return this.loadLayer(entry, scene, newTime);
+    return this.loadLayer(entry, scene);
   }
 }

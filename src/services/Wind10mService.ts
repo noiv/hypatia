@@ -111,7 +111,7 @@ export class Wind10mService {
    */
   static createDataTexture(data: Uint16Array): THREE.DataTexture {
     const texture = new THREE.DataTexture(
-      data,
+      data as any,
       this.WIDTH,
       this.HEIGHT,
       THREE.RedFormat,
@@ -160,15 +160,15 @@ export class Wind10mService {
     const idx11 = y1 * this.WIDTH + x1;
 
     // Decode fp16 to float32 for CPU-side calculations
-    const u00 = this.fp16ToFloat32(u[idx00]);
-    const u10 = this.fp16ToFloat32(u[idx10]);
-    const u01 = this.fp16ToFloat32(u[idx01]);
-    const u11 = this.fp16ToFloat32(u[idx11]);
+    const u00 = this.fp16ToFloat32(u[idx00] ?? 0);
+    const u10 = this.fp16ToFloat32(u[idx10] ?? 0);
+    const u01 = this.fp16ToFloat32(u[idx01] ?? 0);
+    const u11 = this.fp16ToFloat32(u[idx11] ?? 0);
 
-    const v00 = this.fp16ToFloat32(v[idx00]);
-    const v10 = this.fp16ToFloat32(v[idx10]);
-    const v01 = this.fp16ToFloat32(v[idx01]);
-    const v11 = this.fp16ToFloat32(v[idx11]);
+    const v00 = this.fp16ToFloat32(v[idx00] ?? 0);
+    const v10 = this.fp16ToFloat32(v[idx10] ?? 0);
+    const v01 = this.fp16ToFloat32(v[idx01] ?? 0);
+    const v11 = this.fp16ToFloat32(v[idx11] ?? 0);
 
     // Bilinear interpolation
     const uInterp =

@@ -47,14 +47,18 @@ export class AtmosphereLayer {
    * Update sun position for atmospheric scattering
    */
   setSunPosition(position: THREE.Vector3) {
-    this.material.uniforms.sunPosition.value.copy(position);
+    if (this.material.uniforms.sunPosition) {
+      this.material.uniforms.sunPosition.value.copy(position);
+    }
   }
 
   /**
    * Update camera position for ray origin
    */
   setCameraPosition(position: THREE.Vector3) {
-    this.material.uniforms.viewPosition.value.copy(position);
+    if (this.material.uniforms.viewPosition) {
+      this.material.uniforms.viewPosition.value.copy(position);
+    }
   }
 
   /**

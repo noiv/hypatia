@@ -5,8 +5,6 @@ import { Sun } from './Sun';
 import { AtmosphereLayer } from './AtmosphereLayer';
 import { Temp2mLayer } from './Temp2mLayer';
 import { PratesfcLayer } from './PratesfcLayer';
-import { WindLayer } from './WindLayer';
-import { WindLayerInterp } from './WindLayerInterp';
 import { WindLayerGPUCompute } from './WindLayerGPUCompute';
 import { Temp2mService, TimeStep } from '../services/Temp2mService';
 import { PratesfcService, TimeStep as PratesfcTimeStep } from '../services/PratesfcService';
@@ -25,18 +23,12 @@ export class Scene {
   private temp2mTimeSteps: TimeStep[] = [];
   private pratesfcLayer: PratesfcLayer | null = null;
   private pratesfcTimeSteps: PratesfcTimeStep[] = [];
-  private windLayer: WindLayer | null = null;
-  private windLayerInterp: WindLayerInterp | null = null;
   private windLayerGPU: WindLayerGPUCompute | null = null;
   private currentTime: Date;
   private animationId: number | null = null;
   private onCameraChangeCallback: (() => void) | null = null;
   private raycaster: THREE.Raycaster;
   private mouseOverEarth: boolean = false;
-  private onTimeScrollCallback: ((delta: number) => void) | null = null;
-  private wheelGestureMode: 'none' | 'vertical' | 'horizontal' = 'none';
-  private wheelGestureTimeout: number | null = null;
-  private readonly wheelGestureTimeoutMs = 300;
   private lastDistance: number = 0;
   private zoomEndTimeout: number | null = null;
   private readonly zoomEndTimeoutMs = 500;
@@ -121,13 +113,8 @@ export class Scene {
     // Add axes helpers
     this.addAxesHelpers();
 
-    // Handle window resize
-    window.addEventListener('resize', this.onWindowResize);
-
-    // Handle mouse interaction for raycasting
-    canvas.addEventListener('mousedown', this.onMouseDown);
-    canvas.addEventListener('click', this.onClick);
-    canvas.addEventListener('wheel', this.onWheel, { passive: false });
+    // Note: Mouse/click/wheel event listeners are managed by App component
+    // OrbitControls manages its own wheel listener for zoom
 
     // Initialize current time
     this.currentTime = new Date();
@@ -136,7 +123,6 @@ export class Scene {
     this.animate();
 
     console.log(`✅ Scene initialized (${this.scene.children.length} objects)`);
-    console.log('[PAGE_LOADED]'); // Signal for automation tools
   }
 
   private addAxesHelpers() {
@@ -176,7 +162,7 @@ export class Scene {
     this.scene.add(primeMeridianLine);
   }
 
-  private onWindowResize = () => {
+  onWindowResize = () => {
     const canvas = this.renderer.domElement;
     const container = canvas.parentElement;
     const width = container ? container.clientWidth : window.innerWidth;
@@ -192,12 +178,12 @@ export class Scene {
     }
   };
 
-  private onMouseDown = (e: MouseEvent) => {
+  onMouseDown = (e: MouseEvent) => {
     // Check if mouse is over Earth
     this.checkEarthIntersection(e.clientX, e.clientY);
   };
 
-  private onClick = (e: MouseEvent) => {
+  onClick = (e: MouseEvent) => {
     const canvas = this.renderer.domElement;
     const rect = canvas.getBoundingClientRect();
 
@@ -222,56 +208,6 @@ export class Scene {
       const formatted = formatLatLon(lat, lon);
 
       console.log(`Clicked Earth at: ${formatted} (lat: ${lat.toFixed(3)}, lon: ${lon.toFixed(3)}) - XYZ: (${point.x.toFixed(3)}, ${point.y.toFixed(3)}, ${point.z.toFixed(3)})`);
-    }
-  };
-
-  private onWheel = (e: WheelEvent) => {
-    const absY = Math.abs(e.deltaY);
-    const absX = Math.abs(e.deltaX);
-
-    // Clear existing timeout
-    if (this.wheelGestureTimeout) {
-      clearTimeout(this.wheelGestureTimeout);
-    }
-
-    // Determine gesture mode only on first event (lock it in)
-    if (this.wheelGestureMode === 'none') {
-      if (absX > absY) {
-        this.wheelGestureMode = 'horizontal';
-      } else {
-        this.wheelGestureMode = 'vertical';
-      }
-    }
-
-    // Set timeout to reset gesture mode
-    this.wheelGestureTimeout = window.setTimeout(() => {
-      this.wheelGestureMode = 'none';
-      this.wheelGestureTimeout = null;
-      // Re-enable OrbitControls when gesture ends
-      this.controls.enabled = true;
-    }, this.wheelGestureTimeoutMs);
-
-    // Execute appropriate action based on gesture mode
-    if (this.wheelGestureMode === 'vertical') {
-      // Vertical wheel: zoom via OrbitControls
-      // Ensure OrbitControls is enabled
-      this.controls.enabled = true;
-    } else if (this.wheelGestureMode === 'horizontal') {
-      // Horizontal wheel: change time
-      // Disable OrbitControls to prevent zoom
-      this.controls.enabled = false;
-      e.preventDefault();
-
-      if (this.onTimeScrollCallback) {
-        // Determine time delta (hours) - 1 minute per 1 pixel of scroll
-        const minutesPerPixel = 1;
-        const hoursDelta = -(e.deltaX * minutesPerPixel) / 60;
-
-        // Only trigger if movement is significant enough (> 0.5 minutes)
-        if (Math.abs(hoursDelta) > (0.5 / 60)) {
-          this.onTimeScrollCallback(hoursDelta);
-        }
-      }
     }
   };
 
@@ -370,7 +306,7 @@ export class Scene {
   /**
    * Load temp2m layer from manifest data
    */
-  async loadTemp2mLayer(delta: number = 1, onProgress?: (loaded: number, total: number) => void): Promise<void> {
+  async loadTemp2mLayer(_delta: number = 1, onProgress?: (loaded: number, total: number) => void): Promise<void> {
     // Generate time steps from manifest
     this.temp2mTimeSteps = Temp2mService.generateTimeSteps();
 
@@ -453,7 +389,8 @@ export class Scene {
    */
   async loadWindLayer(): Promise<void> {
     if (this.windLayerGPU) {
-      console.log('Wind layer already loaded');
+      console.log('Wind layer already loaded, showing it');
+      this.windLayerGPU.setVisible(true);
       return;
     }
 
@@ -476,6 +413,9 @@ export class Scene {
 
     // Add to scene
     this.scene.add(this.windLayerGPU.getGroup());
+
+    // Ensure visibility is set to true
+    this.windLayerGPU.setVisible(true);
 
     console.log('🌬️  WindLayerGPUCompute loaded');
   }
@@ -555,13 +495,6 @@ export class Scene {
     this.controls.addEventListener('change', callback);
   }
 
-  /**
-   * Register callback for time scroll (when scrolling over Earth)
-   * @param callback - Called with hours delta (+1 or -1)
-   */
-  onTimeScroll(callback: (hoursDelta: number) => void) {
-    this.onTimeScrollCallback = callback;
-  }
 
   /**
    * Check if mouse position intersects Earth
@@ -597,6 +530,20 @@ export class Scene {
   }
 
   /**
+   * Enable orbit controls
+   */
+  enableControls() {
+    this.controls.enabled = true;
+  }
+
+  /**
+   * Disable orbit controls
+   */
+  disableControls() {
+    this.controls.enabled = false;
+  }
+
+  /**
    * Clean up resources
    */
   dispose() {
@@ -604,21 +551,11 @@ export class Scene {
       cancelAnimationFrame(this.animationId);
     }
 
-    if (this.wheelGestureTimeout !== null) {
-      clearTimeout(this.wheelGestureTimeout);
-      this.wheelGestureTimeout = null;
-    }
-
     if (this.onCameraChangeCallback) {
       this.controls.removeEventListener('change', this.onCameraChangeCallback);
     }
 
-    const canvas = this.renderer.domElement;
-    canvas.removeEventListener('mousedown', this.onMouseDown);
-    canvas.removeEventListener('click', this.onClick);
-    canvas.removeEventListener('wheel', this.onWheel);
-
-    window.removeEventListener('resize', this.onWindowResize);
+    // Note: Event listeners are managed by App component, nothing to remove here
     this.controls.dispose();
     this.renderer.dispose();
     this.earth.dispose();

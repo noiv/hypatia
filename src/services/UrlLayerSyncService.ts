@@ -36,7 +36,7 @@ export class UrlLayerSyncService {
   /**
    * Initialize layer state from URL or defaults
    */
-  static initializeLayersFromUrl(layerState: LayerState): void {
+  static async initializeLayersFromUrl(layerState: LayerState): Promise<void> {
     const urlKeys = this.parseLayersFromUrl();
 
     if (urlKeys.length > 0) {

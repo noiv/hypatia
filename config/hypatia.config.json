@@ -21,5 +21,8 @@
     "workerCount": 4,
     "cacheStrategy": "progressive",
     "preloadCritical": true
+  },
+  "features": {
+    "enableGeolocation": false
   }
 }

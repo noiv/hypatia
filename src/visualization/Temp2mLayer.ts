@@ -5,10 +5,8 @@ import { TEMP2M_CONFIG } from '../config/temp2m.config';
 export class Temp2mLayer {
   public mesh: THREE.Mesh;
   private material: THREE.ShaderMaterial;
-  private timeStepCount: number;
 
   constructor(dataTexture: THREE.Data3DTexture, timeStepCount: number) {
-    this.timeStepCount = timeStepCount;
 
     // Use SphereGeometry for better vertex distribution
     // This avoids triangles spanning across the dateline
@@ -50,21 +48,27 @@ export class Temp2mLayer {
    * Update time index for interpolation
    */
   setTimeIndex(index: number) {
-    this.material.uniforms.timeIndex.value = index;
+    if (this.material.uniforms.timeIndex) {
+      this.material.uniforms.timeIndex.value = index;
+    }
   }
 
   /**
    * Set sun direction for day/night shading
    */
   setSunDirection(direction: THREE.Vector3) {
-    this.material.uniforms.sunDirection.value.copy(direction);
+    if (this.material.uniforms.sunDirection) {
+      this.material.uniforms.sunDirection.value.copy(direction);
+    }
   }
 
   /**
    * Set opacity
    */
   setOpacity(opacity: number) {
-    this.material.uniforms.opacity.value = opacity;
+    if (this.material.uniforms.opacity) {
+      this.material.uniforms.opacity.value = opacity;
+    }
   }
 
   /**

@@ -18,7 +18,7 @@ export interface AppUrlState {
   time: Date;
   cameraPosition: { x: number; y: number; z: number };
   cameraDistance: number;
-  layers?: string[];
+  layers?: string[] | undefined;
 }
 
 /**
@@ -97,12 +97,15 @@ export function updateUrlState(state: AppUrlState): void {
   const alt = Math.round(altitudeMeters).toString();
 
   // Build URL manually to avoid encoding colons and commas
-  let url = `?dt=${dt}&alt=${alt}&ll=${ll}`;
+  let search = `?dt=${dt}&alt=${alt}&ll=${ll}`;
 
   // Add layers if present
   if (state.layers && state.layers.length > 0) {
-    url += `&layers=${state.layers.join(',')}`;
+    search += `&layers=${state.layers.join(',')}`;
   }
+
+  // Use absolute URL to prevent browser from encoding
+  const url = `${window.location.origin}${window.location.pathname}${search}`;
 
   // Use replaceState to avoid creating history entries for every update
   window.history.replaceState(null, '', url);

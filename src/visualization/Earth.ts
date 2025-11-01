@@ -14,18 +14,20 @@ export class Earth {
 
     // Normalize vertices to create sphere from cube (like old implementation)
     const positionAttr = geometry.attributes.position;
-    for (let i = 0; i < positionAttr.count; i++) {
-      const x = positionAttr.getX(i);
-      const y = positionAttr.getY(i);
-      const z = positionAttr.getZ(i);
+    if (positionAttr) {
+      for (let i = 0; i < positionAttr.count; i++) {
+        const x = positionAttr.getX(i);
+        const y = positionAttr.getY(i);
+        const z = positionAttr.getZ(i);
 
-      const vector = new THREE.Vector3(x, y, z);
-      vector.normalize().multiplyScalar(EARTH_RADIUS_UNITS);
+        const vector = new THREE.Vector3(x, y, z);
+        vector.normalize().multiplyScalar(EARTH_RADIUS_UNITS);
 
-      positionAttr.setXYZ(i, vector.x, vector.y, vector.z);
+        positionAttr.setXYZ(i, vector.x, vector.y, vector.z);
+      }
+
+      positionAttr.needsUpdate = true;
     }
-
-    positionAttr.needsUpdate = true;
     geometry.computeVertexNormals();
 
     // Shaders for blending between basemaps with lighting
@@ -80,6 +82,9 @@ export class Earth {
     const faceNames = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
     const basemapA = EARTH_CONFIG.basemaps.sets[0];
     const basemapB = EARTH_CONFIG.basemaps.sets[1];
+    if (!basemapA || !basemapB) {
+      throw new Error('Earth basemaps not configured');
+    }
 
     // Create 6 shader materials (one per face) with blending
     this.materials = faceNames.map(face => {
@@ -136,7 +141,9 @@ export class Earth {
    */
   setBlend(blend: number) {
     this.materials.forEach(mat => {
-      mat.uniforms.blend.value = blend;
+      if (mat.uniforms.blend) {
+        mat.uniforms.blend.value = blend;
+      }
     });
   }
 
@@ -145,7 +152,9 @@ export class Earth {
    */
   setSunDirection(direction: THREE.Vector3) {
     this.materials.forEach(mat => {
-      mat.uniforms.sunDirection.value.copy(direction);
+      if (mat.uniforms.sunDirection) {
+        mat.uniforms.sunDirection.value.copy(direction);
+      }
     });
   }
 

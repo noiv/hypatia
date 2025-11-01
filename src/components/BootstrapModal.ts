@@ -34,7 +34,7 @@ export const BootstrapModal: m.Component<BootstrapModalAttrs> = {
               })
             ]),
             m('p.progress-text', `${Math.round(progress.percentage)}%`),
-            m('p.progress-file', progress.currentFile.split('/').pop())
+            m('p.progress-file', progress.currentFile ? progress.currentFile.split('/').pop() : 'Loading...')
           ])
         ] : [
           // Initial state

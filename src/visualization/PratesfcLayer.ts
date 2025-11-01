@@ -5,10 +5,8 @@ import { PRATESFC_CONFIG } from '../config/pratesfc.config';
 export class PratesfcLayer {
   public mesh: THREE.Mesh;
   private material: THREE.ShaderMaterial;
-  private timeStepCount: number;
 
   constructor(dataTexture: THREE.Data3DTexture, timeStepCount: number) {
-    this.timeStepCount = timeStepCount;
 
     // Use SphereGeometry
     const radius = EARTH_RADIUS_UNITS * (1 + PRATESFC_CONFIG.visual.altitudeKm / 6371);
@@ -46,14 +44,18 @@ export class PratesfcLayer {
    * Update time index for interpolation
    */
   setTimeIndex(index: number) {
-    this.material.uniforms.timeIndex.value = index;
+    if (this.material.uniforms.timeIndex) {
+      this.material.uniforms.timeIndex.value = index;
+    }
   }
 
   /**
    * Set opacity
    */
   setOpacity(opacity: number) {
-    this.material.uniforms.opacity.value = opacity;
+    if (this.material.uniforms.opacity) {
+      this.material.uniforms.opacity.value = opacity;
+    }
   }
 
   /**

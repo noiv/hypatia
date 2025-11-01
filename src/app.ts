@@ -1,410 +1,320 @@
+/**
+ * Main Application Component
+ *
+ * Orchestrates app initialization, state management, and rendering
+ */
+
 import m from 'mithril';
 import { Scene } from './visualization/Scene';
 import { TimeSlider } from './components/TimeSlider';
 import { Controls } from './components/Controls';
 import { BootstrapModal } from './components/BootstrapModal';
-import { parseUrlState, debouncedUpdateUrlState } from './utils/urlState';
+import { parseUrlState } from './utils/urlState';
 import { sanitizeUrl } from './utils/sanitizeUrl';
 import { clampTimeToDataRange } from './utils/timeUtils';
-import { getCurrentTime } from './services/TimeService';
-import { getLatestRun, type ECMWFRun } from './services/ECMWFService';
-import { preloadImages, getTotalSize, type LoadProgress } from './services/ResourceManager';
-import { getUserLocation, type UserLocation } from './services/GeolocationService';
-import { getUserOptions } from './services/UserOptionsService';
 import { getDatasetRange } from './manifest';
-
-type BootstrapStatus = 'loading' | 'ready' | 'error';
-
-interface AppState {
-  currentTime: Date;
-  isFullscreen: boolean;
-  blend: number;
-  scene: Scene | null;
-  latestRun: ECMWFRun | null;
-  userLocation: UserLocation | null;
-  bootstrapStatus: BootstrapStatus;
-  bootstrapProgress: LoadProgress | null;
-  bootstrapError: string | null;
-  preloadedImages: Map<string, HTMLImageElement> | null;
-  showTemp2m: boolean;
-  temp2mLoading: boolean;
-  showRain: boolean;
-  rainLoading: boolean;
-  showWind: boolean;
-}
+import type { AppState } from './state/AppState';
+import { LayerStateService } from './services/LayerStateService';
+import { AppBootstrapService } from './services/AppBootstrapService';
+import { LayerToggleService } from './services/LayerToggleService';
+import { UrlLayerSyncService } from './services/UrlLayerSyncService';
+import { WheelGestureDetector } from './utils/wheelGestureDetector';
 
 interface AppComponent extends m.Component {
   state: AppState;
   _keydownHandler?: (e: KeyboardEvent) => void;
+  _mousedownHandler?: (e: MouseEvent) => void;
+  _clickHandler?: (e: MouseEvent) => void;
+  _wheelHandler?: (e: WheelEvent) => void;
+  _resizeHandler?: () => void;
+  _wheelGestureDetector?: WheelGestureDetector;
+
+  // Component methods
+  activate(): void;
+  runBootstrap(): Promise<void>;
+  initializeScene(): Promise<void>;
+  loadEnabledLayers(): Promise<void>;
+  updateUrl(): void;
+  handleLayerToggle(layerId: string): Promise<void>;
+  renderControls(): m.Vnode<any, any> | null;
+  handleReferenceClick(): void;
 }
 
 export const App: AppComponent = {
-  oninit() {
+  state: null as any, // Initialized in oninit
+
+  async oninit() {
     // Sanitize URL and get corrected state
     const sanitizedState = sanitizeUrl();
 
-    // Initialize state synchronously to avoid undefined access in view
+    // Initialize state synchronously
     this.state = {
       currentTime: sanitizedState.time,
       isFullscreen: false,
       blend: 0.0,
       scene: null,
-      latestRun: null,
-      userLocation: null,
       bootstrapStatus: 'loading',
       bootstrapProgress: null,
       bootstrapError: null,
       preloadedImages: null,
-      showTemp2m: sanitizedState.layers?.includes('temp2m') ?? false,
-      temp2mLoading: false,
-      showRain: sanitizedState.layers?.includes('rain') ?? false,
-      rainLoading: false,
-      showWind: sanitizedState.layers?.includes('wind') ?? false
+      latestRun: null,
+      userLocation: null,
+      layerState: null
     };
 
-    // Setup keyboard controls
-    this.setupKeyboardControls();
+    // Setup resize listener early (before bootstrap)
+    this._resizeHandler = () => {
+      if (this.state.scene) {
+        this.state.scene.onWindowResize();
+      }
+    };
+    window.addEventListener('resize', this._resizeHandler);
 
     // Bootstrap asynchronously
     this.runBootstrap();
   },
 
-  async runBootstrap() {
-    try {
-      const urlState = parseUrlState();
+  activate() {
+    const canvas = document.querySelector('.scene-canvas') as HTMLCanvasElement;
+    if (!canvas) return;
 
-      // Define bootstrap steps with progress ranges
-      const STEPS = {
-        INIT: { start: 0, end: 0, label: 'Starting...' },
-        TIME: { start: 0, end: 10, label: 'Fetching server time...' },
-        FORECAST: { start: 10, end: 20, label: 'Checking latest forecast...' },
-        IMAGES: { start: 20, end: 100, label: 'Loading resources...' }
-      };
+    const { scene } = this.state;
 
-      // Helper to update progress
-      const updateProgress = (step: typeof STEPS[keyof typeof STEPS], percentage?: number) => {
-        const percent = percentage ?? step.end;
-        this.state.bootstrapProgress = {
-          loaded: 0,
-          total: 100,
-          percentage: percent,
-          currentFile: step.label
-        };
+    // Initialize wheel gesture detector
+    this._wheelGestureDetector = new WheelGestureDetector({
+      timeoutMs: 100,
+      onReset: () => {
+        // Re-enable controls when gesture ends
+        if (scene) {
+          scene.enableControls();
+        }
+      }
+    });
+
+    // Keyboard events
+    this._keydownHandler = (e: KeyboardEvent) => {
+      const { currentTime, scene } = this.state;
+
+      // Spacebar: toggle time animation
+      if (e.code === 'Space' && !e.repeat) {
+        e.preventDefault();
+        // TODO: Implement time animation
+      }
+
+      // Arrow keys: adjust time
+      if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+        e.preventDefault();
+        const delta = e.code === 'ArrowLeft' ? -6 : 6;
+        const newTime = new Date(currentTime.getTime() + delta * 60 * 60 * 1000);
+        const clampedTime = clampTimeToDataRange(newTime);
+
+        this.state.currentTime = clampedTime;
+        if (scene) {
+          scene.updateTime(clampedTime);
+          this.updateUrl();
+        }
         m.redraw();
-      };
+      }
 
-      // Initialize progress bar
-      updateProgress(STEPS.INIT, STEPS.INIT.start);
-
-      // Bootstrap step 1: Get accurate time from time server
-      updateProgress(STEPS.TIME, STEPS.TIME.start);
-      const serverTime = await getCurrentTime();
-      updateProgress(STEPS.TIME, STEPS.TIME.end);
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Bootstrap step 2: Check ECMWF for latest IFS model run
-      updateProgress(STEPS.FORECAST, STEPS.FORECAST.start);
-      const latestRun = await getLatestRun(serverTime);
-      updateProgress(STEPS.FORECAST, STEPS.FORECAST.end);
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Bootstrap step 3: Preload critical images
-      const totalSize = getTotalSize('critical');
-      const images = await preloadImages('critical', (progress) => {
-        // Map image loading progress (0-100%) to allocated range (20-100%)
-        const mappedPercentage = STEPS.IMAGES.start +
-          (progress.percentage / 100) * (STEPS.IMAGES.end - STEPS.IMAGES.start);
-
-        this.state.bootstrapProgress = {
-          loaded: progress.loaded,
-          total: totalSize,
-          percentage: mappedPercentage,
-          currentFile: progress.currentFile
-        };
+      // F: toggle fullscreen
+      if (e.code === 'KeyF') {
+        e.preventDefault();
+        this.state.isFullscreen = !this.state.isFullscreen;
+        if (this.state.isFullscreen) {
+          document.documentElement.requestFullscreen();
+        } else {
+          document.exitFullscreen();
+        }
         m.redraw();
-      });
-
-      // Update state with bootstrap results
-      const desiredTime = urlState?.time ?? serverTime;
-
-      // Clamp time to available data range
-      const dataRange = getDatasetRange('temp2m');
-      if (dataRange) {
-        this.state.currentTime = new Date(Math.max(
-          dataRange.startTime.getTime(),
-          Math.min(dataRange.endTime.getTime(), desiredTime.getTime())
-        ));
-      } else {
-        this.state.currentTime = desiredTime;
       }
-
-      this.state.latestRun = latestRun;
-      this.state.userLocation = null; // Skip geolocation
-      this.state.preloadedImages = images;
-
-      // Keep modal visible for 1 second to show completion
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      this.state.bootstrapStatus = 'ready';
-      m.redraw();
-    } catch (error) {
-      console.error('Bootstrap failed:', error);
-      this.state.bootstrapStatus = 'error';
-      this.state.bootstrapError = error instanceof Error ? error.message : 'Unknown error';
-      m.redraw();
-    }
-  },
-
-  setupKeyboardControls() {
-    const handleKeydown = (e: KeyboardEvent) => {
-      const state = this.state;
-
-      // Only handle arrow keys
-      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') {
-        return;
-      }
-
-      // Ignore if user is typing in an input field
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-        return;
-      }
-
-      // Prevent default scrolling behavior
-      e.preventDefault();
-
-      // Calculate new time (±1 hour)
-      const hoursDelta = e.key === 'ArrowLeft' ? -1 : 1;
-      const newTime = new Date(state.currentTime.getTime() + hoursDelta * 3600000);
-
-      // Clamp to data range
-      const clampedTime = clampTimeToDataRange(newTime);
-
-      // Update state
-      state.currentTime = clampedTime;
-
-      // Update scene
-      if (state.scene) {
-        state.scene.updateTime(clampedTime);
-        this.updateUrl();
-      }
-
-      // Redraw UI
-      m.redraw();
     };
+    window.addEventListener('keydown', this._keydownHandler);
 
-    // Store reference for cleanup
-    this._keydownHandler = handleKeydown;
+    // Mouse/touch events - delegate to Scene
+    this._mousedownHandler = (e: MouseEvent) => {
+      if (scene) {
+        scene.onMouseDown(e);
+      }
+    };
+    canvas.addEventListener('mousedown', this._mousedownHandler);
 
-    // Add event listener
-    window.addEventListener('keydown', handleKeydown);
+    this._clickHandler = (e: MouseEvent) => {
+      if (scene) {
+        scene.onClick(e);
+      }
+    };
+    canvas.addEventListener('click', this._clickHandler);
+
+    // Wheel events - App handles horizontal scroll for time change
+    // OrbitControls handles vertical scroll for zoom (disabled during horizontal gestures)
+    this._wheelHandler = (e: WheelEvent) => {
+      if (!this._wheelGestureDetector) return;
+
+      const { scene } = this.state;
+      if (!scene) return;
+
+      // Detect gesture direction
+      const gestureMode = this._wheelGestureDetector.detect(e);
+
+      // Handle horizontal scroll (time change)
+      if (gestureMode === 'horizontal') {
+        e.preventDefault();
+
+        // Disable OrbitControls during horizontal gesture
+        scene.disableControls();
+
+        // Time change: 1 minute per pixel of scroll
+        const minutesPerPixel = 1;
+        const minutes = e.deltaX * minutesPerPixel;
+        const hoursDelta = minutes / 60;
+
+        const { currentTime } = this.state;
+        const newTime = new Date(currentTime.getTime() + hoursDelta * 3600000);
+        const clampedTime = clampTimeToDataRange(newTime);
+
+        this.state.currentTime = clampedTime;
+        scene.updateTime(clampedTime);
+        this.updateUrl();
+        m.redraw();
+      }
+      // Vertical scroll is handled by OrbitControls (enabled by default)
+    };
+    canvas.addEventListener('wheel', this._wheelHandler, { passive: false });
+
+    console.log('App.activated');
   },
 
-  oncreate(vnode) {
-    // Only initialize scene when bootstrap is ready
-    if (this.state.bootstrapStatus !== 'ready') {
-      return;
+  async runBootstrap() {
+
+    const result = await AppBootstrapService.bootstrap(this, (progress) => {
+      this.state.bootstrapProgress = {
+        loaded: 0,
+        total: 100,
+        percentage: progress.percentage,
+        currentFile: progress.label
+      };
+      m.redraw();
+    });
+
+    // Update state with bootstrap results
+    Object.assign(this.state, result);
+
+    if (result.bootstrapStatus === 'ready') {
+      // Get layer state (already initialized in bootstrap)
+      this.state.layerState = LayerStateService.getInstance();
     }
 
-    this.initializeScene(vnode.dom);
+    console.log('[HYPATIA_LOADED]');
+
+    m.redraw();
   },
 
-  onupdate(vnode) {
-    // Initialize scene when bootstrap completes
-    if (this.state.bootstrapStatus === 'ready' && !this.state.scene) {
-      this.initializeScene(vnode.dom);
-    }
-  },
-
-  async initializeScene(dom: Element) {
-    const state = this.state;
-    const canvas = dom.querySelector('.scene-canvas') as HTMLCanvasElement;
-
+  async initializeScene() {
+    const canvas = document.querySelector('.scene-canvas') as HTMLCanvasElement;
     if (!canvas) {
-      console.error('Canvas element not found');
-      return;
+      throw new Error('Canvas not found');
     }
 
-    // Load user options
-    const userOptions = await getUserOptions();
-
-    // Initialize Three.js scene with preloaded images and user options
-    state.scene = new Scene(canvas, state.preloadedImages ?? undefined, userOptions);
-    state.scene.updateTime(state.currentTime);
-
-    // Apply URL state if available, otherwise use user location
+    const { blend, currentTime } = this.state;
     const urlState = parseUrlState();
+    const scene = new Scene(canvas);
+
     if (urlState) {
-      // Set layer state BEFORE camera change to preserve URL params
-      if (urlState.layers && urlState.layers.includes('temp2m')) {
-        state.showTemp2m = true;
-      }
-      if (urlState.layers && urlState.layers.includes('rain')) {
-        state.showRain = true;
-      }
-      if (urlState.layers && urlState.layers.includes('wind')) {
-        state.showWind = true;
-      }
-
-      state.scene.setCameraState(urlState.cameraPosition, urlState.cameraDistance);
-
-      // Load layers from URL (async, but state already set)
-      // Each layer loads independently
-      if (urlState.layers) {
-        if (urlState.layers.includes('temp2m')) {
-          this.loadTemp2mLayer();
-        }
-        if (urlState.layers.includes('rain')) {
-          this.loadPratesfcLayer();
-        }
-        if (urlState.layers.includes('wind')) {
-          this.loadWindLayer();
-        }
-      }
-    } else if (state.userLocation) {
-      state.scene.setCameraToLocation(
-        state.userLocation.latitude,
-        state.userLocation.longitude,
-        3 // Default distance
-      );
+      scene.setCameraState(urlState.cameraPosition, urlState.cameraDistance);
     }
 
-    // Register camera change listener for URL updates
-    state.scene.onCameraChange(() => {
+    scene.setBlend(blend);
+    scene.updateTime(currentTime);
+
+    // Setup camera change handler for URL updates
+    scene.onCameraChange(() => {
       this.updateUrl();
     });
 
-    // Register time scroll listener (when scrolling over Earth)
-    state.scene.onTimeScroll((hoursDelta: number) => {
-      const newTime = new Date(state.currentTime.getTime() + hoursDelta * 3600000);
-      const clampedTime = clampTimeToDataRange(newTime);
+    this.state.scene = scene;
+  },
 
-      state.currentTime = clampedTime;
+  async loadEnabledLayers() {
+    const { layerState, scene } = this.state;
+    if (!layerState || !scene) return;
 
-      if (state.scene) {
-        state.scene.updateTime(clampedTime);
-        this.updateUrl();
+    const activeLayers = layerState.getActiveLayers();
+    console.log(`loadEnabledLayers: Found ${activeLayers.length} active layers`, activeLayers.map(e => e.layer.id));
+
+    for (const entry of activeLayers) {
+      console.log(`loadEnabledLayers: Loading ${entry.layer.id}...`);
+      try {
+        layerState.setStatus(entry.layer.id, 'loading');
+        m.redraw();
+
+        await LayerToggleService.enable(
+          entry.layer.id,
+          layerState,
+          scene
+        );
+
+        m.redraw();
+      } catch (error) {
+        console.error(`Failed to load layer ${entry.layer.id}:`, error);
       }
-
-      m.redraw();
-    });
-
-    console.log('Hypatia initialized');
-  },
-
-  async loadTemp2mLayer() {
-    const state = this.state;
-    if (!state.scene) return;
-
-    // Check if already loaded in Scene
-    if (state.scene.isTemp2mLoaded()) {
-      console.log('✓ Temp2m layer already loaded');
-      return;
-    }
-
-    // Prevent double-loading (race condition)
-    if (state.temp2mLoading) {
-      console.log('⏳ Temp2m layer already loading, skipping...');
-      return;
-    }
-
-    state.temp2mLoading = true;
-    m.redraw();
-
-    try {
-      console.log('📊 Loading temp2m layer...');
-      await state.scene.loadTemp2mLayer(1);
-      console.log('✅ Temp2m layer loaded');
-    } catch (error) {
-      console.error('❌ Failed to load temp2m layer:', error);
-      alert('Failed to load temperature data. Please check the console for details.');
-    } finally {
-      state.temp2mLoading = false;
-      m.redraw();
-    }
-  },
-
-  async loadPratesfcLayer() {
-    const state = this.state;
-    if (!state.scene) return;
-
-    // Check if already loaded in Scene
-    if (state.scene.isRainLoaded()) {
-      console.log('✓ Pratesfc layer already loaded');
-      return;
-    }
-
-    // Prevent double-loading (race condition)
-    if (state.rainLoading) {
-      console.log('⏳ Pratesfc layer already loading, skipping...');
-      return;
-    }
-
-    state.rainLoading = true;
-    m.redraw();
-
-    try {
-      console.log('🌧️ Loading pratesfc layer...');
-      await state.scene.loadPratesfcLayer();
-      console.log('✅ Pratesfc layer loaded');
-    } catch (error) {
-      console.error('❌ Failed to load pratesfc layer:', error);
-      // Don't alert, just log - precipitation is optional
-    } finally {
-      state.rainLoading = false;
-      m.redraw();
-    }
-  },
-
-  async loadWindLayer() {
-    const state = this.state;
-    if (!state.scene) return;
-
-    // Check if already loaded in Scene
-    if (state.scene.isWindLoaded()) {
-      console.log('✓ Wind layer already loaded');
-      return;
-    }
-
-    try {
-      console.log('🌬️  Loading wind layer...');
-      await state.scene.loadWindLayer();
-      console.log('✅ Wind layer loaded');
-    } catch (error) {
-      console.error('❌ Failed to load wind layer:', error);
-      alert('Failed to load wind layer. Please check the console for details.');
-    } finally {
-      m.redraw();
     }
   },
 
   updateUrl() {
-    const state = this.state;
-    if (!state.scene) return;
+    const { scene, layerState, currentTime } = this.state;
+    if (!scene || !layerState) return;
 
-    const layers: string[] = [];
-    if (state.showTemp2m) {
-      layers.push('temp2m');
-    }
-    if (state.showRain) {
-      layers.push('rain');
-    }
-    if (state.showWind) {
-      layers.push('wind');
-    }
-
-    debouncedUpdateUrlState({
-      time: state.currentTime,
-      cameraPosition: state.scene.getCameraPosition(),
-      cameraDistance: state.scene.getCameraDistance(),
-      layers: layers.length > 0 ? layers : undefined
+    UrlLayerSyncService.updateUrl(layerState, {
+      time: currentTime,
+      cameraPosition: scene.getCameraPosition(),
+      cameraDistance: scene.getCameraDistance()
     });
   },
 
+  async handleLayerToggle(layerId: string) {
+    const { layerState, scene } = this.state;
+    if (!layerState || !scene) return;
+
+    const result = await LayerToggleService.toggle(
+      layerId,
+      layerState,
+      scene
+    );
+
+    if (!result.success && result.error) {
+      console.error(`Layer toggle failed: ${result.error}`);
+    }
+
+    this.updateUrl();
+    m.redraw();
+  },
+
+
   onremove() {
-    // Clean up keyboard event listener
+    const canvas = document.querySelector('.scene-canvas') as HTMLCanvasElement;
+
+    // Clean up event listeners
     if (this._keydownHandler) {
       window.removeEventListener('keydown', this._keydownHandler);
+    }
+    if (this._resizeHandler) {
+      window.removeEventListener('resize', this._resizeHandler);
+    }
+    if (canvas) {
+      if (this._mousedownHandler) {
+        canvas.removeEventListener('mousedown', this._mousedownHandler);
+      }
+      if (this._clickHandler) {
+        canvas.removeEventListener('click', this._clickHandler);
+      }
+      if (this._wheelHandler) {
+        canvas.removeEventListener('wheel', this._wheelHandler);
+      }
+    }
+
+    // Clean up wheel gesture detector
+    if (this._wheelGestureDetector) {
+      this._wheelGestureDetector.dispose();
     }
 
     // Clean up scene
@@ -414,17 +324,17 @@ export const App: AppComponent = {
   },
 
   view() {
-    const state = this.state;
+    const { bootstrapStatus, bootstrapProgress, bootstrapError, currentTime } = this.state;
 
     // Show bootstrap modal during loading or error
-    if (state.bootstrapStatus !== 'ready') {
-      return m(BootstrapModal, {
-        progress: state.bootstrapProgress,
-        error: state.bootstrapError,
-        onRetry: state.bootstrapStatus === 'error' ? () => {
-          state.bootstrapStatus = 'loading';
-          state.bootstrapError = null;
-          state.bootstrapProgress = null;
+    if (bootstrapStatus !== 'ready') {
+      return m(BootstrapModal as any, {
+        progress: bootstrapProgress,
+        error: bootstrapError,
+        onRetry: bootstrapStatus === 'error' ? () => {
+          this.state.bootstrapStatus = 'loading';
+          this.state.bootstrapError = null;
+          this.state.bootstrapProgress = null;
           this.runBootstrap();
         } : undefined
       });
@@ -432,13 +342,8 @@ export const App: AppComponent = {
 
     // Show main app when ready
     return m('div.app-container', {
-      class: state.bootstrapStatus === 'ready' ? 'ready' : ''
+      class: bootstrapStatus === 'ready' ? 'ready' : ''
     }, [
-      // Canvas container
-      m('div.canvas-container', [
-        m('canvas.scene-canvas')
-      ]),
-
       // UI Overlay
       m('div.ui-overlay', [
         // Header
@@ -452,7 +357,7 @@ export const App: AppComponent = {
             }, 'Hypatia')
           ]),
           m('p.time-display',
-            state.currentTime.toLocaleString('en-US', {
+            currentTime.toLocaleString('en-US', {
               year: 'numeric',
               month: 'short',
               day: 'numeric',
@@ -462,113 +367,16 @@ export const App: AppComponent = {
             })
           ),
           m('p.time-utc',
-            state.currentTime.toISOString().replace('T', ' ').substring(0, 19) + ' UTC'
+            currentTime.toISOString().replace('T', ' ').substring(0, 19) + ' UTC'
           )
         ]),
 
         // Controls
-        m(Controls, {
-          isFullscreen: state.isFullscreen,
-          onFullscreenToggle: () => {
-            state.isFullscreen = !state.isFullscreen;
-            if (state.isFullscreen) {
-              document.documentElement.requestFullscreen();
-            } else {
-              document.exitFullscreen();
-            }
-          },
-          blend: state.blend,
-          onBlendChange: (newBlend: number) => {
-            state.blend = newBlend;
-            if (state.scene) {
-              state.scene.setBlend(newBlend);
-            }
-          },
-          onReferenceClick: () => {
-            // Update URL with reference state
-            m.route.set('/', { dt: '2025-10-29:12:00', alt: '12742000', ll: '0.000,0.000' });
-
-            // Parse and apply the reference state
-            const urlState = parseUrlState();
-            if (urlState && state.scene) {
-              state.currentTime = urlState.time;
-              state.scene.updateTime(urlState.time);
-              state.scene.setCameraState(urlState.cameraPosition, urlState.cameraDistance);
-            }
-
-            m.redraw();
-          },
-          showTemp2m: state.showTemp2m,
-          temp2mLoading: state.temp2mLoading,
-          onTemp2mToggle: async () => {
-            if (!state.scene) return;
-
-            // If turning on
-            if (!state.showTemp2m) {
-              // Load temp2m layer if not already loaded
-              if (!state.scene.isTemp2mLoaded()) {
-                await this.loadTemp2mLayer();
-              }
-              // Toggle visibility and update state
-              state.scene.toggleTemp2m(true);
-              state.showTemp2m = true;
-            } else {
-              // Turning off
-              state.scene.toggleTemp2m(false);
-              state.showTemp2m = false;
-            }
-
-            // Update URL with new layer state
-            this.updateUrl();
-            m.redraw();
-          },
-          showRain: state.showRain,
-          onRainToggle: async () => {
-            if (!state.scene) return;
-
-            // Toggle visibility
-            if (!state.showRain) {
-              // Check if pratesfc layer is loaded, load if not
-              if (!state.scene.isRainLoaded()) {
-                await this.loadPratesfcLayer();
-              }
-              state.scene.toggleRain(true);
-              state.showRain = true;
-            } else {
-              state.scene.toggleRain(false);
-              state.showRain = false;
-            }
-
-            // Update URL with new layer state
-            this.updateUrl();
-            m.redraw();
-          },
-          showWind: state.showWind,
-          onWindToggle: async () => {
-            if (!state.scene) return;
-
-            // Toggle visibility
-            if (!state.showWind) {
-              // Check if wind layer is loaded, load if not
-              if (!state.scene.isWindLoaded()) {
-                await this.loadWindLayer();
-              }
-              state.scene.toggleWind(true);
-              state.showWind = true;
-            } else {
-              state.scene.toggleWind(false);
-              state.showWind = false;
-            }
-
-            // Update URL with new layer state
-            this.updateUrl();
-            m.redraw();
-          }
-        }),
+        this.renderControls(),
 
         // Time Slider
         m(TimeSlider, {
-          currentTime: state.currentTime,
+          currentTime,
           startTime: (() => {
             const range = getDatasetRange('temp2m');
             return range ? range.startTime : new Date();
@@ -578,9 +386,9 @@ export const App: AppComponent = {
             return range ? range.endTime : new Date();
           })(),
           onTimeChange: (newTime: Date) => {
-            state.currentTime = newTime;
-            if (state.scene) {
-              state.scene.updateTime(newTime);
+            this.state.currentTime = newTime;
+            if (this.state.scene) {
+              this.state.scene.updateTime(newTime);
               this.updateUrl();
             }
             m.redraw();
@@ -588,5 +396,82 @@ export const App: AppComponent = {
         })
       ])
     ]);
+  },
+
+  renderControls() {
+    const { layerState, isFullscreen, blend, scene } = this.state;
+
+    // Don't render controls until bootstrap is complete
+    // (BootstrapModal is shown during loading)
+    if (!layerState) {
+      return null;
+    }
+
+    // Get layer states for Controls component
+    const temp2m = layerState.get('temp2m');
+    const precipitation = layerState.get('precipitation');
+    const wind = layerState.get('wind10m');
+
+    return m(Controls, {
+      isFullscreen,
+      onFullscreenToggle: () => {
+        this.state.isFullscreen = !this.state.isFullscreen;
+        if (this.state.isFullscreen) {
+          document.documentElement.requestFullscreen();
+        } else {
+          document.exitFullscreen();
+        }
+      },
+      blend,
+      onBlendChange: (newBlend: number) => {
+        this.state.blend = newBlend;
+        if (scene) {
+          scene.setBlend(newBlend);
+        }
+      },
+      onReferenceClick: () => {
+        this.handleReferenceClick();
+      },
+      showTemp2m: temp2m ? temp2m.status !== 'disabled' : false,
+      temp2mLoading: temp2m ? temp2m.status === 'loading' : false,
+      onTemp2mToggle: async () => {
+        await this.handleLayerToggle('temp2m');
+      },
+      showRain: precipitation ? precipitation.status !== 'disabled' : false,
+      onRainToggle: async () => {
+        await this.handleLayerToggle('precipitation');
+      },
+      showWind: wind ? wind.status !== 'disabled' : false,
+      onWindToggle: async () => {
+        await this.handleLayerToggle('wind10m');
+      }
+    });
+  },
+
+  handleReferenceClick() {
+    const { scene } = this.state;
+
+    // Reference state: 2x Earth radius altitude, looking at lat=0 lon=0
+    const referenceTime = new Date('2025-10-29T12:00:00Z');
+    const referenceAltitude = 12742000; // 2x Earth radius in meters
+    const referenceDistance = (referenceAltitude / 6371000) + 1; // Convert to THREE.js units
+
+    const referencePosition = {
+      x: 0,
+      y: 0,
+      z: referenceDistance
+    };
+
+    // Update state
+    this.state.currentTime = referenceTime;
+    if (scene) {
+      scene.updateTime(referenceTime);
+      scene.setCameraState(referencePosition, referenceDistance);
+    }
+
+    // Update URL using proper updateUrl method
+    this.updateUrl();
+
+    m.redraw();
   }
 };

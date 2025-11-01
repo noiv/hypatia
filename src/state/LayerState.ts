@@ -32,7 +32,7 @@ export class LayerState {
    * Enable layers from URL keys (e.g., ['temp', 'wind'])
    */
   enableFromUrlKeys(urlKeys: string[]): void {
-    for (const [layerId, entry] of this.layers) {
+    for (const [, entry] of this.layers) {
       if (urlKeys.includes(entry.layer.urlKey)) {
         entry.status = 'active';
       }

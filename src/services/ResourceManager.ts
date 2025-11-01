@@ -28,8 +28,6 @@ export async function preloadImages(
   const total = resources.reduce((sum, r) => sum + r.size, 0);
   let loaded = 0;
 
-  console.log(`📦 Preloading ${resources.length} ${priority} resources (${(total / 1024 / 1024).toFixed(2)} MB)...`);
-
   for (const resource of resources) {
     try {
       const img = await loadImage(resource.path);
@@ -46,12 +44,12 @@ export async function preloadImages(
         });
       }
     } catch (error) {
-      console.error(`   ✗ ${resource.path}:`, error);
+      console.error(`❌ Failed to load ${resource.path}:`, error);
       // Continue loading other resources even if one fails
     }
   }
 
-  console.log(`✅ Preloaded ${images.size}/${resources.length} ${priority} resources`);
+  console.log(`✅ Preloaded ${images.size}/${resources.length} ${priority} resources (${(total / 1024 / 1024).toFixed(2)} MB)`);
 
   return images;
 }

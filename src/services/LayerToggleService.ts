@@ -11,18 +11,33 @@ import { LayerLoaderService } from './LayerLoaderService';
 export interface LayerToggleResult {
   success: boolean;
   newStatus: 'disabled' | 'loading' | 'active';
-  error?: string;
+  error?: string | undefined;
 }
 
 export class LayerToggleService {
+  /**
+   * Check if a layer is actually loaded in the scene
+   */
+  private static isLayerLoadedInScene(layerId: string, scene: Scene): boolean {
+    switch (layerId) {
+      case 'temp2m':
+        return scene.isTemp2mLoaded();
+      case 'precipitation':
+        return scene.isRainLoaded();
+      case 'wind10m':
+        return scene.isWindLoaded();
+      default:
+        return false;
+    }
+  }
+
   /**
    * Toggle a layer on/off
    */
   static async toggle(
     layerId: string,
     layerState: LayerState,
-    scene: Scene | null,
-    currentTime: Date
+    scene: Scene | null
   ): Promise<LayerToggleResult> {
     const entry = layerState.get(layerId);
 
@@ -51,7 +66,7 @@ export class LayerToggleService {
 
     // If we're enabling, start loading
     if (!wasEnabled && scene) {
-      const result = await LayerLoaderService.loadLayer(entry, scene, currentTime);
+      const result = await LayerLoaderService.loadLayer(entry, scene);
 
       if (result.success) {
         layerState.setStatus(layerId, 'active');
@@ -82,8 +97,7 @@ export class LayerToggleService {
   static async enable(
     layerId: string,
     layerState: LayerState,
-    scene: Scene | null,
-    currentTime: Date
+    scene: Scene | null
   ): Promise<LayerToggleResult> {
     const entry = layerState.get(layerId);
 
@@ -95,10 +109,15 @@ export class LayerToggleService {
       };
     }
 
-    if (layerState.isEnabled(layerId)) {
+    // Check if layer is already loaded in the scene (not just enabled in state)
+    const isActuallyLoaded = scene && this.isLayerLoadedInScene(layerId, scene);
+
+    if (isActuallyLoaded) {
+      // Already loaded, just ensure it's visible and state is correct
+      layerState.setStatus(layerId, 'active');
       return {
         success: true,
-        newStatus: entry.status
+        newStatus: 'active'
       };
     }
 
@@ -111,7 +130,7 @@ export class LayerToggleService {
       };
     }
 
-    const result = await LayerLoaderService.loadLayer(entry, scene, currentTime);
+    const result = await LayerLoaderService.loadLayer(entry, scene);
 
     if (result.success) {
       layerState.setStatus(layerId, 'active');

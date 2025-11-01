@@ -106,6 +106,10 @@ export class WindLayer {
         const segmentIndex = i;
         const totalSegments = line.length - 1;
 
+        const pt1 = line[i];
+        const pt2 = line[i + 1];
+        if (!pt1 || !pt2) continue;
+
         // Calculate taper factor for this segment (1.0 = full width, 0.0 = zero width)
         const remainingSegments = totalSegments - segmentIndex;
         let taperFactor = 1.0;
@@ -117,8 +121,8 @@ export class WindLayer {
 
         // Add segment start and end positions
         positions.push(
-          line[i].x, line[i].y, line[i].z,
-          line[i + 1].x, line[i + 1].y, line[i + 1].z
+          pt1.x, pt1.y, pt1.z,
+          pt2.x, pt2.y, pt2.z
         );
 
         // Store segment data in color channels:
