@@ -16,9 +16,8 @@ import * as THREE from 'three';
 
 export interface AppUrlState {
   time: Date;
-  cameraPosition: { x: number; y: number; z: number };
-  cameraDistance: number;
-  layers?: string[];
+  camera: { x: number; y: number; z: number; distance: number };
+  layers: string[];
 }
 
 /**
@@ -63,16 +62,17 @@ export function parseUrlState(): AppUrlState | null {
 
   // Convert lat/lon to camera position at specified distance
   const cameraPositionVec = latLonToCartesian(latLon.lat, latLon.lon, cameraDistance);
-  const cameraPosition = {
+  const camera = {
     x: cameraPositionVec.x,
     y: cameraPositionVec.y,
-    z: cameraPositionVec.z
+    z: cameraPositionVec.z,
+    distance: cameraDistance
   };
 
-  // Parse layers (optional)
-  const layers = layersStr ? layersStr.split(',').map(l => l.trim()).filter(l => l.length > 0) : undefined;
+  // Parse layers (optional) - default to empty array when not present
+  const layers = layersStr ? layersStr.split(',').map(l => l.trim()).filter(l => l.length > 0) : [];
 
-  return { time, cameraPosition, cameraDistance, layers };
+  return { time, camera, layers };
 }
 
 /**
@@ -85,24 +85,27 @@ export function updateUrlState(state: AppUrlState): void {
 
   // Convert camera position to lat/lon
   const cameraVec = new THREE.Vector3(
-    state.cameraPosition.x,
-    state.cameraPosition.y,
-    state.cameraPosition.z
+    state.camera.x,
+    state.camera.y,
+    state.camera.z
   );
   const { lat, lon } = cartesianToLatLon(cameraVec);
   const ll = formatLatLonForUrl(lat, lon);
 
   // Convert camera distance to altitude in meters
-  const altitudeMeters = distanceToAltitude(state.cameraDistance);
+  const altitudeMeters = distanceToAltitude(state.camera.distance);
   const alt = Math.round(altitudeMeters).toString();
 
   // Build URL manually to avoid encoding colons and commas
-  let url = `?dt=${dt}&alt=${alt}&ll=${ll}`;
+  let search = `?dt=${dt}&alt=${alt}&ll=${ll}`;
 
   // Add layers if present
   if (state.layers && state.layers.length > 0) {
-    url += `&layers=${state.layers.join(',')}`;
+    search += `&layers=${state.layers.join(',')}`;
   }
+
+  // Use absolute URL to prevent browser from encoding
+  const url = `${window.location.origin}${window.location.pathname}${search}`;
 
   // Use replaceState to avoid creating history entries for every update
   window.history.replaceState(null, '', url);
@@ -113,7 +116,7 @@ export function updateUrlState(state: AppUrlState): void {
  */
 let updateTimeout: number | null = null;
 
-export function debouncedUpdateUrlState(state: AppUrlState, delay: number = 500): void {
+export function debouncedUpdateUrlState(state: AppUrlState, delay: number = 100): void {
   if (updateTimeout !== null) {
     clearTimeout(updateTimeout);
   }

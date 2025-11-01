@@ -1,14 +1,16 @@
 import * as THREE from 'three';
 import { EARTH_RADIUS_UNITS } from '../utils/constants';
 import { TEMP2M_CONFIG } from '../config/temp2m.config';
+import { TimeSeriesLayer } from './TimeSeriesLayer';
+import type { TimeStep } from '../services/Temp2mService';
+import type { DataService } from '../services/DataService';
 
-export class Temp2mLayer {
-  public mesh: THREE.Mesh;
+export class Temp2mLayer extends TimeSeriesLayer {
+  private mesh: THREE.Mesh;
   private material: THREE.ShaderMaterial;
-  private timeStepCount: number;
 
-  constructor(dataTexture: THREE.Data3DTexture, timeStepCount: number) {
-    this.timeStepCount = timeStepCount;
+  private constructor(dataTexture: THREE.Data3DTexture, timeSteps: TimeStep[], timeStepCount: number) {
+    super(timeSteps);
 
     // Use SphereGeometry for better vertex distribution
     // This avoids triangles spanning across the dateline
@@ -25,7 +27,7 @@ export class Temp2mLayer {
         dataTexture: { value: dataTexture },
         timeIndex: { value: 0.0 },
         maxTimeIndex: { value: timeStepCount - 1 },
-        sunDirection: { value: new THREE.Vector3(1, 0, 0) },
+        sunDirection: { value: new THREE.Vector3(0, 0, 0) }, // Default: no sun (flat lighting)
         opacity: { value: TEMP2M_CONFIG.visual.opacity },
         dayNightSharpness: { value: TEMP2M_CONFIG.visual.dayNightSharpness },
         dayNightFactor: { value: TEMP2M_CONFIG.visual.dayNightFactor }
@@ -47,31 +49,66 @@ export class Temp2mLayer {
   }
 
   /**
-   * Update time index for interpolation
+   * Factory method to create Temp2mLayer with data loading
    */
-  setTimeIndex(index: number) {
-    this.material.uniforms.timeIndex.value = index;
+  static async create(dataService: DataService): Promise<Temp2mLayer> {
+    const layerData = await dataService.loadLayer('temp2m');
+    return new Temp2mLayer(layerData.texture, layerData.timeSteps, layerData.timeSteps.length);
+  }
+
+  // ILayer interface implementation
+
+  /**
+   * Get THREE.js object for scene
+   */
+  getSceneObject(): THREE.Object3D {
+    return this.mesh;
   }
 
   /**
-   * Set sun direction for day/night shading
+   * Update time index for interpolation
    */
-  setSunDirection(direction: THREE.Vector3) {
-    this.material.uniforms.sunDirection.value.copy(direction);
+  setTimeIndex(index: number) {
+    if (this.material.uniforms.timeIndex) {
+      this.material.uniforms.timeIndex.value = index;
+    }
+  }
+
+  /**
+   * Update sun direction for day/night shading
+   */
+  updateSunDirection(direction: THREE.Vector3) {
+    if (this.material.uniforms.sunDirection) {
+      this.material.uniforms.sunDirection.value.copy(direction);
+    }
   }
 
   /**
    * Set opacity
    */
   setOpacity(opacity: number) {
-    this.material.uniforms.opacity.value = opacity;
+    if (this.material.uniforms.opacity) {
+      this.material.uniforms.opacity.value = opacity;
+    }
   }
 
   /**
-   * Show/hide layer
+   * Show/hide layer (ILayer interface)
    */
-  setVisible(visible: boolean) {
+  setVisible(visible: boolean): void {
     this.mesh.visible = visible;
+  }
+
+  /**
+   * Clean up resources (ILayer interface)
+   */
+  dispose(): void {
+    if (this.mesh.geometry) {
+      this.mesh.geometry.dispose();
+    }
+    if (this.material) {
+      this.material.dispose();
+    }
   }
 
   private getVertexShader(): string {
@@ -207,18 +244,27 @@ export class Temp2mLayer {
         // Get color from palette
         vec3 color = getTempColor(tempC);
 
-        // Calculate sun lighting for day/night
-        vec3 lightDir = normalize(sunDirection);
-        float dotNL = dot(vNormal, lightDir);
+        // Check if sun is enabled (non-zero direction)
+        float sunLength = length(sunDirection);
 
-        // Sharpen day/night transition (from config)
-        float dnZone = clamp(dotNL * dayNightSharpness, -1.0, 1.0);
+        vec3 finalColor;
+        if (sunLength > 0.01) {
+          // Sun enabled - apply day/night lighting
+          vec3 lightDir = normalize(sunDirection);
+          float dotNL = dot(vNormal, lightDir);
 
-        // Dim night side (from config)
-        float lightMix = 0.5 + dnZone * dayNightFactor;
+          // Sharpen day/night transition (from config)
+          float dnZone = clamp(dotNL * dayNightSharpness, -1.0, 1.0);
 
-        // Apply lighting to color
-        vec3 finalColor = color * lightMix;
+          // Dim night side (from config)
+          float lightMix = 0.5 + dnZone * dayNightFactor;
+
+          // Apply lighting to color
+          finalColor = color * lightMix;
+        } else {
+          // Sun disabled - flat lighting
+          finalColor = color;
+        }
 
         gl_FragColor = vec4(finalColor, opacity);
         #endif
@@ -226,15 +272,4 @@ export class Temp2mLayer {
     `;
   }
 
-  /**
-   * Clean up resources
-   */
-  dispose() {
-    if (this.mesh.geometry) {
-      this.mesh.geometry.dispose();
-    }
-    if (this.material) {
-      this.material.dispose();
-    }
-  }
 }

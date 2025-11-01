@@ -30,6 +30,13 @@ export class Sun {
   }
 
   /**
+   * Get sun direction as a normalized vector
+   */
+  getDirection(): THREE.Vector3 {
+    return this.mesh.position.clone().normalize();
+  }
+
+  /**
    * Update sun position based on time
    * Sun rotates around Earth (geocentric view)
    */

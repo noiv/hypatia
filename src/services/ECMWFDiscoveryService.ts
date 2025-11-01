@@ -31,6 +31,9 @@ export async function getLatestECMWFRun(): Promise<ECMWFRunInfo> {
       if (cycles.length > 0) {
         // Return the most recent cycle
         const latestCycle = cycles[cycles.length - 1];
+        if (!latestCycle) {
+          continue;
+        }
         const timestamp = parseRunTimestamp(dateStr, latestCycle);
 
         return {
@@ -70,7 +73,9 @@ async function getAvailableCycles(dateStr: string): Promise<string[]> {
   let match;
 
   while ((match = regex.exec(xml)) !== null) {
-    cycles.push(match[2]); // Extract "00z", "06z", etc.
+    if (match[2]) {
+      cycles.push(match[2]); // Extract "00z", "06z", etc.
+    }
   }
 
   // Sort cycles chronologically

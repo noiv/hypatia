@@ -14,18 +14,20 @@ export class Earth {
 
     // Normalize vertices to create sphere from cube (like old implementation)
     const positionAttr = geometry.attributes.position;
-    for (let i = 0; i < positionAttr.count; i++) {
-      const x = positionAttr.getX(i);
-      const y = positionAttr.getY(i);
-      const z = positionAttr.getZ(i);
+    if (positionAttr) {
+      for (let i = 0; i < positionAttr.count; i++) {
+        const x = positionAttr.getX(i);
+        const y = positionAttr.getY(i);
+        const z = positionAttr.getZ(i);
 
-      const vector = new THREE.Vector3(x, y, z);
-      vector.normalize().multiplyScalar(EARTH_RADIUS_UNITS);
+        const vector = new THREE.Vector3(x, y, z);
+        vector.normalize().multiplyScalar(EARTH_RADIUS_UNITS);
 
-      positionAttr.setXYZ(i, vector.x, vector.y, vector.z);
+        positionAttr.setXYZ(i, vector.x, vector.y, vector.z);
+      }
+
+      positionAttr.needsUpdate = true;
     }
-
-    positionAttr.needsUpdate = true;
     geometry.computeVertexNormals();
 
     // Shaders for blending between basemaps with lighting
@@ -58,19 +60,27 @@ export class Earth {
         // Blend textures
         vec3 baseColor = mix(colorA, colorB, blend);
 
-        // Calculate normal from position (smooth across sphere)
-        // Since Earth is centered at origin, normal = normalize(position)
-        vec3 normal = normalize(vPosition);
-        vec3 lightDir = normalize(sunDirection);
-        float dotNL = dot(normal, lightDir);
+        // Check if sun is enabled (non-zero direction)
+        float sunLength = length(sunDirection);
 
-        // Sharpen day/night transition (from config)
-        float dnZone = clamp(dotNL * dayNightSharpness, -1.0, 1.0);
+        vec3 color;
+        if (sunLength > 0.01) {
+          // Sun enabled - apply day/night lighting
+          vec3 normal = normalize(vPosition);
+          vec3 lightDir = normalize(sunDirection);
+          float dotNL = dot(normal, lightDir);
 
-        // Dim night side (from config)
-        float lightMix = 0.5 + dnZone * dayNightFactor;
+          // Sharpen day/night transition (from config)
+          float dnZone = clamp(dotNL * dayNightSharpness, -1.0, 1.0);
 
-        vec3 color = baseColor * lightMix;
+          // Dim night side (from config)
+          float lightMix = 0.5 + dnZone * dayNightFactor;
+
+          color = baseColor * lightMix;
+        } else {
+          // Sun disabled - flat lighting
+          color = baseColor;
+        }
 
         gl_FragColor = vec4(color, 1.0);
       }
@@ -80,6 +90,9 @@ export class Earth {
     const faceNames = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
     const basemapA = EARTH_CONFIG.basemaps.sets[0];
     const basemapB = EARTH_CONFIG.basemaps.sets[1];
+    if (!basemapA || !basemapB) {
+      throw new Error('Earth basemaps not configured');
+    }
 
     // Create 6 shader materials (one per face) with blending
     this.materials = faceNames.map(face => {
@@ -117,7 +130,7 @@ export class Earth {
           blend: { value: 0.0 },
           texA: { value: texA },
           texB: { value: texB },
-          sunDirection: { value: new THREE.Vector3(1, 0, 0) },
+          sunDirection: { value: new THREE.Vector3(0, 0, 0) }, // Default: no sun (flat lighting)
           dayNightSharpness: { value: EARTH_CONFIG.visual.dayNightSharpness },
           dayNightFactor: { value: EARTH_CONFIG.visual.dayNightFactor }
         },
@@ -136,7 +149,9 @@ export class Earth {
    */
   setBlend(blend: number) {
     this.materials.forEach(mat => {
-      mat.uniforms.blend.value = blend;
+      if (mat.uniforms.blend) {
+        mat.uniforms.blend.value = blend;
+      }
     });
   }
 
@@ -145,7 +160,9 @@ export class Earth {
    */
   setSunDirection(direction: THREE.Vector3) {
     this.materials.forEach(mat => {
-      mat.uniforms.sunDirection.value.copy(direction);
+      if (mat.uniforms.sunDirection) {
+        mat.uniforms.sunDirection.value.copy(direction);
+      }
     });
   }
 

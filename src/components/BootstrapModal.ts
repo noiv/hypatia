@@ -1,5 +1,6 @@
 import m from 'mithril';
 import type { LoadProgress } from '../services/ResourceManager';
+import { getCapabilityHelpUrls } from '../utils/capabilityCheck';
 
 interface BootstrapModalAttrs {
   progress: LoadProgress | null;
@@ -19,10 +20,29 @@ export const BootstrapModal: m.Component<BootstrapModalAttrs> = {
         error ? [
           // Error state
           m('div.error-message', [
-            m('p', 'Failed to load resources'),
-            m('p.error-detail', error)
+            m('p', error.includes('WebGL') || error.includes('WebGPU') ? 'Browser Not Supported' : 'Failed to load resources'),
+            error.includes('WebGL') || error.includes('WebGPU') ? [
+              m('p.error-detail', 'Your browser does not support required features.'),
+              m('p.help-links', 'Please check your browser configuration:'),
+              m('ul.help-list', [
+                m('li', [
+                  m('a', {
+                    href: getCapabilityHelpUrls().webgl,
+                    target: '_blank',
+                    rel: 'noopener noreferrer'
+                  }, 'WebGL2 Support')
+                ]),
+                m('li', [
+                  m('a', {
+                    href: getCapabilityHelpUrls().webgpu,
+                    target: '_blank',
+                    rel: 'noopener noreferrer'
+                  }, 'WebGPU Implementation Status')
+                ])
+              ])
+            ] : m('p.error-detail', error)
           ]),
-          onRetry && m('button.retry-btn', {
+          onRetry && !error.includes('WebGL') && !error.includes('WebGPU') && m('button.retry-btn', {
             onclick: onRetry
           }, 'Retry')
         ] : progress ? [
@@ -34,7 +54,7 @@ export const BootstrapModal: m.Component<BootstrapModalAttrs> = {
               })
             ]),
             m('p.progress-text', `${Math.round(progress.percentage)}%`),
-            m('p.progress-file', progress.currentFile.split('/').pop())
+            m('p.progress-file', progress.currentFile ? progress.currentFile.split('/').pop() : 'Loading...')
           ])
         ] : [
           // Initial state

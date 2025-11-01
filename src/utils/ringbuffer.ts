@@ -5,8 +5,8 @@
 export interface RingBuffer {
   push: (item: number) => void;
   buf: number[];
-  get: (key: number) => number;
-  last: () => number;
+  get: (key: number) => number | undefined;
+  last: () => number | undefined;
   max: () => number;
   min: () => number;
   sum: () => number;

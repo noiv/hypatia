@@ -89,8 +89,11 @@ export class PratesfcService {
 
     // Load each time step
     for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
+      if (!step) continue;
+
       try {
-        const layerData = await this.loadBinaryFile(steps[i].filePath);
+        const layerData = await this.loadBinaryFile(step.filePath);
 
         // Copy into the 3D texture data array
         const offset = i * this.WIDTH * this.HEIGHT;
@@ -100,7 +103,7 @@ export class PratesfcService {
           onProgress(i + 1, steps.length);
         }
       } catch (error) {
-        console.warn(`Failed to load ${steps[i].filePath}:`, error);
+        console.warn(`Failed to load ${step.filePath}:`, error);
         // Leave as zeros (will be handled as no precipitation in shader)
       }
     }
@@ -127,8 +130,12 @@ export class PratesfcService {
     const currentMs = currentTime.getTime();
 
     for (let i = 0; i < steps.length - 1; i++) {
-      const step1 = this.parseTimeStep(steps[i]);
-      const step2 = this.parseTimeStep(steps[i + 1]);
+      const stepA = steps[i];
+      const stepB = steps[i + 1];
+      if (!stepA || !stepB) continue;
+
+      const step1 = this.parseTimeStep(stepA);
+      const step2 = this.parseTimeStep(stepB);
 
       if (currentMs >= step1.getTime() && currentMs <= step2.getTime()) {
         // Interpolate between i and i+1
@@ -139,7 +146,8 @@ export class PratesfcService {
     }
 
     // Out of range - clamp
-    if (currentMs < this.parseTimeStep(steps[0]).getTime()) {
+    const firstStep = steps[0];
+    if (firstStep && currentMs < this.parseTimeStep(firstStep).getTime()) {
       return -1; // Before first step
     }
 

@@ -3,8 +3,10 @@
  * WindLayerGPUCompute - WebGPU compute-based wind line tracing
  *
  * Performance: ~3.4ms for 16384 lines (vs 190ms CPU)
+ * Implements ILayer interface for polymorphic layer management
  */
 
+import type { ILayer } from './ILayer';
 import * as THREE from 'three';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
@@ -14,7 +16,7 @@ import { generateFibonacciSphere } from '../utils/sphereSeeds';
 import { Wind10mService, TimeStep } from '../services/Wind10mService';
 import { WindGPUService } from '../services/WindGPUService';
 
-export class WindLayerGPUCompute {
+export class WindLayerGPUCompute implements ILayer {
   public group: THREE.Group;
   private seeds: THREE.Vector3[];
   private lines: LineSegments2 | THREE.Mesh | null = null;
@@ -65,11 +67,7 @@ export class WindLayerGPUCompute {
    * Initialize WebGPU compute pipeline
    */
   async initGPU(renderer: any): Promise<void> {
-    // Get WebGPU device (independent of WebGL renderer)
-    if (!navigator.gpu) {
-      throw new Error('WebGPU not supported');
-    }
-
+    // WebGPU guaranteed to be available (checked during bootstrap)
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) {
       throw new Error('Failed to get WebGPU adapter');
@@ -362,9 +360,9 @@ export class WindLayerGPUCompute {
   }
 
   /**
-   * Update wind lines for current time using WebGPU compute
+   * Update wind lines for current time using WebGPU compute (async version)
    */
-  async updateTime(currentTime: Date): Promise<void> {
+  async updateTimeAsync(currentTime: Date): Promise<void> {
     if (this.timesteps.length === 0 || !this.device || !this.pipeline) return;
 
     const timeIndex = WindGPUService.timeToIndex(currentTime, this.timesteps);
@@ -454,7 +452,7 @@ export class WindLayerGPUCompute {
     const submitMs = submitTime - startTime;
     const mapMs = mapTime - submitTime;
     const geomMs = geometryTime - mapTime;
-    console.log(`GPU ${this.seeds.length} lines: tot ${totalTime.toFixed(1)}, sub: ${submitMs.toFixed(1)}, map: ${mapMs.toFixed(1)}, geo: ${geomMs.toFixed(1)}`);
+    // console.log(`GPU ${this.seeds.length} lines: tot ${totalTime.toFixed(1)}, sub: ${submitMs.toFixed(1)}, map: ${mapMs.toFixed(1)}, geo: ${geomMs.toFixed(1)}`);
   }
 
   /**
@@ -812,12 +810,36 @@ export class WindLayerGPUCompute {
     console.log(`✅ Created custom wind lines: ${this.seeds.length} lines, ${numSegments} segments`);
   }
 
-  getGroup(): THREE.Group {
+  // ILayer interface implementation
+
+  /**
+   * Update layer based on current time
+   * Delegates to async updateTimeAsync for GPU compute
+   */
+  updateTime(time: Date): void {
+    // Call async version without blocking (fire and forget)
+    this.updateTimeAsync(time).catch(err => {
+      console.error('Failed to update wind layer:', err);
+    });
+  }
+
+  /**
+   * Get the THREE.js object to add to scene
+   */
+  getSceneObject(): THREE.Object3D {
     return this.group;
   }
 
+  /**
+   * Set layer visibility
+   */
   setVisible(visible: boolean): void {
     this.group.visible = visible;
+  }
+
+  // Legacy method for backward compatibility
+  getGroup(): THREE.Group {
+    return this.group;
   }
 
   setResolution(width: number, height: number): void {
@@ -830,7 +852,27 @@ export class WindLayerGPUCompute {
     }
   }
 
-  updateLineWidth(cameraDistance: number): void {
+  /**
+   * Update layer based on camera distance (ILayer interface)
+   * Updates line width based on camera distance from origin
+   */
+  updateDistance(distance: number): void {
+    this.updateLineWidth(distance);
+  }
+
+  /**
+   * Update sun direction (ILayer interface)
+   * Wind layer doesn't use sun direction
+   */
+  updateSunDirection(_sunDir: THREE.Vector3): void {
+    // No-op - wind layer doesn't use lighting
+  }
+
+  /**
+   * Update line width based on camera distance
+   * Uses logarithmic interpolation for smooth scaling
+   */
+  private updateLineWidth(cameraDistance: number): void {
     if (!this.material) return;
 
     const minDistance = 1.157;
