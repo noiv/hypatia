@@ -9,15 +9,13 @@ import { Scene } from './visualization/Scene';
 import { TimeSlider } from './components/TimeSlider';
 import { Controls } from './components/Controls';
 import { BootstrapModal } from './components/BootstrapModal';
-import { parseUrlState } from './utils/urlState';
+import { parseUrlState, updateUrlState } from './utils/urlState';
 import { sanitizeUrl } from './utils/sanitizeUrl';
 import { clampTimeToDataRange } from './utils/timeUtils';
 import { getDatasetRange } from './manifest';
 import type { AppState } from './state/AppState';
 import { LayerStateService } from './services/LayerStateService';
 import { AppBootstrapService } from './services/AppBootstrapService';
-import { LayerToggleService } from './services/LayerToggleService';
-import { UrlLayerSyncService } from './services/UrlLayerSyncService';
 import { WheelGestureDetector } from './utils/wheelGestureDetector';
 
 interface AppComponent extends m.Component {
@@ -235,58 +233,72 @@ export const App: AppComponent = {
   },
 
   async loadEnabledLayers() {
-    const { layerState, scene } = this.state;
-    if (!layerState || !scene) return;
+    const { scene } = this.state;
+    if (!scene) return;
 
-    const activeLayers = layerState.getActiveLayers();
-    console.log(`loadEnabledLayers: Found ${activeLayers.length} active layers`, activeLayers.map(e => e.layer.id));
+    // Get layers from URL
+    const urlState = parseUrlState();
+    const layersToLoad = urlState?.layers || [];
 
-    for (const entry of activeLayers) {
-      console.log(`loadEnabledLayers: Loading ${entry.layer.id}...`);
+    if (layersToLoad.length > 0) {
+      console.log(`Bootstrap.loading: ${layersToLoad.join(', ')}`);
+    }
+
+    for (const layerId of layersToLoad) {
       try {
-        layerState.setStatus(entry.layer.id, 'loading');
         m.redraw();
 
-        await LayerToggleService.enable(
-          entry.layer.id,
-          layerState,
-          scene
-        );
+        // Create and show layer
+        await scene.createLayer(layerId as any);
+        scene.setLayerVisible(layerId as any, true);
 
         m.redraw();
       } catch (error) {
-        console.error(`Failed to load layer ${entry.layer.id}:`, error);
+        console.error(`Bootstrap.error: ${layerId}`, error);
       }
     }
   },
 
   updateUrl() {
-    const { scene, layerState, currentTime } = this.state;
-    if (!scene || !layerState) return;
+    const { scene, currentTime } = this.state;
+    if (!scene) return;
 
-    UrlLayerSyncService.updateUrl(layerState, {
+    // Get visible layers from scene
+    const visibleLayers = scene.getVisibleLayers();
+
+    // Convert LayerId to urlKey (temp2m->temp2m, precipitation->precipitation, wind10m->wind10m)
+    // For now they're the same, but future may differ
+    const layers = visibleLayers;
+
+    updateUrlState({
       time: currentTime,
       cameraPosition: scene.getCameraPosition(),
-      cameraDistance: scene.getCameraDistance()
+      cameraDistance: scene.getCameraDistance(),
+      layers
     });
   },
 
   async handleLayerToggle(layerId: string) {
-    const { layerState, scene } = this.state;
-    if (!layerState || !scene) return;
+    const { scene } = this.state;
+    if (!scene) return;
 
-    const result = await LayerToggleService.toggle(
-      layerId,
-      layerState,
-      scene
-    );
+    try {
+      const state = scene.getLayerState(layerId as any); // Cast for now
 
-    if (!result.success && result.error) {
-      console.error(`Layer toggle failed: ${result.error}`);
+      if (!state.created) {
+        // Layer not created yet - create and show it
+        await scene.createLayer(layerId as any);
+        scene.setLayerVisible(layerId as any, true);
+      } else {
+        // Layer exists - toggle visibility
+        scene.setLayerVisible(layerId as any, !state.visible);
+      }
+
+      this.updateUrl();
+      m.redraw();
+    } catch (error) {
+      console.error(`Layer toggle failed:`, error);
     }
-
-    this.updateUrl();
-    m.redraw();
   },
 
 
@@ -399,18 +411,17 @@ export const App: AppComponent = {
   },
 
   renderControls() {
-    const { layerState, isFullscreen, blend, scene } = this.state;
+    const { isFullscreen, blend, scene } = this.state;
 
-    // Don't render controls until bootstrap is complete
-    // (BootstrapModal is shown during loading)
-    if (!layerState) {
+    // Don't render controls until scene is ready
+    if (!scene) {
       return null;
     }
 
-    // Get layer states for Controls component
-    const temp2m = layerState.get('temp2m');
-    const precipitation = layerState.get('precipitation');
-    const wind = layerState.get('wind10m');
+    // Get layer states from scene
+    const temp2mState = scene.getLayerState('temp2m');
+    const precipitationState = scene.getLayerState('precipitation');
+    const windState = scene.getLayerState('wind10m');
 
     return m(Controls, {
       isFullscreen,
@@ -432,16 +443,16 @@ export const App: AppComponent = {
       onReferenceClick: () => {
         this.handleReferenceClick();
       },
-      showTemp2m: temp2m ? temp2m.status !== 'disabled' : false,
-      temp2mLoading: temp2m ? temp2m.status === 'loading' : false,
+      showTemp2m: temp2mState.created && temp2mState.visible,
+      temp2mLoading: false, // TODO: track loading state
       onTemp2mToggle: async () => {
         await this.handleLayerToggle('temp2m');
       },
-      showRain: precipitation ? precipitation.status !== 'disabled' : false,
+      showRain: precipitationState.created && precipitationState.visible,
       onRainToggle: async () => {
         await this.handleLayerToggle('precipitation');
       },
-      showWind: wind ? wind.status !== 'disabled' : false,
+      showWind: windState.created && windState.visible,
       onWindToggle: async () => {
         await this.handleLayerToggle('wind10m');
       }

@@ -8,8 +8,10 @@ import { PratesfcLayer } from './PratesfcLayer';
 import { WindLayerGPUCompute } from './WindLayerGPUCompute';
 import { Temp2mService, TimeStep } from '../services/Temp2mService';
 import { PratesfcService, TimeStep as PratesfcTimeStep } from '../services/PratesfcService';
-import { cartesianToLatLon, formatLatLon, latLonToCartesian } from '../utils/coordinates';
+import { latLonToCartesian } from '../utils/coordinates';
 import { UserOptions } from '../services/UserOptionsService';
+import { DataService, type LayerId } from '../services/DataService';
+import type { LayerRenderState } from '../config/types';
 
 export class Scene {
   private scene: THREE.Scene;
@@ -34,8 +36,10 @@ export class Scene {
   private readonly zoomEndTimeoutMs = 500;
   private lastFrameTime: number = performance.now();
   private stats: any;
+  private dataService: DataService;
 
   constructor(canvas: HTMLCanvasElement, preloadedImages?: Map<string, HTMLImageElement>, userOptions?: UserOptions) {
+    this.dataService = new DataService();
     // Scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x161616);
@@ -99,7 +103,6 @@ export class Scene {
     if (userOptions?.atmosphere.enabled) {
       this.atmosphereLayer = new AtmosphereLayer();
       this.scene.add(this.atmosphereLayer.mesh);
-      console.log('Atmosphere layer created');
     }
 
     // Initialize sun direction for Earth's shader
@@ -121,8 +124,6 @@ export class Scene {
 
     // Start animation loop
     this.animate();
-
-    console.log(`✅ Scene initialized (${this.scene.children.length} objects)`);
   }
 
   private addAxesHelpers() {
@@ -200,14 +201,7 @@ export class Scene {
     const intersects = this.raycaster.intersectObject(this.earth.mesh, false);
 
     if (intersects.length > 0) {
-      const intersection = intersects[0]!;
-      const point = intersection.point;
-
-      // Convert to lat/lon
-      const { lat, lon } = cartesianToLatLon(point);
-      const formatted = formatLatLon(lat, lon);
-
-      console.log(`Clicked Earth at: ${formatted} (lat: ${lat.toFixed(3)}, lon: ${lon.toFixed(3)}) - XYZ: (${point.x.toFixed(3)}, ${point.y.toFixed(3)}, ${point.z.toFixed(3)})`);
+      // Click detected on Earth
     }
   };
 
@@ -251,8 +245,7 @@ export class Scene {
         this.zoomEndTimeout = window.setTimeout(() => {
           // Zoom has ended, log the final values
           const altitudeKm = altitude * 6371; // Earth radius = 6371 km
-          const lineWidth = this.windLayerGPU?.getLineWidth();
-          console.log(`🌬️  Zoom ended: altitude=${altitudeKm.toFixed(0)}km, lineWidth=${lineWidth?.toFixed(3)}px`);
+          this.windLayerGPU?.updateLineWidth(altitudeKm);
         }, this.zoomEndTimeoutMs);
         this.lastDistance = distance;
       }
@@ -325,8 +318,6 @@ export class Scene {
 
     const sunDir = this.sun.mesh.position.clone().normalize();
     this.temp2mLayer.setSunDirection(sunDir);
-
-    console.log('Temp2m layer loaded with', this.temp2mTimeSteps.length, 'time steps');
   }
 
   /**
@@ -348,8 +339,6 @@ export class Scene {
     // Update with current time
     const timeIndex = PratesfcService.timeToIndex(this.currentTime, this.pratesfcTimeSteps);
     this.pratesfcLayer.setTimeIndex(timeIndex);
-
-    console.log('Pratesfc layer loaded with', this.pratesfcTimeSteps.length, 'time steps');
   }
 
   /**
@@ -389,12 +378,9 @@ export class Scene {
    */
   async loadWindLayer(): Promise<void> {
     if (this.windLayerGPU) {
-      console.log('Wind layer already loaded, showing it');
       this.windLayerGPU.setVisible(true);
       return;
     }
-
-    console.log('🌬️  Loading WindLayerGPUCompute...');
 
     this.windLayerGPU = new WindLayerGPUCompute(8192);
 
@@ -402,11 +388,7 @@ export class Scene {
     await this.windLayerGPU.initGPU(this.renderer);
 
     // Load all wind data timesteps and upload to GPU
-    await this.windLayerGPU.loadWindData((loaded, total) => {
-      if (loaded === total) {
-        console.log(`Wind: loaded ${total} files`);
-      }
-    });
+    await this.windLayerGPU.loadWindData();
 
     // Trace initial geometry
     await this.windLayerGPU.updateTime(this.currentTime);
@@ -416,8 +398,6 @@ export class Scene {
 
     // Ensure visibility is set to true
     this.windLayerGPU.setVisible(true);
-
-    console.log('🌬️  WindLayerGPUCompute loaded');
   }
 
   /**
@@ -484,7 +464,6 @@ export class Scene {
       { x: position.x, y: position.y, z: position.z },
       distance
     );
-    console.log(`📍 Camera set to ${lat.toFixed(4)}°, ${lon.toFixed(4)}° at distance ${distance.toFixed(2)}`);
   }
 
   /**
@@ -541,6 +520,159 @@ export class Scene {
    */
   disableControls() {
     this.controls.enabled = false;
+  }
+
+  // ========================================================================
+  // New Unified Layer API
+  // ========================================================================
+
+  /**
+   * Create a layer (loads data if needed, creates visualization)
+   * Returns true if layer was created, false if already exists
+   */
+  async createLayer(layerId: LayerId): Promise<boolean> {
+    // Check if already created
+    if (this.isLayerCreated(layerId)) {
+      return false;
+    }
+
+    // Create visualization based on layer type
+    switch (layerId) {
+      case 'temp2m':
+        {
+          // Load data through DataService
+          const layerData = await this.dataService.loadLayer(layerId);
+          this.temp2mTimeSteps = layerData.timeSteps;
+          this.temp2mLayer = new Temp2mLayer(layerData.texture, layerData.timeSteps.length);
+          this.scene.add(this.temp2mLayer.mesh);
+
+          // Update with current time and sun direction
+          const timeIndex = Temp2mService.timeToIndex(this.currentTime, this.temp2mTimeSteps);
+          this.temp2mLayer.setTimeIndex(timeIndex);
+          this.temp2mLayer.setSunDirection(this.sun.getDirection());
+        }
+        break;
+
+      case 'precipitation':
+        {
+          // Load data through DataService
+          const layerData = await this.dataService.loadLayer(layerId);
+          this.pratesfcTimeSteps = layerData.timeSteps;
+          this.pratesfcLayer = new PratesfcLayer(layerData.texture, layerData.timeSteps.length);
+          this.scene.add(this.pratesfcLayer.mesh);
+
+          // Update with current time
+          const prateTimeIndex = PratesfcService.timeToIndex(this.currentTime, this.pratesfcTimeSteps);
+          this.pratesfcLayer.setTimeIndex(prateTimeIndex);
+        }
+        break;
+
+      case 'wind10m':
+        // Wind layer doesn't use DataService yet - loads directly
+        this.windLayerGPU = new WindLayerGPUCompute(8192);
+        await this.windLayerGPU.initGPU(this.renderer);
+        await this.windLayerGPU.loadWindData();
+        await this.windLayerGPU.updateTime(this.currentTime);
+        this.scene.add(this.windLayerGPU.getGroup());
+        break;
+    }
+
+    return true;
+  }
+
+  /**
+   * Toggle layer visibility (layer must be created first)
+   */
+  setLayerVisible(layerId: LayerId, visible: boolean): void {
+    switch (layerId) {
+      case 'temp2m':
+        if (this.temp2mLayer) {
+          this.temp2mLayer.setVisible(visible);
+        }
+        break;
+
+      case 'precipitation':
+        if (this.pratesfcLayer) {
+          this.pratesfcLayer.setVisible(visible);
+        }
+        break;
+
+      case 'wind10m':
+        if (this.windLayerGPU) {
+          this.windLayerGPU.setVisible(visible);
+        }
+        break;
+    }
+  }
+
+  /**
+   * Toggle multiple layers at once
+   */
+  toggleLayers(layerIds: LayerId[], visible: boolean): void {
+    for (const layerId of layerIds) {
+      this.setLayerVisible(layerId, visible);
+    }
+  }
+
+  /**
+   * Check if layer is created (data loaded, visualization exists)
+   */
+  isLayerCreated(layerId: LayerId): boolean {
+    switch (layerId) {
+      case 'temp2m':
+        return this.temp2mLayer !== null;
+      case 'precipitation':
+        return this.pratesfcLayer !== null;
+      case 'wind10m':
+        return this.windLayerGPU !== null;
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Check if layer is visible
+   */
+  isLayerVisible(layerId: LayerId): boolean {
+    switch (layerId) {
+      case 'temp2m':
+        return this.temp2mLayer?.mesh.visible ?? false;
+      case 'precipitation':
+        return this.pratesfcLayer?.mesh.visible ?? false;
+      case 'wind10m':
+        return this.windLayerGPU?.getGroup().visible ?? false;
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Get layer render state
+   */
+  getLayerState(layerId: LayerId): LayerRenderState {
+    const created = this.isLayerCreated(layerId);
+    if (!created) {
+      return { created: false, visible: false };
+    }
+    return { created: true, visible: this.isLayerVisible(layerId) };
+  }
+
+  /**
+   * Get all created layer IDs
+   */
+  getCreatedLayers(): LayerId[] {
+    const layers: LayerId[] = [];
+    if (this.temp2mLayer) layers.push('temp2m');
+    if (this.pratesfcLayer) layers.push('precipitation');
+    if (this.windLayerGPU) layers.push('wind10m');
+    return layers;
+  }
+
+  /**
+   * Get all visible layer IDs
+   */
+  getVisibleLayers(): LayerId[] {
+    return this.getCreatedLayers().filter(layerId => this.isLayerVisible(layerId));
   }
 
   /**
