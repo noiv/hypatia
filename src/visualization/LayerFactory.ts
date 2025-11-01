@@ -3,6 +3,7 @@ import type { ILayer, LayerId } from './ILayer';
 import type { DataService } from '../services/DataService';
 import { EarthLayer } from './EarthLayer';
 import { SunLayer } from './SunLayer';
+import { GraticuleLayer } from './GraticuleLayer';
 import { Temp2mLayer } from './Temp2mLayer';
 import { PratesfcLayer } from './PratesfcLayer';
 import { WindLayerGPUCompute } from './WindLayerGPUCompute';
@@ -37,6 +38,9 @@ export class LayerFactory {
       case 'sun':
         return SunLayer.create(currentTime, false); // Atmosphere shader disabled (not ready)
 
+      case 'graticule':
+        return GraticuleLayer.create();
+
       case 'temp2m':
         return Temp2mLayer.create(dataService);
 
@@ -44,11 +48,9 @@ export class LayerFactory {
         return PratesfcLayer.create(dataService);
 
       case 'wind10m':
-        if (!renderer) {
-          throw new Error('Wind layer requires WebGL renderer');
-        }
+        // Renderer guaranteed to exist (WebGL2 checked during bootstrap)
         const windLayer = new WindLayerGPUCompute();
-        await windLayer.initGPU(renderer);
+        await windLayer.initGPU(renderer!);
         await windLayer.loadWindData();
         return windLayer;
 
@@ -63,7 +65,7 @@ export class LayerFactory {
    * Get list of all available layer IDs
    */
   static getAllLayerIds(): LayerId[] {
-    return ['earth', 'sun', 'temp2m', 'precipitation', 'wind10m'];
+    return ['earth', 'sun', 'graticule', 'temp2m', 'precipitation', 'wind10m'];
   }
 
   /**
@@ -78,6 +80,6 @@ export class LayerFactory {
    * Get optional layers that can be toggled by user
    */
   static getOptionalLayers(): LayerId[] {
-    return ['earth', 'sun', 'temp2m', 'precipitation', 'wind10m'];
+    return ['earth', 'sun', 'graticule', 'temp2m', 'precipitation', 'wind10m'];
   }
 }

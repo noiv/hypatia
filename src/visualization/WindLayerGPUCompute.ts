@@ -67,11 +67,7 @@ export class WindLayerGPUCompute implements ILayer {
    * Initialize WebGPU compute pipeline
    */
   async initGPU(renderer: any): Promise<void> {
-    // Get WebGPU device (independent of WebGL renderer)
-    if (!navigator.gpu) {
-      throw new Error('WebGPU not supported');
-    }
-
+    // WebGPU guaranteed to be available (checked during bootstrap)
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) {
       throw new Error('Failed to get WebGPU adapter');
@@ -856,7 +852,27 @@ export class WindLayerGPUCompute implements ILayer {
     }
   }
 
-  updateLineWidth(cameraDistance: number): void {
+  /**
+   * Update layer based on camera distance (ILayer interface)
+   * Updates line width based on camera distance from origin
+   */
+  updateDistance(distance: number): void {
+    this.updateLineWidth(distance);
+  }
+
+  /**
+   * Update sun direction (ILayer interface)
+   * Wind layer doesn't use sun direction
+   */
+  updateSunDirection(_sunDir: THREE.Vector3): void {
+    // No-op - wind layer doesn't use lighting
+  }
+
+  /**
+   * Update line width based on camera distance
+   * Uses logarithmic interpolation for smooth scaling
+   */
+  private updateLineWidth(cameraDistance: number): void {
     if (!this.material) return;
 
     const minDistance = 1.157;

@@ -9,7 +9,7 @@ import { Scene } from './visualization/Scene';
 import { TimeSlider } from './components/TimeSlider';
 import { Controls } from './components/Controls';
 import { BootstrapModal } from './components/BootstrapModal';
-import { parseUrlState, updateUrlState } from './utils/urlState';
+import { parseUrlState, debouncedUpdateUrlState } from './utils/urlState';
 import { sanitizeUrl } from './utils/sanitizeUrl';
 import { clampTimeToDataRange } from './utils/timeUtils';
 import { getDatasetRange } from './manifest';
@@ -84,7 +84,7 @@ export const App: AppComponent = {
       onReset: () => {
         // Re-enable controls when gesture ends
         if (scene) {
-          scene.enableControls();
+          scene.toggleControls(true);
         }
       }
     });
@@ -159,7 +159,7 @@ export const App: AppComponent = {
         e.preventDefault();
 
         // Disable OrbitControls during horizontal gesture
-        scene.disableControls();
+        scene.toggleControls(false);
 
         // Time change: 1 minute per pixel of scroll
         const minutesPerPixel = 1;
@@ -218,7 +218,7 @@ export const App: AppComponent = {
     const scene = new Scene(canvas);
 
     if (urlState) {
-      scene.setCameraState(urlState.cameraPosition, urlState.cameraDistance);
+      scene.setCameraState(urlState.camera, urlState.camera.distance);
     }
 
     scene.setBasemapBlend(blend);
@@ -277,12 +277,11 @@ export const App: AppComponent = {
     // All layers are optional in dev mode - include all visible layers in URL
     const layers = visibleLayers;
 
-    updateUrlState({
+    debouncedUpdateUrlState({
       time: currentTime,
-      cameraPosition: scene.getCameraPosition(),
-      cameraDistance: scene.getCameraDistance(),
+      camera: scene.getCameraState(),
       layers
-    });
+    }, 100);
   },
 
   async handleLayerToggle(layerId: string) {

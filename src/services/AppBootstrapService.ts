@@ -11,6 +11,7 @@ import { getUserLocation, type UserLocation } from './GeolocationService';
 import { LayerStateService } from './LayerStateService';
 import { UrlLayerSyncService } from './UrlLayerSyncService';
 import { configLoader } from '../config';
+import { checkBrowserCapabilities, getCapabilityHelpUrls } from '../utils/capabilityCheck';
 
 export type BootstrapStatus = 'loading' | 'ready' | 'error';
 
@@ -40,10 +41,11 @@ export interface AppInstance {
 export class AppBootstrapService {
   private static readonly STEPS = {
     INIT: { start: 0, end: 0, label: 'Starting...' },
-    CONFIG: { start: 0, end: 10, label: 'Loading configurations...' },
-    TIME: { start: 10, end: 20, label: 'Fetching server time...' },
-    FORECAST: { start: 20, end: 30, label: 'Checking latest forecast...' },
-    IMAGES: { start: 30, end: 90, label: 'Loading resources...' },
+    CAPABILITIES: { start: 0, end: 5, label: 'Checking browser capabilities...' },
+    CONFIG: { start: 5, end: 15, label: 'Loading configurations...' },
+    TIME: { start: 15, end: 25, label: 'Fetching server time...' },
+    FORECAST: { start: 25, end: 35, label: 'Checking latest forecast...' },
+    IMAGES: { start: 35, end: 90, label: 'Loading resources...' },
     LAYERS: { start: 90, end: 93, label: 'Initializing layers...' },
     SCENE: { start: 93, end: 95, label: 'Initializing scene...' },
     LOAD_LAYERS: { start: 95, end: 97, label: 'Loading enabled layers...' },
@@ -83,6 +85,21 @@ export class AppBootstrapService {
       };
 
       console.log('Bootstrap.start');
+
+      // Step 0: Check browser capabilities
+      updateProgress(this.STEPS.CAPABILITIES, this.STEPS.CAPABILITIES.start);
+      const capabilities = checkBrowserCapabilities();
+      if (!capabilities.supported) {
+        const helpUrls = getCapabilityHelpUrls();
+        const missing = capabilities.missing.join(', ');
+        const errorMessage = `Your browser does not support required features: ${missing}.\n\n` +
+          `Please check:\n` +
+          `• WebGL2: ${helpUrls.webgl}\n` +
+          `• WebGPU: ${helpUrls.webgpu}`;
+
+        throw new Error(errorMessage);
+      }
+      updateProgress(this.STEPS.CAPABILITIES, this.STEPS.CAPABILITIES.end);
 
       // Step 1: Load configurations
       updateProgress(this.STEPS.CONFIG, this.STEPS.CONFIG.start);

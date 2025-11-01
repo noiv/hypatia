@@ -95,12 +95,12 @@ export function sanitizeUrl(): AppUrlState {
 
     const defaultState: AppUrlState = {
       time: DEFAULT_URL_STATE.getDefaultTime(),
-      cameraPosition: {
+      camera: {
         x: defaultPos.x,
         y: defaultPos.y,
-        z: defaultPos.z
+        z: defaultPos.z,
+        distance
       },
-      cameraDistance: distance,
       layers: []
     };
 
@@ -110,7 +110,7 @@ export function sanitizeUrl(): AppUrlState {
   }
 
   // Sanitize altitude
-  const currentAltitude = distanceToAltitude(urlState.cameraDistance);
+  const currentAltitude = distanceToAltitude(urlState.camera.distance);
   let sanitizedAltitude = currentAltitude;
 
   if (currentAltitude < ALTITUDE_BOUNDS.min) {
@@ -163,9 +163,9 @@ export function sanitizeUrl(): AppUrlState {
   // Sanitize lat/lon (they're already clamped by cartesianToLatLon, but we validate)
   // Latitude: -90 to 90, Longitude: -180 to 180
   const posVec = new THREE.Vector3(
-    urlState.cameraPosition.x,
-    urlState.cameraPosition.y,
-    urlState.cameraPosition.z
+    urlState.camera.x,
+    urlState.camera.y,
+    urlState.camera.z
   );
   const { lat, lon } = cartesianToLatLon(posVec);
 
@@ -177,10 +177,11 @@ export function sanitizeUrl(): AppUrlState {
       DEFAULT_URL_STATE.longitude,
       distance
     );
-    urlState.cameraPosition = {
+    urlState.camera = {
       x: defaultPos.x,
       y: defaultPos.y,
-      z: defaultPos.z
+      z: defaultPos.z,
+      distance
     };
     needsUpdate = true;
   }
@@ -188,8 +189,12 @@ export function sanitizeUrl(): AppUrlState {
   // Create sanitized state
   const sanitizedState: AppUrlState = {
     time: sanitizedTime,
-    cameraPosition: urlState.cameraPosition,
-    cameraDistance: altitudeToDistance(sanitizedAltitude),
+    camera: {
+      x: urlState.camera.x,
+      y: urlState.camera.y,
+      z: urlState.camera.z,
+      distance: altitudeToDistance(sanitizedAltitude)
+    },
     layers: urlState.layers
   };
 

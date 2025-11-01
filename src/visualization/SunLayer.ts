@@ -94,6 +94,22 @@ export class SunLayer implements ILayer {
   }
 
   /**
+   * Update layer based on camera distance
+   * Sun doesn't change with distance, but must implement interface
+   */
+  updateDistance(_distance: number): void {
+    // No-op - Sun doesn't change with distance
+  }
+
+  /**
+   * Update sun direction
+   * Sun doesn't consume sun direction (it is the sun!)
+   */
+  updateSunDirection(_sunDir: THREE.Vector3): void {
+    // No-op - Sun is the light source
+  }
+
+  /**
    * Set layer visibility
    */
   setVisible(visible: boolean): void {

@@ -28,6 +28,22 @@ export abstract class TimeSeriesLayer implements ILayer {
   }
 
   /**
+   * Update layer based on camera distance
+   * Default implementation is no-op; subclasses can override if needed
+   */
+  updateDistance(_distance: number): void {
+    // No-op - time series layers don't change with distance by default
+  }
+
+  /**
+   * Update sun direction for lighting
+   * Default implementation is no-op; subclasses can override if needed
+   */
+  updateSunDirection(_sunDir: THREE.Vector3): void {
+    // No-op - time series layers don't use sun direction by default
+  }
+
+  /**
    * Calculate interpolated time index from current time
    */
   protected calculateTimeIndex(currentTime: Date): number {

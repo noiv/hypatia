@@ -33,6 +33,14 @@ export class EarthLayer implements ILayer {
   }
 
   /**
+   * Update layer based on camera distance
+   * Earth doesn't change with distance, but must implement interface
+   */
+  updateDistance(_distance: number): void {
+    // No-op - Earth doesn't change with distance
+  }
+
+  /**
    * Set layer visibility
    */
   setVisible(visible: boolean): void {
@@ -61,9 +69,9 @@ export class EarthLayer implements ILayer {
   }
 
   /**
-   * Set sun direction for lighting calculation
+   * Update sun direction for lighting calculation
    */
-  setSunDirection(direction: THREE.Vector3): void {
+  updateSunDirection(direction: THREE.Vector3): void {
     this.earth.setSunDirection(direction);
   }
 }

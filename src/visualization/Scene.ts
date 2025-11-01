@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { latLonToCartesian } from '../utils/coordinates';
+// import { latLonToCartesian } from '../utils/coordinates';
 import { DataService } from '../services/DataService';
 import type { LayerRenderState } from '../config/types';
 import type { ILayer, LayerId } from './ILayer';
@@ -21,9 +21,6 @@ export class Scene {
   private onCameraChangeCallback: (() => void) | null = null;
   private raycaster: THREE.Raycaster;
   private mouseOverEarth: boolean = false;
-  private lastDistance: number = 0;
-  private zoomEndTimeout: number | null = null;
-  private readonly zoomEndTimeoutMs = 500;
   private lastFrameTime: number = performance.now();
   private stats: any;
   private dataService: DataService;
@@ -212,26 +209,15 @@ export class Scene {
       sunLayer.setCameraPosition(this.camera.position);
     }
 
-    // Update wind layer line width and animation based on camera altitude
+    // Update all layers with camera distance (polymorphic call)
+    this.layers.forEach(layer => {
+      layer.updateDistance(distance);
+    });
+
+    // Update wind layer animation (wind-specific)
     const windLayer = this.layers.get('wind10m') as WindLayerGPUCompute | undefined;
     if (windLayer) {
-      windLayer.updateLineWidth(distance);
       windLayer.updateAnimation(deltaTime);
-
-      // Detect zoom changes and log when zoom ends
-      if (Math.abs(distance - this.lastDistance) > 0.001) {
-        // Distance changed, reset timeout
-        if (this.zoomEndTimeout !== null) {
-          window.clearTimeout(this.zoomEndTimeout);
-        }
-        this.zoomEndTimeout = window.setTimeout(() => {
-          // Zoom has ended, log the final values
-          const altitudeKm = altitude * 6371; // Earth radius = 6371 km
-          const windLayer = this.layers.get('wind10m') as WindLayerGPUCompute | undefined;
-          windLayer?.updateLineWidth(altitudeKm);
-        }, this.zoomEndTimeoutMs);
-        this.lastDistance = distance;
-      }
     }
 
     // Render
@@ -251,7 +237,7 @@ export class Scene {
       layer.updateTime(time);
     });
 
-    // Update sun direction for layers that need it (Earth, Temp2m)
+    // Update sun direction for all layers (polymorphic call)
     const sunLayer = this.layers.get('sun') as SunLayer | undefined;
 
     // Get sun direction - use neutral direction if sun layer not present or not visible
@@ -263,15 +249,10 @@ export class Scene {
       sunDir = new THREE.Vector3(0, 0, 0);
     }
 
-    const earthLayer = this.layers.get('earth') as EarthLayer | undefined;
-    if (earthLayer) {
-      (earthLayer as any).setSunDirection(sunDir);
-    }
-
-    const temp2mLayer = this.layers.get('temp2m');
-    if (temp2mLayer) {
-      (temp2mLayer as any).setSunDirection(sunDir);
-    }
+    // Update all layers with sun direction (polymorphic call)
+    this.layers.forEach(layer => {
+      layer.updateSunDirection(sunDir);
+    });
   }
 
   /**
@@ -285,21 +266,15 @@ export class Scene {
   }
 
   /**
-   * Get camera position
+   * Get camera state (position and distance)
    */
-  getCameraPosition(): { x: number; y: number; z: number } {
+  getCameraState(): { x: number; y: number; z: number; distance: number } {
     return {
       x: this.camera.position.x,
       y: this.camera.position.y,
-      z: this.camera.position.z
+      z: this.camera.position.z,
+      distance: this.camera.position.distanceTo(this.controls.target)
     };
-  }
-
-  /**
-   * Get camera distance from origin
-   */
-  getCameraDistance(): number {
-    return this.camera.position.distanceTo(this.controls.target);
   }
 
   /**
@@ -318,20 +293,6 @@ export class Scene {
     );
 
     this.camera.lookAt(0, 0, 0);
-  }
-
-  /**
-   * Set camera to look at a specific lat/lon location
-   * @param lat - Latitude in degrees
-   * @param lon - Longitude in degrees
-   * @param distance - Camera distance from center (default 3)
-   */
-  setCameraToLocation(lat: number, lon: number, distance: number = 3) {
-    const position = latLonToCartesian(lat, lon);
-    this.setCameraState(
-      { x: position.x, y: position.y, z: position.z },
-      distance
-    );
   }
 
   /**
@@ -384,17 +345,10 @@ export class Scene {
   }
 
   /**
-   * Enable orbit controls
+   * Toggle orbit controls
    */
-  enableControls() {
-    this.controls.enabled = true;
-  }
-
-  /**
-   * Disable orbit controls
-   */
-  disableControls() {
-    this.controls.enabled = false;
+  toggleControls(enabled: boolean) {
+    this.controls.enabled = enabled;
   }
 
   // ========================================================================
@@ -471,7 +425,7 @@ export class Scene {
   /**
    * Check if layer is visible
    */
-  isLayerVisible(layerId: LayerId): boolean {
+  private isLayerVisible(layerId: LayerId): boolean {
     const layer = this.layers.get(layerId);
     if (!layer) return false;
 

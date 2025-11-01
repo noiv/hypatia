@@ -75,9 +75,9 @@ export class Temp2mLayer extends TimeSeriesLayer {
   }
 
   /**
-   * Set sun direction for day/night shading
+   * Update sun direction for day/night shading
    */
-  setSunDirection(direction: THREE.Vector3) {
+  updateSunDirection(direction: THREE.Vector3) {
     if (this.material.uniforms.sunDirection) {
       this.material.uniforms.sunDirection.value.copy(direction);
     }
