@@ -18,7 +18,7 @@ export interface AppUrlState {
   time: Date;
   cameraPosition: { x: number; y: number; z: number };
   cameraDistance: number;
-  layers?: string[] | undefined;
+  layers: string[];
 }
 
 /**
@@ -69,8 +69,8 @@ export function parseUrlState(): AppUrlState | null {
     z: cameraPositionVec.z
   };
 
-  // Parse layers (optional)
-  const layers = layersStr ? layersStr.split(',').map(l => l.trim()).filter(l => l.length > 0) : undefined;
+  // Parse layers (optional) - default to empty array when not present
+  const layers = layersStr ? layersStr.split(',').map(l => l.trim()).filter(l => l.length > 0) : [];
 
   return { time, cameraPosition, cameraDistance, layers };
 }

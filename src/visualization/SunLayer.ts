@@ -1,71 +1,155 @@
 import * as THREE from 'three';
 import { EARTH_RADIUS_UNITS } from '../utils/constants';
 import { ATMOSPHERE_CONFIG } from '../config/atmosphere.config';
+import { Sun } from './Sun';
+import type { ILayer } from './ILayer';
 
-export class AtmosphereLayer {
-  public mesh: THREE.Mesh;
-  private material: THREE.ShaderMaterial;
+/**
+ * SunLayer - Sun positioning and lighting
+ *
+ * Manages the sun sphere and directional light.
+ * Atmosphere shader is disabled (not ready yet).
+ */
+export class SunLayer implements ILayer {
+  private sun: Sun;
+  private group: THREE.Group;
 
-  constructor() {
-    // Calculate atmosphere radius in scene units
-    const radius = EARTH_RADIUS_UNITS * (ATMOSPHERE_CONFIG.physical.atmosphereRadius / ATMOSPHERE_CONFIG.physical.planetRadius);
+  // Atmosphere mesh (disabled - shader not ready)
+  private atmosphereMesh?: THREE.Mesh;
+  private atmosphereMaterial?: THREE.ShaderMaterial;
 
-    const geometry = new THREE.SphereGeometry(
-      radius,
-      ATMOSPHERE_CONFIG.geometry.widthSegments,
-      ATMOSPHERE_CONFIG.geometry.heightSegments
-    );
+  private constructor(sun: Sun, enableAtmosphere: boolean = false) {
+    this.sun = sun;
 
-    // Create shader material with atmospheric scattering
-    this.material = new THREE.ShaderMaterial({
-      uniforms: {
-        sunPosition: { value: new THREE.Vector3(0, 0, 1) },
-        viewPosition: { value: new THREE.Vector3(0, 0, 10) },
-        planetRadius: { value: EARTH_RADIUS_UNITS },
-        atmosphereRadius: { value: radius },
-        rayleighCoefficient: { value: new THREE.Vector3(...ATMOSPHERE_CONFIG.physical.rayleighCoefficient) },
-        mieCoefficient: { value: ATMOSPHERE_CONFIG.physical.mieCoefficient },
-        rayleighScaleHeight: { value: ATMOSPHERE_CONFIG.physical.rayleighScaleHeight / ATMOSPHERE_CONFIG.physical.planetRadius * EARTH_RADIUS_UNITS },
-        mieScaleHeight: { value: ATMOSPHERE_CONFIG.physical.mieScaleHeight / ATMOSPHERE_CONFIG.physical.planetRadius * EARTH_RADIUS_UNITS },
-        mieDirection: { value: ATMOSPHERE_CONFIG.physical.mieDirection },
-        sunIntensity: { value: ATMOSPHERE_CONFIG.physical.sunIntensity },
-        exposure: { value: ATMOSPHERE_CONFIG.visual.exposure }
-      },
-      vertexShader: this.getVertexShader(),
-      fragmentShader: this.getFragmentShader(),
-      transparent: true,
-      side: THREE.BackSide,   // Render from inside (camera sees inner faces)
-      depthWrite: false,      // Don't write to depth buffer
-      blending: THREE.AdditiveBlending
-    });
+    // Create group containing sun (and optionally atmosphere)
+    this.group = new THREE.Group();
+    this.group.name = 'SunLayer';
+    this.group.add(this.sun.mesh);
 
-    this.mesh = new THREE.Mesh(geometry, this.material);
-    this.mesh.name = 'atmosphere';
+    // Atmosphere shader - disabled by default (not ready)
+    if (enableAtmosphere) {
+      // Calculate atmosphere radius in scene units
+      const radius = EARTH_RADIUS_UNITS * (ATMOSPHERE_CONFIG.physical.atmosphereRadius / ATMOSPHERE_CONFIG.physical.planetRadius);
+
+      const geometry = new THREE.SphereGeometry(
+        radius,
+        ATMOSPHERE_CONFIG.geometry.widthSegments,
+        ATMOSPHERE_CONFIG.geometry.heightSegments
+      );
+
+      // Create shader material with atmospheric scattering
+      this.atmosphereMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+          sunPosition: { value: new THREE.Vector3(0, 0, 1) },
+          viewPosition: { value: new THREE.Vector3(0, 0, 10) },
+          planetRadius: { value: EARTH_RADIUS_UNITS },
+          atmosphereRadius: { value: radius },
+          rayleighCoefficient: { value: new THREE.Vector3(...ATMOSPHERE_CONFIG.physical.rayleighCoefficient) },
+          mieCoefficient: { value: ATMOSPHERE_CONFIG.physical.mieCoefficient },
+          rayleighScaleHeight: { value: ATMOSPHERE_CONFIG.physical.rayleighScaleHeight / ATMOSPHERE_CONFIG.physical.planetRadius * EARTH_RADIUS_UNITS },
+          mieScaleHeight: { value: ATMOSPHERE_CONFIG.physical.mieScaleHeight / ATMOSPHERE_CONFIG.physical.planetRadius * EARTH_RADIUS_UNITS },
+          mieDirection: { value: ATMOSPHERE_CONFIG.physical.mieDirection },
+          sunIntensity: { value: ATMOSPHERE_CONFIG.physical.sunIntensity },
+          exposure: { value: ATMOSPHERE_CONFIG.visual.exposure }
+        },
+        vertexShader: this.getVertexShader(),
+        fragmentShader: this.getFragmentShader(),
+        transparent: true,
+        side: THREE.BackSide,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+      });
+
+      this.atmosphereMesh = new THREE.Mesh(geometry, this.atmosphereMaterial);
+      this.atmosphereMesh.name = 'atmosphere';
+      this.group.add(this.atmosphereMesh);
+    }
   }
 
   /**
-   * Update sun position for atmospheric scattering
+   * Factory method to create SunLayer
+   * @param currentTime - Initial time for sun position
+   * @param enableAtmosphere - Enable atmosphere shader (default: false, not ready)
+   */
+  static async create(currentTime: Date, enableAtmosphere: boolean = false): Promise<SunLayer> {
+    const sun = new Sun();
+    sun.updatePosition(currentTime);
+    const layer = new SunLayer(sun, enableAtmosphere);
+    if (layer.atmosphereMesh) {
+      layer.setSunPosition(sun.mesh.position);
+    }
+    return layer;
+  }
+
+  // ILayer interface implementation
+
+  /**
+   * Update layer based on current time
+   */
+  updateTime(time: Date): void {
+    this.sun.updatePosition(time);
+    if (this.atmosphereMesh) {
+      this.setSunPosition(this.sun.mesh.position);
+    }
+  }
+
+  /**
+   * Set layer visibility
+   */
+  setVisible(visible: boolean): void {
+    this.group.visible = visible;
+  }
+
+  /**
+   * Get the THREE.js object to add to scene
+   */
+  getSceneObject(): THREE.Object3D {
+    return this.group;
+  }
+
+  /**
+   * Clean up resources
+   */
+  dispose(): void {
+    if (this.atmosphereMesh?.geometry) {
+      this.atmosphereMesh.geometry.dispose();
+    }
+    if (this.atmosphereMaterial) {
+      this.atmosphereMaterial.dispose();
+    }
+    this.sun.dispose();
+  }
+
+  /**
+   * Update sun position for atmospheric scattering (if atmosphere enabled)
    */
   setSunPosition(position: THREE.Vector3) {
-    if (this.material.uniforms.sunPosition) {
-      this.material.uniforms.sunPosition.value.copy(position);
+    if (this.atmosphereMaterial?.uniforms.sunPosition) {
+      this.atmosphereMaterial.uniforms.sunPosition.value.copy(position);
     }
   }
 
   /**
-   * Update camera position for ray origin
+   * Update camera position for ray origin (if atmosphere enabled)
    */
   setCameraPosition(position: THREE.Vector3) {
-    if (this.material.uniforms.viewPosition) {
-      this.material.uniforms.viewPosition.value.copy(position);
+    if (this.atmosphereMaterial?.uniforms.viewPosition) {
+      this.atmosphereMaterial.uniforms.viewPosition.value.copy(position);
     }
   }
 
   /**
-   * Set visibility
+   * Get the directional light for scene lighting
    */
-  setVisible(visible: boolean) {
-    this.mesh.visible = visible;
+  getLight(): THREE.DirectionalLight {
+    return this.sun.getLight();
+  }
+
+  /**
+   * Get sun direction as normalized vector
+   */
+  getSunDirection(): THREE.Vector3 {
+    return this.sun.getDirection();
   }
 
   private getVertexShader(): string {

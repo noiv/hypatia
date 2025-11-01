@@ -16,6 +16,7 @@ import * as THREE from 'three';
 import type { LayerData, TimeStep, LoadProgress } from '../config/types';
 import { Temp2mService } from './Temp2mService';
 import { PratesfcService } from './PratesfcService';
+import type { LayerId } from '../visualization/ILayer';
 
 // Re-export LayerId for convenience
 export type { LayerId } from '../visualization/ILayer';
@@ -79,7 +80,6 @@ export class DataService {
       case 'wind10m':
       case 'earth':
       case 'sun':
-      case 'atmosphere':
         // These layers handle their own data loading
         throw new Error(`Layer ${layerId} does not use DataService for data loading`);
 

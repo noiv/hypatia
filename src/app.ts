@@ -221,7 +221,7 @@ export const App: AppComponent = {
       scene.setCameraState(urlState.cameraPosition, urlState.cameraDistance);
     }
 
-    scene.setBlend(blend);
+    scene.setBasemapBlend(blend);
     scene.updateTime(currentTime);
 
     // Setup camera change handler for URL updates
@@ -238,7 +238,11 @@ export const App: AppComponent = {
 
     // Get layers from URL
     const urlState = parseUrlState();
-    const layersToLoad = urlState?.layers || [];
+    if (!urlState) {
+      // No URL state - no layers to load
+      return;
+    }
+    const layersToLoad = urlState.layers;
 
     if (layersToLoad.length > 0) {
       console.log(`Bootstrap.loading: ${layersToLoad.join(', ')}`);
@@ -257,6 +261,10 @@ export const App: AppComponent = {
         console.error(`Bootstrap.error: ${layerId}`, error);
       }
     }
+
+    // After all layers loaded, update sun direction based on which layers are visible
+    // This ensures earth/temp2m get correct sun direction (zero if sun not loaded)
+    scene.updateTime(this.state.currentTime);
   },
 
   updateUrl() {
@@ -266,8 +274,7 @@ export const App: AppComponent = {
     // Get visible layers from scene
     const visibleLayers = scene.getVisibleLayers();
 
-    // Convert LayerId to urlKey (temp2m->temp2m, precipitation->precipitation, wind10m->wind10m)
-    // For now they're the same, but future may differ
+    // All layers are optional in dev mode - include all visible layers in URL
     const layers = visibleLayers;
 
     updateUrlState({
@@ -419,6 +426,8 @@ export const App: AppComponent = {
     }
 
     // Get layer states from scene
+    const earthState = scene.getLayerState('earth');
+    const sunState = scene.getLayerState('sun');
     const temp2mState = scene.getLayerState('temp2m');
     const precipitationState = scene.getLayerState('precipitation');
     const windState = scene.getLayerState('wind10m');
@@ -437,11 +446,19 @@ export const App: AppComponent = {
       onBlendChange: (newBlend: number) => {
         this.state.blend = newBlend;
         if (scene) {
-          scene.setBlend(newBlend);
+          scene.setBasemapBlend(newBlend);
         }
       },
       onReferenceClick: () => {
         this.handleReferenceClick();
+      },
+      showEarth: earthState.created && earthState.visible,
+      onEarthToggle: async () => {
+        await this.handleLayerToggle('earth');
+      },
+      showSun: sunState.created && sunState.visible,
+      onSunToggle: async () => {
+        await this.handleLayerToggle('sun');
       },
       showTemp2m: temp2mState.created && temp2mState.visible,
       temp2mLoading: false, // TODO: track loading state

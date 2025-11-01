@@ -60,19 +60,27 @@ export class Earth {
         // Blend textures
         vec3 baseColor = mix(colorA, colorB, blend);
 
-        // Calculate normal from position (smooth across sphere)
-        // Since Earth is centered at origin, normal = normalize(position)
-        vec3 normal = normalize(vPosition);
-        vec3 lightDir = normalize(sunDirection);
-        float dotNL = dot(normal, lightDir);
+        // Check if sun is enabled (non-zero direction)
+        float sunLength = length(sunDirection);
 
-        // Sharpen day/night transition (from config)
-        float dnZone = clamp(dotNL * dayNightSharpness, -1.0, 1.0);
+        vec3 color;
+        if (sunLength > 0.01) {
+          // Sun enabled - apply day/night lighting
+          vec3 normal = normalize(vPosition);
+          vec3 lightDir = normalize(sunDirection);
+          float dotNL = dot(normal, lightDir);
 
-        // Dim night side (from config)
-        float lightMix = 0.5 + dnZone * dayNightFactor;
+          // Sharpen day/night transition (from config)
+          float dnZone = clamp(dotNL * dayNightSharpness, -1.0, 1.0);
 
-        vec3 color = baseColor * lightMix;
+          // Dim night side (from config)
+          float lightMix = 0.5 + dnZone * dayNightFactor;
+
+          color = baseColor * lightMix;
+        } else {
+          // Sun disabled - flat lighting
+          color = baseColor;
+        }
 
         gl_FragColor = vec4(color, 1.0);
       }
@@ -122,7 +130,7 @@ export class Earth {
           blend: { value: 0.0 },
           texA: { value: texA },
           texB: { value: texB },
-          sunDirection: { value: new THREE.Vector3(1, 0, 0) },
+          sunDirection: { value: new THREE.Vector3(0, 0, 0) }, // Default: no sun (flat lighting)
           dayNightSharpness: { value: EARTH_CONFIG.visual.dayNightSharpness },
           dayNightFactor: { value: EARTH_CONFIG.visual.dayNightFactor }
         },

@@ -27,7 +27,7 @@ export class Temp2mLayer extends TimeSeriesLayer {
         dataTexture: { value: dataTexture },
         timeIndex: { value: 0.0 },
         maxTimeIndex: { value: timeStepCount - 1 },
-        sunDirection: { value: new THREE.Vector3(1, 0, 0) },
+        sunDirection: { value: new THREE.Vector3(0, 0, 0) }, // Default: no sun (flat lighting)
         opacity: { value: TEMP2M_CONFIG.visual.opacity },
         dayNightSharpness: { value: TEMP2M_CONFIG.visual.dayNightSharpness },
         dayNightFactor: { value: TEMP2M_CONFIG.visual.dayNightFactor }
@@ -244,18 +244,27 @@ export class Temp2mLayer extends TimeSeriesLayer {
         // Get color from palette
         vec3 color = getTempColor(tempC);
 
-        // Calculate sun lighting for day/night
-        vec3 lightDir = normalize(sunDirection);
-        float dotNL = dot(vNormal, lightDir);
+        // Check if sun is enabled (non-zero direction)
+        float sunLength = length(sunDirection);
 
-        // Sharpen day/night transition (from config)
-        float dnZone = clamp(dotNL * dayNightSharpness, -1.0, 1.0);
+        vec3 finalColor;
+        if (sunLength > 0.01) {
+          // Sun enabled - apply day/night lighting
+          vec3 lightDir = normalize(sunDirection);
+          float dotNL = dot(vNormal, lightDir);
 
-        // Dim night side (from config)
-        float lightMix = 0.5 + dnZone * dayNightFactor;
+          // Sharpen day/night transition (from config)
+          float dnZone = clamp(dotNL * dayNightSharpness, -1.0, 1.0);
 
-        // Apply lighting to color
-        vec3 finalColor = color * lightMix;
+          // Dim night side (from config)
+          float lightMix = 0.5 + dnZone * dayNightFactor;
+
+          // Apply lighting to color
+          finalColor = color * lightMix;
+        } else {
+          // Sun disabled - flat lighting
+          finalColor = color;
+        }
 
         gl_FragColor = vec4(finalColor, opacity);
         #endif
@@ -263,15 +272,4 @@ export class Temp2mLayer extends TimeSeriesLayer {
     `;
   }
 
-  /**
-   * Clean up resources
-   */
-  dispose() {
-    if (this.mesh.geometry) {
-      this.mesh.geometry.dispose();
-    }
-    if (this.material) {
-      this.material.dispose();
-    }
-  }
 }

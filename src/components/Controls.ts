@@ -7,6 +7,10 @@ export interface ControlsAttrs {
   blend: number;
   onBlendChange: (blend: number) => void;
   onReferenceClick: () => void;
+  showEarth: boolean;
+  onEarthToggle: () => void;
+  showSun: boolean;
+  onSunToggle: () => void;
   showTemp2m: boolean;
   onTemp2mToggle: () => void;
   temp2mLoading?: boolean;
@@ -24,6 +28,10 @@ export const Controls: m.Component<ControlsAttrs> = {
       blend,
       onBlendChange,
       onReferenceClick,
+      showEarth,
+      onEarthToggle,
+      showSun,
+      onSunToggle,
       showTemp2m,
       onTemp2mToggle,
       temp2mLoading,
@@ -43,6 +51,18 @@ export const Controls: m.Component<ControlsAttrs> = {
       m('button.btn', {
         onclick: onReferenceClick
       }, '↺ Reference'),
+
+      // Earth toggle button
+      m('button.btn', {
+        onclick: onEarthToggle,
+        class: showEarth ? 'active' : ''
+      }, showEarth ? '🌍 Earth ON' : '🌍 Earth OFF'),
+
+      // Sun toggle button
+      m('button.btn', {
+        onclick: onSunToggle,
+        class: showSun ? 'active' : ''
+      }, showSun ? '☀️ Sun ON' : '☀️ Sun OFF'),
 
       // Temp2m toggle button
       m('button.btn', {

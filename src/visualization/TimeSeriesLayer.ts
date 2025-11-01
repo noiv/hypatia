@@ -4,6 +4,7 @@
  * Shared implementation for weather data layers with time interpolation
  */
 
+import type * as THREE from 'three';
 import type { ILayer } from './ILayer';
 import type { TimeStep } from '../services/Temp2mService';
 

@@ -1,12 +1,16 @@
 import * as THREE from 'three';
 import { EARTH_RADIUS_UNITS } from '../utils/constants';
 import { PRATESFC_CONFIG } from '../config/pratesfc.config';
+import { TimeSeriesLayer } from './TimeSeriesLayer';
+import type { TimeStep } from '../services/Temp2mService';
+import type { DataService } from '../services/DataService';
 
-export class PratesfcLayer {
-  public mesh: THREE.Mesh;
+export class PratesfcLayer extends TimeSeriesLayer {
+  private mesh: THREE.Mesh;
   private material: THREE.ShaderMaterial;
 
-  constructor(dataTexture: THREE.Data3DTexture, timeStepCount: number) {
+  private constructor(dataTexture: THREE.Data3DTexture, timeSteps: TimeStep[], timeStepCount: number) {
+    super(timeSteps);
 
     // Use SphereGeometry
     const radius = EARTH_RADIUS_UNITS * (1 + PRATESFC_CONFIG.visual.altitudeKm / 6371);
@@ -41,6 +45,23 @@ export class PratesfcLayer {
   }
 
   /**
+   * Factory method to create PratesfcLayer with data loading
+   */
+  static async create(dataService: DataService): Promise<PratesfcLayer> {
+    const layerData = await dataService.loadLayer('precipitation');
+    return new PratesfcLayer(layerData.texture, layerData.timeSteps, layerData.timeSteps.length);
+  }
+
+  // ILayer interface implementation
+
+  /**
+   * Get THREE.js object for scene
+   */
+  getSceneObject(): THREE.Object3D {
+    return this.mesh;
+  }
+
+  /**
    * Update time index for interpolation
    */
   setTimeIndex(index: number) {
@@ -59,10 +80,22 @@ export class PratesfcLayer {
   }
 
   /**
-   * Show/hide layer
+   * Show/hide layer (ILayer interface)
    */
-  setVisible(visible: boolean) {
+  setVisible(visible: boolean): void {
     this.mesh.visible = visible;
+  }
+
+  /**
+   * Clean up resources (ILayer interface)
+   */
+  dispose(): void {
+    if (this.mesh.geometry) {
+      this.mesh.geometry.dispose();
+    }
+    if (this.material) {
+      this.material.dispose();
+    }
   }
 
   private getVertexShader(): string {

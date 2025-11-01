@@ -13,7 +13,10 @@ export class UrlLayerSyncService {
    */
   static parseLayersFromUrl(): string[] {
     const urlState = parseUrlState();
-    return urlState?.layers ?? [];
+    if (!urlState) {
+      return [];
+    }
+    return urlState.layers;
   }
 
   /**
@@ -27,7 +30,7 @@ export class UrlLayerSyncService {
 
     const newState: AppUrlState = {
       ...currentAppState,
-      layers: activeUrlKeys.length > 0 ? activeUrlKeys : undefined
+      layers: activeUrlKeys
     };
 
     updateUrlState(newState);

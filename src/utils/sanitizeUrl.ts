@@ -101,7 +101,7 @@ export function sanitizeUrl(): AppUrlState {
         z: defaultPos.z
       },
       cameraDistance: distance,
-      layers: undefined
+      layers: []
     };
 
     // Update URL with defaults

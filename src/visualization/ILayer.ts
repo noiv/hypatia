@@ -42,7 +42,6 @@ export interface ILayer {
 export type LayerId =
   | 'earth'
   | 'sun'
-  | 'atmosphere'
   | 'temp2m'
   | 'precipitation'
   | 'wind10m';
