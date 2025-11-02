@@ -16,75 +16,93 @@ export interface CapabilityCheckResult {
   missing: string[];
 }
 
+// Verbose logging flag - set to false to reduce console noise
+const VERBOSE_LOGGING = false;
+
 /**
  * Check if browser supports required features (WebGL2 and WebGPU)
  */
 export function checkBrowserCapabilities(): CapabilityCheckResult {
   const missing: string[] = [];
 
-  console.group('🔍 Browser Capability Check');
-
-  // Browser info
-  console.log('User Agent:', navigator.userAgent);
-  console.log('Platform:', navigator.platform);
+  if (VERBOSE_LOGGING) {
+    console.group('🔍 Browser Capability Check');
+    console.log('User Agent:', navigator.userAgent);
+    console.log('Platform:', navigator.platform);
+  }
 
   // Check WebGL2 support
-  console.log('\n📊 WebGL2 Check:');
+  if (VERBOSE_LOGGING) console.log('\n📊 WebGL2 Check:');
   const canvas = document.createElement('canvas');
   const gl = canvas.getContext('webgl2');
   if (!gl) {
     console.error('❌ WebGL2 not available');
     missing.push('WebGL2');
   } else {
-    console.log('✅ WebGL2 available');
-    console.log('   Vendor:', gl.getParameter(gl.VENDOR));
-    console.log('   Renderer:', gl.getParameter(gl.RENDERER));
-    console.log('   Version:', gl.getParameter(gl.VERSION));
+    if (VERBOSE_LOGGING) {
+      console.log('✅ WebGL2 available');
+      console.log('   Vendor:', gl.getParameter(gl.VENDOR));
+      console.log('   Renderer:', gl.getParameter(gl.RENDERER));
+      console.log('   Version:', gl.getParameter(gl.VERSION));
+    }
   }
 
   // Check WebGPU support
-  console.log('\n⚡ WebGPU Check:');
-  console.log('   navigator.gpu exists:', !!navigator.gpu);
+  if (VERBOSE_LOGGING) {
+    console.log('\n⚡ WebGPU Check:');
+    console.log('   navigator.gpu exists:', !!navigator.gpu);
+  }
 
   if (!navigator.gpu) {
     console.error('❌ WebGPU not available');
-    console.log('   Common causes:');
-    console.log('   • Browser too old (need Chrome 113+, Safari 18+, Edge 113+)');
-    console.log('   • Feature flag disabled');
-    console.log('   • iOS/iPadOS < 26');
-    console.log('   • macOS Safari < 18');
+    if (VERBOSE_LOGGING) {
+      console.log('   Common causes:');
+      console.log('   • Browser too old (need Chrome 113+, Safari 18+, Edge 113+)');
+      console.log('   • Feature flag disabled');
+      console.log('   • iOS/iPadOS < 26');
+      console.log('   • macOS Safari < 18');
+    }
     missing.push('WebGPU');
   } else {
-    console.log('✅ navigator.gpu exists');
+    if (VERBOSE_LOGGING) console.log('✅ navigator.gpu exists');
 
     // Try to request adapter for detailed info
-    navigator.gpu.requestAdapter().then((adapter: any) => {
-      if (adapter) {
-        console.log('✅ WebGPU adapter available');
-        console.log('   Adapter info:', {
-          vendor: adapter.info?.vendor,
-          architecture: adapter.info?.architecture,
-          device: adapter.info?.device,
-          description: adapter.info?.description
-        });
-        console.log('   Features:', Array.from(adapter.features || []));
-        console.log('   Limits:', adapter.limits);
-      } else {
-        console.error('❌ WebGPU adapter request returned null');
-      }
-    }).catch((error: Error) => {
-      console.error('❌ WebGPU adapter request failed:', error);
-    });
+    if (VERBOSE_LOGGING) {
+      navigator.gpu.requestAdapter().then((adapter: any) => {
+        if (adapter) {
+          console.log('✅ WebGPU adapter available');
+          console.log('   Adapter info:', {
+            vendor: adapter.info?.vendor,
+            architecture: adapter.info?.architecture,
+            device: adapter.info?.device,
+            description: adapter.info?.description
+          });
+          console.log('   Features:', Array.from(adapter.features || []));
+          console.log('   Limits:', adapter.limits);
+        } else {
+          console.error('❌ WebGPU adapter request returned null');
+        }
+      }).catch((error: Error) => {
+        console.error('❌ WebGPU adapter request failed:', error);
+      });
+    }
   }
 
-  console.log('\n📋 Summary:');
+  if (VERBOSE_LOGGING) {
+    console.log('\n📋 Summary:');
+  }
+
   if (missing.length === 0) {
-    console.log('✅ All required capabilities present');
+    if (VERBOSE_LOGGING) {
+      console.log('✅ All required capabilities present');
+    }
   } else {
     console.error('❌ Missing capabilities:', missing.join(', '));
   }
 
-  console.groupEnd();
+  if (VERBOSE_LOGGING) {
+    console.groupEnd();
+  }
 
   return {
     supported: missing.length === 0,

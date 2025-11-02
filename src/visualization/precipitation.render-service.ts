@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { EARTH_RADIUS_UNITS } from '../utils/constants';
-import { PRATESFC_CONFIG } from '../config/pratesfc.config';
-import { TimeSeriesLayer } from './TimeSeriesLayer';
-import type { TimeStep } from '../services/Temp2mService';
+import { PRECIPITATION_CONFIG } from '../config/precipitation.config';
+import { TimeSeriesLayer } from './render-service.base';
+import type { TimeStep } from '../layers/temp2m.data-service';
 import type { DataService } from '../services/DataService';
 
-export class PratesfcLayer extends TimeSeriesLayer {
+export class PrecipitationRenderService extends TimeSeriesLayer {
   private mesh: THREE.Mesh;
   private material: THREE.ShaderMaterial;
 
@@ -13,11 +13,11 @@ export class PratesfcLayer extends TimeSeriesLayer {
     super(timeSteps);
 
     // Use SphereGeometry
-    const radius = EARTH_RADIUS_UNITS * (1 + PRATESFC_CONFIG.visual.altitudeKm / 6371);
+    const radius = EARTH_RADIUS_UNITS * (1 + PRECIPITATION_CONFIG.visual.altitudeKm / 6371);
     const geometry = new THREE.SphereGeometry(
       radius,
-      PRATESFC_CONFIG.geometry.widthSegments,
-      PRATESFC_CONFIG.geometry.heightSegments
+      PRECIPITATION_CONFIG.geometry.widthSegments,
+      PRECIPITATION_CONFIG.geometry.heightSegments
     );
 
     // Create shader material
@@ -26,7 +26,7 @@ export class PratesfcLayer extends TimeSeriesLayer {
         dataTexture: { value: dataTexture },
         timeIndex: { value: 0.0 },
         maxTimeIndex: { value: timeStepCount - 1 },
-        opacity: { value: PRATESFC_CONFIG.visual.opacity }
+        opacity: { value: PRECIPITATION_CONFIG.visual.opacity }
       },
       vertexShader: this.getVertexShader(),
       fragmentShader: this.getFragmentShader(),
@@ -34,22 +34,22 @@ export class PratesfcLayer extends TimeSeriesLayer {
       side: THREE.FrontSide,
       depthWrite: false,
       // Render on top of temperature layer
-      polygonOffset: PRATESFC_CONFIG.depth.polygonOffset,
-      polygonOffsetFactor: PRATESFC_CONFIG.depth.polygonOffsetFactor,
-      polygonOffsetUnits: PRATESFC_CONFIG.depth.polygonOffsetUnits
+      polygonOffset: PRECIPITATION_CONFIG.depth.polygonOffset,
+      polygonOffsetFactor: PRECIPITATION_CONFIG.depth.polygonOffsetFactor,
+      polygonOffsetUnits: PRECIPITATION_CONFIG.depth.polygonOffsetUnits
     });
 
     this.mesh = new THREE.Mesh(geometry, this.material);
-    this.mesh.name = 'PratesfcLayer';
+    this.mesh.name = 'PrecipitationLayer';
     this.mesh.renderOrder = 2; // Render after temp2m (renderOrder 1)
   }
 
   /**
-   * Factory method to create PratesfcLayer with data loading
+   * Factory method to create PrecipitationRenderService with data loading
    */
-  static async create(dataService: DataService): Promise<PratesfcLayer> {
+  static async create(dataService: DataService): Promise<PrecipitationRenderService> {
     const layerData = await dataService.loadLayer('precipitation');
-    return new PratesfcLayer(layerData.texture, layerData.timeSteps, layerData.timeSteps.length);
+    return new PrecipitationRenderService(layerData.texture, layerData.timeSteps, layerData.timeSteps.length);
   }
 
   // ILayer interface implementation
@@ -136,7 +136,7 @@ export class PratesfcLayer extends TimeSeriesLayer {
       varying vec2 vUv;
       varying vec3 vNormal;
 
-      const float DISCARD_THRESHOLD = ${PRATESFC_CONFIG.discardThreshold.toExponential()};
+      const float DISCARD_THRESHOLD = ${PRECIPITATION_CONFIG.discardThreshold.toExponential()};
 
       // Legacy precipitation color palette (from hypatia.arctic.io)
       vec4 getPrateColor(float rate) {

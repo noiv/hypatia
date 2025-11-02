@@ -12,7 +12,7 @@ export interface HypatiaConfig {
   };
   data: {
     maxRangeDays: number;
-    dataDirectory: string;
+    dataBaseUrl: string;
     updateIntervalMs: number;
     defaultResolution: string;
   };
@@ -93,6 +93,25 @@ export interface LayersConfig {
   layers: Layer[];
   groups: {
     [key: string]: LayerGroup;
+  };
+}
+
+// ============================================================================
+// Data Manifest Types
+// ============================================================================
+
+export interface DatasetInfo {
+  range: string;        // "20251030_00z-20251107_18z"
+  step: string;         // "6h"
+  count: number;        // 38
+  missing: string[];    // ["20251031_06z", ...]
+  size_bytes: number;   // Single file size
+}
+
+export interface DataManifest {
+  generated: string;    // ISO timestamp
+  datasets: {
+    [paramName: string]: DatasetInfo;
   };
 }
 

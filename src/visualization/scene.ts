@@ -5,9 +5,9 @@ import { DataService } from '../services/DataService';
 import type { LayerRenderState } from '../config/types';
 import type { ILayer, LayerId } from './ILayer';
 import { LayerFactory } from './LayerFactory';
-import type { SunLayer } from './SunLayer';
-import type { EarthLayer } from './EarthLayer';
-import type { WindLayerGPUCompute } from './WindLayerGPUCompute';
+import type { SunRenderService } from './sun.render-service';
+import type { EarthRenderService } from './earth.render-service';
+import type { Wind10mRenderService } from './wind10m.render-service';
 
 export class Scene {
   private scene: THREE.Scene;
@@ -147,7 +147,7 @@ export class Scene {
     this.renderer.setSize(width, height);
 
     // Update Line2 material resolution for wind layer
-    const windLayer = this.layers.get('wind10m') as WindLayerGPUCompute | undefined;
+    const windLayer = this.layers.get('wind10m') as Wind10mRenderService | undefined;
     if (windLayer) {
       windLayer.setResolution(width, height);
     }
@@ -204,7 +204,7 @@ export class Scene {
     this.controls.update();
 
     // Update sun layer camera position (for atmosphere shader if enabled)
-    const sunLayer = this.layers.get('sun') as SunLayer | undefined;
+    const sunLayer = this.layers.get('sun') as SunRenderService | undefined;
     if (sunLayer) {
       sunLayer.setCameraPosition(this.camera.position);
     }
@@ -215,7 +215,7 @@ export class Scene {
     });
 
     // Update wind layer animation (wind-specific)
-    const windLayer = this.layers.get('wind10m') as WindLayerGPUCompute | undefined;
+    const windLayer = this.layers.get('wind10m') as Wind10mRenderService | undefined;
     if (windLayer) {
       windLayer.updateAnimation(deltaTime);
     }
@@ -238,7 +238,7 @@ export class Scene {
     });
 
     // Update sun direction for all layers (polymorphic call)
-    const sunLayer = this.layers.get('sun') as SunLayer | undefined;
+    const sunLayer = this.layers.get('sun') as SunRenderService | undefined;
 
     // Get sun direction - use neutral direction if sun layer not present or not visible
     let sunDir: THREE.Vector3;
@@ -259,7 +259,7 @@ export class Scene {
    * Set basemap blend factor (0.0 = rtopo2, 1.0 = gmlc)
    */
   setBasemapBlend(blend: number) {
-    const earthLayer = this.layers.get('earth') as EarthLayer | undefined;
+    const earthLayer = this.layers.get('earth') as EarthRenderService | undefined;
     if (earthLayer) {
       (earthLayer as any).setBlend(blend);
     }
@@ -380,7 +380,7 @@ export class Scene {
 
     // Special handling for sun layer - add directional light
     if (layerId === 'sun') {
-      const sunLayer = layer as SunLayer;
+      const sunLayer = layer as SunRenderService;
       this.scene.add(sunLayer.getLight());
       this.scene.add(sunLayer.getLight().target);
     }

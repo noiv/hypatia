@@ -7,7 +7,7 @@
 
 import * as THREE from 'three';
 import { parseUrlState, updateUrlState, type AppUrlState } from './urlState';
-import { getDatasetRange } from '../manifest';
+import { configLoader } from '../config';
 import { EARTH_RADIUS_METERS } from './constants';
 import { latLonToCartesian, cartesianToLatLon } from './coordinates';
 
@@ -24,7 +24,7 @@ export const DEFAULT_URL_STATE = {
 
   // Default time: most recent analysis (t+0) from latest model run
   getDefaultTime: (): Date => {
-    const range = getDatasetRange('temp2m');
+    const range = configLoader.getDatasetRange('temp2m');
     if (!range) {
       // Fallback if no data available
       return new Date();
@@ -124,7 +124,7 @@ export function sanitizeUrl(): AppUrlState {
   }
 
   // Sanitize time
-  const dataRange = getDatasetRange('temp2m');
+  const dataRange = configLoader.getDatasetRange('temp2m');
   let sanitizedTime = urlState.time;
 
   if (dataRange) {

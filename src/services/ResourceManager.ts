@@ -4,7 +4,7 @@
  * Handles loading of resources with progress tracking
  */
 
-import { RESOURCE_MANIFEST } from '../manifest';
+import { RESOURCE_MANIFEST, type ResourceManifest } from '../resource.manifest';
 
 export interface LoadProgress {
   loaded: number;
@@ -19,7 +19,7 @@ export type ProgressCallback = (progress: LoadProgress) => void;
  * Preload images and return them as a map
  */
 export async function preloadImages(
-  priority: keyof typeof RESOURCE_MANIFEST,
+  priority: keyof ResourceManifest,
   onProgress?: ProgressCallback
 ): Promise<Map<string, HTMLImageElement>> {
   const resources = RESOURCE_MANIFEST[priority];
@@ -71,6 +71,6 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 /**
  * Get total size for a priority level
  */
-export function getTotalSize(priority: keyof typeof RESOURCE_MANIFEST): number {
+export function getTotalSize(priority: keyof ResourceManifest): number {
   return RESOURCE_MANIFEST[priority].reduce((sum, r) => sum + r.size, 0);
 }

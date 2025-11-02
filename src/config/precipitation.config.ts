@@ -3,7 +3,7 @@
  * Uses legacy color palette from hypatia.arctic.io
  */
 
-export const PRATESFC_CONFIG = {
+export const PRECIPITATION_CONFIG = {
   // Geometry configuration
   geometry: {
     widthSegments: 180,
@@ -24,7 +24,7 @@ export const PRATESFC_CONFIG = {
     polygonOffsetUnits: -2.0
   },
 
-  // Color palette (from legacy pratesfc.js)
+  // Color palette (from legacy precipitation layer)
   // Values in kg/m²/s (equals mm/s)
   // Colors are blue shades with varying alpha for precipitation intensity
   palette: [

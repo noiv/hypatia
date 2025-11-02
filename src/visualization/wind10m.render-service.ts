@@ -1,6 +1,6 @@
 // @ts-nocheck - Working first, types later
 /**
- * WindLayerGPUCompute - WebGPU compute-based wind line tracing
+ * Wind10mRenderService - WebGPU compute-based wind line tracing
  *
  * Performance: ~3.4ms for 16384 lines (vs 190ms CPU)
  * Implements ILayer interface for polymorphic layer management
@@ -13,10 +13,10 @@ import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeome
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { EARTH_RADIUS_UNITS } from '../utils/constants';
 import { generateFibonacciSphere } from '../utils/sphereSeeds';
-import { Wind10mService, TimeStep } from '../services/Wind10mService';
-import { WindGPUService } from '../services/WindGPUService';
+import { Wind10mDataService, TimeStep } from '../layers/wind10m.data-service';
+import { configLoader } from '../config';
 
-export class WindLayerGPUCompute implements ILayer {
+export class Wind10mRenderService implements ILayer {
   public group: THREE.Group;
   private seeds: THREE.Vector3[];
   private lines: LineSegments2 | THREE.Mesh | null = null;
@@ -26,6 +26,7 @@ export class WindLayerGPUCompute implements ILayer {
   private static readonly USE_CUSTOM_GEOMETRY = false;
 
   // Wind data
+  private dataService: Wind10mDataService | null = null;
   private timesteps: TimeStep[] = [];
   private windDataU: Uint16Array[] = [];
   private windDataV: Uint16Array[] = [];
@@ -60,7 +61,7 @@ export class WindLayerGPUCompute implements ILayer {
     // Generate uniformly distributed seed points on sphere using Fibonacci lattice
     this.seeds = generateFibonacciSphere(8192, EARTH_RADIUS_UNITS);
 
-    console.log(`🌬️  WindLayerGPUCompute: Generated ${this.seeds.length} grid points`);
+    console.log(`🌬️  Wind10mRenderService: Generated ${this.seeds.length} grid points`);
   }
 
   /**
@@ -92,7 +93,7 @@ export class WindLayerGPUCompute implements ILayer {
     this.device.queue.writeBuffer(this.seedBuffer, 0, seedData);
 
     // Create output buffer (vec4f = 4 floats = 16 bytes per vertex)
-    const outputSize = this.seeds.length * WindLayerGPUCompute.LINE_STEPS * 4 * 4;
+    const outputSize = this.seeds.length * Wind10mRenderService.LINE_STEPS * 4 * 4;
     this.outputBuffer = this.device.createBuffer({
       size: outputSize,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
@@ -327,12 +328,29 @@ export class WindLayerGPUCompute implements ILayer {
    * Load all wind data timesteps
    */
   async loadWindData(onProgress?: (loaded: number, total: number) => void): Promise<void> {
-    this.timesteps = Wind10mService.generateTimeSteps();
+    // Get dataset info for U and V components
+    const uDatasetInfo = configLoader.getDatasetInfo('wind10m_u');
+    const vDatasetInfo = configLoader.getDatasetInfo('wind10m_v');
+
+    if (!uDatasetInfo || !vDatasetInfo) {
+      throw new Error('Wind datasets (wind10m_u, wind10m_v) not found in manifest');
+    }
+
+    // Create Wind10mDataService instance
+    this.dataService = new Wind10mDataService(
+      uDatasetInfo,
+      vDatasetInfo,
+      configLoader.getDataBaseUrl(),
+      'wind10m_u',
+      'wind10m_v'
+    );
+
+    this.timesteps = this.dataService.generateTimeSteps();
     if (this.timesteps.length === 0) {
       throw new Error('No wind timesteps available');
     }
 
-    const { uData, vData } = await WindGPUService.loadAllTimeSteps(this.timesteps, onProgress);
+    const { uData, vData } = await this.dataService.loadAllTimeSteps(this.timesteps, onProgress);
     this.windDataU = uData;
     this.windDataV = vData;
 
@@ -363,9 +381,9 @@ export class WindLayerGPUCompute implements ILayer {
    * Update wind lines for current time using WebGPU compute (async version)
    */
   async updateTimeAsync(currentTime: Date): Promise<void> {
-    if (this.timesteps.length === 0 || !this.device || !this.pipeline) return;
+    if (this.timesteps.length === 0 || !this.device || !this.pipeline || !this.dataService) return;
 
-    const timeIndex = WindGPUService.timeToIndex(currentTime, this.timesteps);
+    const timeIndex = this.dataService.timeToIndex(currentTime, this.timesteps);
 
     // Only recompute if time changed significantly
     if (Math.abs(timeIndex - this.lastTimeIndex) < 0.001) {
@@ -382,7 +400,7 @@ export class WindLayerGPUCompute implements ILayer {
       // Update lastTimeIndex inside the critical section
       this.lastTimeIndex = timeIndex;
 
-      const { index0, index1, blend } = WindGPUService.getAdjacentTimesteps(timeIndex);
+      const { index0, index1, blend } = this.dataService!.getAdjacentTimesteps(timeIndex);
 
       await this.doUpdate(index0, index1, blend);
     };
@@ -430,7 +448,7 @@ export class WindLayerGPUCompute implements ILayer {
     passEncoder.end();
 
     // Copy results to staging buffer (vec4 = 4 floats per vertex)
-    const outputSize = this.seeds.length * WindLayerGPUCompute.LINE_STEPS * 4 * 4;
+    const outputSize = this.seeds.length * Wind10mRenderService.LINE_STEPS * 4 * 4;
     commandEncoder.copyBufferToBuffer(this.outputBuffer!, 0, this.stagingBuffer!, 0, outputSize);
     this.device.queue.submit([commandEncoder.finish()]);
 
@@ -460,7 +478,7 @@ export class WindLayerGPUCompute implements ILayer {
    */
   private updateGeometry(vertices: Float32Array): void {
     // Allocate arrays once and reuse them
-    const numSegments = this.seeds.length * (WindLayerGPUCompute.LINE_STEPS - 1);
+    const numSegments = this.seeds.length * (Wind10mRenderService.LINE_STEPS - 1);
     const arraySize = numSegments * 6;
 
     if (!this.cachedPositions || this.cachedPositions.length !== arraySize) {
@@ -471,8 +489,8 @@ export class WindLayerGPUCompute implements ILayer {
     const positions = this.cachedPositions;
     const colors = this.cachedColors;
 
-    const cycleLength = WindLayerGPUCompute.LINE_STEPS + WindLayerGPUCompute.SNAKE_LENGTH;
-    const totalSegments = WindLayerGPUCompute.LINE_STEPS - 1;
+    const cycleLength = Wind10mRenderService.LINE_STEPS + Wind10mRenderService.SNAKE_LENGTH;
+    const totalSegments = Wind10mRenderService.LINE_STEPS - 1;
 
     // Generate random offsets once and cache them
     if (!this.cachedRandomOffsets) {
@@ -487,10 +505,10 @@ export class WindLayerGPUCompute implements ILayer {
 
     for (let lineIdx = 0; lineIdx < this.seeds.length; lineIdx++) {
       const randomOffset = this.cachedRandomOffsets[lineIdx];
-      const offset = lineIdx * WindLayerGPUCompute.LINE_STEPS * 4; // vec4 = 4 floats
+      const offset = lineIdx * Wind10mRenderService.LINE_STEPS * 4; // vec4 = 4 floats
       const normalizedOffset = randomOffset / cycleLength;
 
-      for (let i = 0; i < WindLayerGPUCompute.LINE_STEPS - 1; i++) {
+      for (let i = 0; i < Wind10mRenderService.LINE_STEPS - 1; i++) {
         const idx0 = offset + i * 4;       // vec4 stride
         const idx1 = offset + (i + 1) * 4; // vec4 stride
 
@@ -503,8 +521,8 @@ export class WindLayerGPUCompute implements ILayer {
         positions[posIdx++] = vertices[idx1 + 2];
 
         const remainingSegments = totalSegments - i;
-        const taperFactor = remainingSegments <= WindLayerGPUCompute.TAPER_SEGMENTS
-          ? remainingSegments / WindLayerGPUCompute.TAPER_SEGMENTS
+        const taperFactor = remainingSegments <= Wind10mRenderService.TAPER_SEGMENTS
+          ? remainingSegments / Wind10mRenderService.TAPER_SEGMENTS
           : 1.0;
 
         // Encode segment data in color channels for snake animation
@@ -520,7 +538,7 @@ export class WindLayerGPUCompute implements ILayer {
     }
 
     if (this.lines) {
-      if (WindLayerGPUCompute.USE_CUSTOM_GEOMETRY) {
+      if (Wind10mRenderService.USE_CUSTOM_GEOMETRY) {
         this.updateCustomGeometry(positions, colors);
       } else {
         const geometry = this.lines.geometry as LineSegmentsGeometry;
@@ -564,7 +582,7 @@ export class WindLayerGPUCompute implements ILayer {
    * Create LineSegments2 or custom geometry based on USE_CUSTOM_GEOMETRY flag
    */
   private createLines(positions: Float32Array | number[], colors: Float32Array | number[]): void {
-    if (WindLayerGPUCompute.USE_CUSTOM_GEOMETRY) {
+    if (Wind10mRenderService.USE_CUSTOM_GEOMETRY) {
       this.createCustomGeometry(positions as Float32Array, colors as Float32Array);
     } else {
       this.createLineSegments2(positions, colors);
@@ -580,7 +598,7 @@ export class WindLayerGPUCompute implements ILayer {
     geometry.setColors(colors);
 
     this.material = new LineMaterial({
-      linewidth: WindLayerGPUCompute.LINE_WIDTH,
+      linewidth: Wind10mRenderService.LINE_WIDTH,
       vertexColors: true,
       transparent: true,
       opacity: 0.6,
@@ -595,8 +613,8 @@ export class WindLayerGPUCompute implements ILayer {
     (this.material as any).uniforms = {
       ...this.material.uniforms,
       animationPhase: { value: 0.0 },
-      snakeLength: { value: WindLayerGPUCompute.SNAKE_LENGTH },
-      lineSteps: { value: WindLayerGPUCompute.LINE_STEPS }
+      snakeLength: { value: Wind10mRenderService.SNAKE_LENGTH },
+      lineSteps: { value: Wind10mRenderService.LINE_STEPS }
     };
 
     this.material.onBeforeCompile = (shader) => {
@@ -793,11 +811,11 @@ export class WindLayerGPUCompute implements ILayer {
       `,
       uniforms: {
         resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
-        linewidth: { value: WindLayerGPUCompute.LINE_WIDTH },
+        linewidth: { value: Wind10mRenderService.LINE_WIDTH },
         opacity: { value: 0.6 },
         animationPhase: { value: 0.0 },
-        snakeLength: { value: WindLayerGPUCompute.SNAKE_LENGTH },
-        lineSteps: { value: WindLayerGPUCompute.LINE_STEPS }
+        snakeLength: { value: Wind10mRenderService.SNAKE_LENGTH },
+        lineSteps: { value: Wind10mRenderService.LINE_STEPS }
       },
       transparent: true,
       depthWrite: false,
@@ -845,7 +863,7 @@ export class WindLayerGPUCompute implements ILayer {
   setResolution(width: number, height: number): void {
     if (!this.material) return;
 
-    if (WindLayerGPUCompute.USE_CUSTOM_GEOMETRY) {
+    if (Wind10mRenderService.USE_CUSTOM_GEOMETRY) {
       (this.material as THREE.ShaderMaterial).uniforms.resolution.value.set(width, height);
     } else {
       (this.material as LineMaterial).resolution.set(width, height);
@@ -885,7 +903,7 @@ export class WindLayerGPUCompute implements ILayer {
     const clampedT = Math.max(0, Math.min(1, t));
     const lineWidth = minWidth + (maxWidth - minWidth) * clampedT;
 
-    if (WindLayerGPUCompute.USE_CUSTOM_GEOMETRY) {
+    if (Wind10mRenderService.USE_CUSTOM_GEOMETRY) {
       (this.material as THREE.ShaderMaterial).uniforms.linewidth.value = lineWidth;
     } else {
       (this.material as LineMaterial).linewidth = lineWidth;
@@ -896,7 +914,7 @@ export class WindLayerGPUCompute implements ILayer {
     if (!this.material) return;
 
     const animationSpeed = 20.0;
-    const cycleLength = WindLayerGPUCompute.LINE_STEPS + WindLayerGPUCompute.SNAKE_LENGTH;
+    const cycleLength = Wind10mRenderService.LINE_STEPS + Wind10mRenderService.SNAKE_LENGTH;
     this.animationPhase = (this.animationPhase + deltaTime * animationSpeed) % cycleLength;
 
     const uniforms = (this.material as any).uniforms;

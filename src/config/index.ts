@@ -13,5 +13,7 @@ export type {
   LayerVisualization,
   LayerUI,
   LayerGroup,
-  ParamInfo
+  ParamInfo,
+  DataManifest,
+  DatasetInfo
 } from './types';

@@ -14,9 +14,10 @@
 
 import * as THREE from 'three';
 import type { LayerData, TimeStep, LoadProgress } from '../config/types';
-import { Temp2mService } from './Temp2mService';
-import { PratesfcService } from './PratesfcService';
+import { Temp2mDataService } from '../layers/temp2m.data-service';
+import { PrecipitationDataService } from '../layers/precipitation.data-service';
 import type { LayerId } from '../visualization/ILayer';
+import { configLoader } from '../config';
 
 // Re-export LayerId for convenience
 export type { LayerId } from '../visualization/ILayer';
@@ -65,19 +66,52 @@ export class DataService {
     };
 
     switch (layerId) {
-      case 'temp2m':
-        timeSteps = Temp2mService.generateTimeSteps();
-        texture = await Temp2mService.loadTexture(timeSteps, progressCallback);
+      case 'temp2m': {
+        const datasetInfo = configLoader.getDatasetInfo('temp2m');
+        if (!datasetInfo) {
+          throw new Error('temp2m dataset not found in manifest');
+        }
+
+        const service = new Temp2mDataService(
+          datasetInfo,
+          configLoader.getDataBaseUrl(),
+          'temp2m'
+        );
+        timeSteps = service.generateTimeSteps();
+        texture = await service.loadTexture(timeSteps, progressCallback);
         sizeBytes = this.estimateTextureSize(texture);
         break;
+      }
 
-      case 'precipitation':
-        timeSteps = PratesfcService.generateTimeSteps();
-        texture = await PratesfcService.loadTexture(timeSteps, progressCallback);
+      case 'precipitation': {
+        const datasetInfo = configLoader.getDatasetInfo('tprate');
+        if (!datasetInfo) {
+          throw new Error('tprate dataset not found in manifest');
+        }
+
+        const service = new PrecipitationDataService(
+          datasetInfo,
+          configLoader.getDataBaseUrl(),
+          'tprate'
+        );
+        timeSteps = service.generateTimeSteps();
+        texture = await service.loadTexture(timeSteps, progressCallback);
         sizeBytes = this.estimateTextureSize(texture);
         break;
+      }
 
-      case 'wind10m':
+      case 'wind10m': {
+        const uDatasetInfo = configLoader.getDatasetInfo('wind10m_u');
+        const vDatasetInfo = configLoader.getDatasetInfo('wind10m_v');
+        if (!uDatasetInfo || !vDatasetInfo) {
+          throw new Error('wind10m_u or wind10m_v dataset not found in manifest');
+        }
+
+        // Note: Wind layer has its own loading mechanism in WindLayerGPUCompute
+        // Wind uses separate TimeStep type with uFilePath/vFilePath
+        throw new Error(`Layer ${layerId} does not use DataService for texture loading yet`);
+      }
+
       case 'earth':
       case 'sun':
         // These layers handle their own data loading

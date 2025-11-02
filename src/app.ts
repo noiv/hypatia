@@ -5,14 +5,14 @@
  */
 
 import m from 'mithril';
-import { Scene } from './visualization/Scene';
+import { Scene } from './visualization/scene';
 import { TimeSlider } from './components/TimeSlider';
 import { Controls } from './components/Controls';
 import { BootstrapModal } from './components/BootstrapModal';
 import { parseUrlState, debouncedUpdateUrlState } from './utils/urlState';
 import { sanitizeUrl } from './utils/sanitizeUrl';
 import { clampTimeToDataRange } from './utils/timeUtils';
-import { getDatasetRange } from './manifest';
+import { configLoader } from './config';
 import type { AppState } from './state/AppState';
 import { LayerStateService } from './services/LayerStateService';
 import { AppBootstrapService } from './services/AppBootstrapService';
@@ -399,11 +399,11 @@ export const App: AppComponent = {
         m(TimeSlider, {
           currentTime,
           startTime: (() => {
-            const range = getDatasetRange('temp2m');
+            const range = configLoader.getDatasetRange('temp2m');
             return range ? range.startTime : new Date();
           })(),
           endTime: (() => {
-            const range = getDatasetRange('temp2m');
+            const range = configLoader.getDatasetRange('temp2m');
             return range ? range.endTime : new Date();
           })(),
           onTimeChange: (newTime: Date) => {

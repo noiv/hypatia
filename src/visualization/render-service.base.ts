@@ -6,7 +6,7 @@
 
 import type * as THREE from 'three';
 import type { ILayer } from './ILayer';
-import type { TimeStep } from '../services/Temp2mService';
+import type { TimeStep } from '../layers/temp2m.data-service';
 
 /**
  * Abstract base class for layers with time-series data

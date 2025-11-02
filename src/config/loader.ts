@@ -4,21 +4,26 @@
  * Loads and validates configuration files at runtime
  */
 
-import type { HypatiaConfig, ParamsConfig, LayersConfig, Layer } from './types';
+import type { HypatiaConfig, ParamsConfig, LayersConfig, Layer, DataManifest, DatasetInfo } from './types';
 
 class ConfigLoader {
   private hypatiaConfig: HypatiaConfig | null = null;
   private paramsConfig: ParamsConfig | null = null;
   private layersConfig: LayersConfig | null = null;
+  private dataManifest: DataManifest | null = null;
 
   /**
    * Load all configuration files
    */
   async loadAll(): Promise<void> {
+    // Load hypatia config first (needed for dataBaseUrl)
+    await this.loadHypatiaConfig();
+
+    // Load rest in parallel
     await Promise.all([
-      this.loadHypatiaConfig(),
       this.loadParamsConfig(),
-      this.loadLayersConfig()
+      this.loadLayersConfig(),
+      this.loadDataManifest()
     ]);
   }
 
@@ -154,12 +159,106 @@ class ConfigLoader {
   }
 
   /**
+   * Load data manifest
+   */
+  async loadDataManifest(): Promise<DataManifest> {
+    if (this.dataManifest) return this.dataManifest;
+
+    const dataBaseUrl = this.getDataBaseUrl();
+    const manifestUrl = `${dataBaseUrl}/manifest.json`;
+
+    const response = await fetch(manifestUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to load manifest from ${manifestUrl}: ${response.statusText}`);
+    }
+
+    const manifest: DataManifest = await response.json();
+    this.dataManifest = manifest;
+    return manifest;
+  }
+
+  /**
+   * Get data manifest (must be loaded first)
+   */
+  getDataManifest(): DataManifest {
+    if (!this.dataManifest) {
+      throw new Error('Data manifest not loaded. Call loadAll() first.');
+    }
+    return this.dataManifest;
+  }
+
+  /**
+   * Get dataset info by parameter name
+   */
+  getDatasetInfo(paramName: string): DatasetInfo | undefined {
+    if (!this.dataManifest) {
+      return undefined;
+    }
+    return this.dataManifest.datasets[paramName];
+  }
+
+  /**
+   * Get data base URL from hypatia config
+   */
+  getDataBaseUrl(): string {
+    const config = this.getHypatiaConfig();
+    return config.data.dataBaseUrl;
+  }
+
+  /**
+   * Get dataset time range (start and end times)
+   * Parses compact manifest format "20251026_00z-20251108_06z"
+   */
+  getDatasetRange(paramName: string): { startTime: Date; endTime: Date } | null {
+    const datasetInfo = this.getDatasetInfo(paramName);
+    if (!datasetInfo) {
+      return null;
+    }
+
+    // Parse range: "20251026_00z-20251108_06z"
+    const [startStr, endStr] = datasetInfo.range.split('-');
+    if (!startStr || !endStr) {
+      return null;
+    }
+
+    const startTime = this.parseTimestamp(startStr);
+    const endTime = this.parseTimestamp(endStr);
+
+    return { startTime, endTime };
+  }
+
+  /**
+   * Parse timestamp like "20251030_00z" into Date
+   */
+  private parseTimestamp(timestamp: string): Date {
+    const parts = timestamp.split('_');
+    if (parts.length !== 2) {
+      throw new Error(`Invalid timestamp format: ${timestamp}`);
+    }
+
+    const dateStr = parts[0];
+    const cycleStr = parts[1];
+
+    if (!dateStr || !cycleStr) {
+      throw new Error(`Invalid timestamp format: ${timestamp}`);
+    }
+
+    const year = parseInt(dateStr.slice(0, 4));
+    const month = parseInt(dateStr.slice(4, 6)) - 1;
+    const day = parseInt(dateStr.slice(6, 8));
+    const hour = parseInt(cycleStr.slice(0, 2));
+
+    return new Date(Date.UTC(year, month, day, hour, 0, 0, 0));
+  }
+
+  /**
    * Check if all configs are loaded
    */
   isReady(): boolean {
     return this.hypatiaConfig !== null &&
            this.paramsConfig !== null &&
-           this.layersConfig !== null;
+           this.layersConfig !== null &&
+           this.dataManifest !== null;
   }
 }
 

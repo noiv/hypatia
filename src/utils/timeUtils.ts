@@ -2,14 +2,14 @@
  * Time utility functions
  */
 
-import { getDatasetRange } from '../manifest';
+import { configLoader } from '../config';
 
 /**
  * Clamp time to available data range for a dataset
  * Returns the clamped time, or the original time if no range is available
  */
 export function clampTimeToDataRange(time: Date, dataset: string = 'temp2m'): Date {
-  const range = getDatasetRange(dataset);
+  const range = configLoader.getDatasetRange(dataset);
 
   if (!range) {
     return time;

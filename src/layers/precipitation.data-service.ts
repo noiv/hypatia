@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { DATA_MANIFEST } from '../manifest';
+import type { DatasetInfo } from '../config';
 
 export interface TimeStep {
   date: string;    // YYYYMMDD
@@ -7,31 +7,46 @@ export interface TimeStep {
   filePath: string;
 }
 
-export class PratesfcService {
+export class PrecipitationDataService {
   private static readonly WIDTH = 1441; // Includes wrapping column
   private static readonly HEIGHT = 721;
   private static readonly BYTES_PER_FLOAT16 = 2; // fp16 = 2 bytes
-  private static readonly EXPECTED_SIZE = PratesfcService.WIDTH * PratesfcService.HEIGHT * PratesfcService.BYTES_PER_FLOAT16;
+  private readonly EXPECTED_SIZE: number;
+
+  constructor(
+    private readonly datasetInfo: DatasetInfo,
+    private readonly dataBaseUrl: string,
+    private readonly paramName: string
+  ) {
+    this.EXPECTED_SIZE = PrecipitationDataService.WIDTH * PrecipitationDataService.HEIGHT * PrecipitationDataService.BYTES_PER_FLOAT16;
+  }
 
   /**
-   * Generate list of time steps from manifest data
+   * Generate list of time steps from compact manifest format
+   * Parses range "20251030_00z-20251107_18z" with step "6h"
    */
-  static generateTimeSteps(): TimeStep[] {
+  generateTimeSteps(): TimeStep[] {
     const steps: TimeStep[] = [];
-    const pratesfcData = DATA_MANIFEST['pratesfc'];
 
-    if (!pratesfcData) {
-      console.warn('No pratesfc data found in manifest');
-      return steps;
+    // Parse range: "20251030_00z-20251107_18z"
+    const rangeParts = this.datasetInfo.range.split('-');
+    if (rangeParts.length !== 2) {
+      throw new Error(`Invalid range format: ${this.datasetInfo.range}`);
     }
+    const startStr = rangeParts[0];
+    const endStr = rangeParts[1];
+    if (!startStr || !endStr) {
+      throw new Error(`Invalid range format: ${this.datasetInfo.range}`);
+    }
+    const startDate = this.parseTimestamp(startStr);
+    const endDate = this.parseTimestamp(endStr);
 
-    // Parse start and end times from manifest
-    const startTime = new Date(pratesfcData.startTime);
-    const endTime = new Date(pratesfcData.endTime);
+    // Parse step (e.g., "6h" -> 6)
+    const stepHours = parseInt(this.datasetInfo.step);
 
-    // Generate timesteps at 6-hour intervals
-    const current = new Date(startTime);
-    while (current <= endTime) {
+    // Generate timesteps
+    const current = new Date(startDate);
+    while (current <= endDate) {
       const year = current.getUTCFullYear();
       const month = String(current.getUTCMonth() + 1).padStart(2, '0');
       const day = String(current.getUTCDate()).padStart(2, '0');
@@ -39,7 +54,7 @@ export class PratesfcService {
 
       const dateStr = `${year}${month}${day}`;
       const cycle = `${hour}z`;
-      const filePath = `/data/pratesfc/${dateStr}_${cycle}.bin`;
+      const filePath = `${this.dataBaseUrl}/${this.paramName}/${dateStr}_${cycle}.bin`;
 
       steps.push({
         date: dateStr,
@@ -47,13 +62,37 @@ export class PratesfcService {
         filePath
       });
 
-      // Increment by 6 hours
-      current.setUTCHours(current.getUTCHours() + 6);
+      // Increment by step hours
+      current.setUTCHours(current.getUTCHours() + stepHours);
     }
 
-    console.log(`Pratesfc: ${steps.length} timesteps (${startTime.toISOString()} to ${endTime.toISOString()})`);
+    console.log(`${this.paramName}: ${steps.length} timesteps (${this.datasetInfo.range})`);
 
     return steps;
+  }
+
+  /**
+   * Parse timestamp like "20251030_00z" into Date
+   */
+  private parseTimestamp(timestamp: string): Date {
+    const parts = timestamp.split('_');
+    if (parts.length !== 2) {
+      throw new Error(`Invalid timestamp format: ${timestamp}`);
+    }
+
+    const dateStr = parts[0];
+    const cycleStr = parts[1];
+
+    if (!dateStr || !cycleStr) {
+      throw new Error(`Invalid timestamp format: ${timestamp}`);
+    }
+
+    const year = parseInt(dateStr.slice(0, 4));
+    const month = parseInt(dateStr.slice(4, 6)) - 1;
+    const day = parseInt(dateStr.slice(6, 8));
+    const hour = parseInt(cycleStr.slice(0, 2));
+
+    return new Date(Date.UTC(year, month, day, hour, 0, 0, 0));
   }
 
   /**
@@ -61,7 +100,7 @@ export class PratesfcService {
    * Note: Data files are stored as fp16, we keep them as-is for GPU
    * Note: Data files already include wrapping column (1441 columns)
    */
-  private static async loadBinaryFile(path: string): Promise<Uint16Array> {
+  private async loadBinaryFile(path: string): Promise<Uint16Array> {
     const response = await fetch(path);
     if (!response.ok) {
       throw new Error(`Failed to load ${path}: ${response.statusText}`);
@@ -82,9 +121,9 @@ export class PratesfcService {
   /**
    * Load all time steps and create a Data3DTexture with native fp16 support
    */
-  static async loadTexture(steps: TimeStep[], onProgress?: (loaded: number, total: number) => void): Promise<THREE.Data3DTexture> {
+  async loadTexture(steps: TimeStep[], onProgress?: (loaded: number, total: number) => void): Promise<THREE.Data3DTexture> {
     const depth = steps.length;
-    const totalSize = this.WIDTH * this.HEIGHT * depth;
+    const totalSize = PrecipitationDataService.WIDTH * PrecipitationDataService.HEIGHT * depth;
     const data = new Uint16Array(totalSize);
 
     // Load each time step
@@ -96,7 +135,7 @@ export class PratesfcService {
         const layerData = await this.loadBinaryFile(step.filePath);
 
         // Copy into the 3D texture data array
-        const offset = i * this.WIDTH * this.HEIGHT;
+        const offset = i * PrecipitationDataService.WIDTH * PrecipitationDataService.HEIGHT;
         data.set(layerData, offset);
 
         if (onProgress) {
@@ -110,7 +149,7 @@ export class PratesfcService {
 
     // Create Data3DTexture with HalfFloatType for native fp16 support
     // This saves 50% GPU memory compared to FloatType
-    const texture = new THREE.Data3DTexture(data, this.WIDTH, this.HEIGHT, depth);
+    const texture = new THREE.Data3DTexture(data, PrecipitationDataService.WIDTH, PrecipitationDataService.HEIGHT, depth);
     texture.format = THREE.RedFormat;
     texture.type = THREE.HalfFloatType; // Use fp16 natively
     texture.minFilter = THREE.LinearFilter;
@@ -125,7 +164,7 @@ export class PratesfcService {
   /**
    * Calculate time index (0 to steps.length-1) from current time
    */
-  static timeToIndex(currentTime: Date, steps: TimeStep[]): number {
+  timeToIndex(currentTime: Date, steps: TimeStep[]): number {
     // Find the two closest time steps
     const currentMs = currentTime.getTime();
 
@@ -157,7 +196,7 @@ export class PratesfcService {
   /**
    * Parse time step into Date object (in UTC)
    */
-  private static parseTimeStep(step: TimeStep): Date {
+  private parseTimeStep(step: TimeStep): Date {
     const year = parseInt(step.date.slice(0, 4));
     const month = parseInt(step.date.slice(4, 6)) - 1;
     const day = parseInt(step.date.slice(6, 8));

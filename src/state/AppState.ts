@@ -4,7 +4,7 @@
  * Central state definition for the application
  */
 
-import type { Scene } from '../visualization/Scene';
+import type { Scene } from '../visualization/scene';
 import type { ECMWFRun } from '../services/ECMWFService';
 import type { UserLocation } from '../services/GeolocationService';
 import type { BootstrapStatus } from '../services/AppBootstrapService';

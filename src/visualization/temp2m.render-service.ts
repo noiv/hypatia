@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { EARTH_RADIUS_UNITS } from '../utils/constants';
 import { TEMP2M_CONFIG } from '../config/temp2m.config';
-import { TimeSeriesLayer } from './TimeSeriesLayer';
-import type { TimeStep } from '../services/Temp2mService';
+import { TimeSeriesLayer } from './render-service.base';
+import type { TimeStep } from '../layers/temp2m.data-service';
 import type { DataService } from '../services/DataService';
 
-export class Temp2mLayer extends TimeSeriesLayer {
+export class Temp2mRenderService extends TimeSeriesLayer {
   private mesh: THREE.Mesh;
   private material: THREE.ShaderMaterial;
 
@@ -44,16 +44,16 @@ export class Temp2mLayer extends TimeSeriesLayer {
     });
 
     this.mesh = new THREE.Mesh(geometry, this.material);
-    this.mesh.name = 'Temp2mLayer';
+    this.mesh.name = 'Temp2mRenderService';
     this.mesh.renderOrder = 1; // Render after Earth
   }
 
   /**
-   * Factory method to create Temp2mLayer with data loading
+   * Factory method to create Temp2mRenderService with data loading
    */
-  static async create(dataService: DataService): Promise<Temp2mLayer> {
+  static async create(dataService: DataService): Promise<Temp2mRenderService> {
     const layerData = await dataService.loadLayer('temp2m');
-    return new Temp2mLayer(layerData.texture, layerData.timeSteps, layerData.timeSteps.length);
+    return new Temp2mRenderService(layerData.texture, layerData.timeSteps, layerData.timeSteps.length);
   }
 
   // ILayer interface implementation

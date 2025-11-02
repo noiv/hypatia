@@ -1,16 +1,94 @@
 import * as THREE from 'three';
 import { EARTH_RADIUS_UNITS } from '../utils/constants';
 import { ATMOSPHERE_CONFIG } from '../config/atmosphere.config';
-import { Sun } from './Sun';
+import { calculateSunPosition } from '../utils/time';
 import type { ILayer } from './ILayer';
 
 /**
- * SunLayer - Sun positioning and lighting
+ * Sun - Sun mesh and lighting
+ */
+class Sun {
+  public mesh: THREE.Mesh;
+  private light: THREE.DirectionalLight;
+
+  constructor() {
+    // Sun mesh (larger sphere for visibility at distance)
+    const geometry = new THREE.SphereGeometry(5, 32, 32);
+    const material = new THREE.MeshBasicMaterial({
+      color: 0xffff00
+    });
+
+    this.mesh = new THREE.Mesh(geometry, material);
+    this.mesh.name = 'Sun';
+
+    // Directional light for illumination (stronger for longer distance)
+    this.light = new THREE.DirectionalLight(0xffffff, 2);
+
+    // Initial position
+    this.updatePosition(new Date());
+  }
+
+  /**
+   * Get the directional light
+   */
+  getLight(): THREE.DirectionalLight {
+    return this.light;
+  }
+
+  /**
+   * Get sun direction as a normalized vector
+   */
+  getDirection(): THREE.Vector3 {
+    return this.mesh.position.clone().normalize();
+  }
+
+  /**
+   * Update sun position based on time
+   * Sun rotates around Earth (geocentric view)
+   */
+  updatePosition(time: Date) {
+    const pos = calculateSunPosition(time);
+
+    // Position sun at very large distance to minimize perspective distortion
+    // Sun should appear circular, not warped by perspective
+    const distance = 500;
+    this.mesh.position.set(
+      pos.x * distance,
+      pos.y * distance,
+      pos.z * distance
+    );
+
+    // Update light position to match sun
+    this.light.position.copy(this.mesh.position);
+
+    // Light points toward Earth (origin)
+    this.light.target.position.set(0, 0, 0);
+  }
+
+  /**
+   * Clean up resources
+   */
+  dispose() {
+    if (this.mesh.geometry) {
+      this.mesh.geometry.dispose();
+    }
+
+    if (this.mesh.material) {
+      const material = this.mesh.material as THREE.Material;
+      material.dispose();
+    }
+
+    this.light.dispose();
+  }
+}
+
+/**
+ * SunRenderService - Sun positioning and lighting
  *
  * Manages the sun sphere and directional light.
  * Atmosphere shader is disabled (not ready yet).
  */
-export class SunLayer implements ILayer {
+export class SunRenderService implements ILayer {
   private sun: Sun;
   private group: THREE.Group;
 
@@ -23,7 +101,7 @@ export class SunLayer implements ILayer {
 
     // Create group containing sun (and optionally atmosphere)
     this.group = new THREE.Group();
-    this.group.name = 'SunLayer';
+    this.group.name = 'SunRenderService';
     this.group.add(this.sun.mesh);
 
     // Atmosphere shader - disabled by default (not ready)
@@ -67,14 +145,14 @@ export class SunLayer implements ILayer {
   }
 
   /**
-   * Factory method to create SunLayer
+   * Factory method to create SunRenderService
    * @param currentTime - Initial time for sun position
    * @param enableAtmosphere - Enable atmosphere shader (default: false, not ready)
    */
-  static async create(currentTime: Date, enableAtmosphere: boolean = false): Promise<SunLayer> {
+  static async create(currentTime: Date, enableAtmosphere: boolean = false): Promise<SunRenderService> {
     const sun = new Sun();
     sun.updatePosition(currentTime);
-    const layer = new SunLayer(sun, enableAtmosphere);
+    const layer = new SunRenderService(sun, enableAtmosphere);
     if (layer.atmosphereMesh) {
       layer.setSunPosition(sun.mesh.position);
     }

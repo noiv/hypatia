@@ -1,12 +1,12 @@
 import type * as THREE from 'three';
 import type { ILayer, LayerId } from './ILayer';
 import type { DataService } from '../services/DataService';
-import { EarthLayer } from './EarthLayer';
-import { SunLayer } from './SunLayer';
-import { GraticuleLayer } from './GraticuleLayer';
-import { Temp2mLayer } from './Temp2mLayer';
-import { PratesfcLayer } from './PratesfcLayer';
-import { WindLayerGPUCompute } from './WindLayerGPUCompute';
+import { EarthRenderService } from './earth.render-service';
+import { SunRenderService } from './sun.render-service';
+import { GraticuleRenderService } from './graticule.render-service';
+import { Temp2mRenderService } from './temp2m.render-service';
+import { PrecipitationRenderService } from './precipitation.render-service';
+import { Wind10mRenderService } from './wind10m.render-service';
 
 /**
  * LayerFactory - Polymorphic factory for creating all layer types
@@ -33,23 +33,23 @@ export class LayerFactory {
   ): Promise<ILayer> {
     switch (layerId) {
       case 'earth':
-        return EarthLayer.create(preloadedImages);
+        return EarthRenderService.create(preloadedImages);
 
       case 'sun':
-        return SunLayer.create(currentTime, false); // Atmosphere shader disabled (not ready)
+        return SunRenderService.create(currentTime, false); // Atmosphere shader disabled (not ready)
 
       case 'graticule':
-        return GraticuleLayer.create();
+        return GraticuleRenderService.create();
 
       case 'temp2m':
-        return Temp2mLayer.create(dataService);
+        return Temp2mRenderService.create(dataService);
 
       case 'precipitation':
-        return PratesfcLayer.create(dataService);
+        return PrecipitationRenderService.create(dataService);
 
       case 'wind10m':
         // Renderer guaranteed to exist (WebGL2 checked during bootstrap)
-        const windLayer = new WindLayerGPUCompute();
+        const windLayer = new Wind10mRenderService();
         await windLayer.initGPU(renderer!);
         await windLayer.loadWindData();
         return windLayer;

@@ -25,7 +25,7 @@ const LOD_LEVELS = [
   { maxDistance: Infinity, latStep: 45, lonStep: 45 } // Very far: every 45°
 ];
 
-export class GraticuleLayer implements ILayer {
+export class GraticuleRenderService implements ILayer {
   private group: THREE.Group;
   private lineSegments: THREE.LineSegments | null = null;
   private material: THREE.LineBasicMaterial;
@@ -55,10 +55,10 @@ export class GraticuleLayer implements ILayer {
   }
 
   /**
-   * Factory method to create GraticuleLayer
+   * Factory method to create GraticuleRenderService
    */
-  static async create(config?: GraticuleConfig): Promise<GraticuleLayer> {
-    return new GraticuleLayer(config);
+  static async create(config?: GraticuleConfig): Promise<GraticuleRenderService> {
+    return new GraticuleRenderService(config);
   }
 
   /**
