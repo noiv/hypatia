@@ -36,3 +36,7 @@ npm-debug.log*
 # Temporary
 *.tmp
 .cache/
+
+# SSL Certificates
+../certs/*.pem
+../certs/*.key
