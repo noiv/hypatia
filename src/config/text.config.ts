@@ -19,10 +19,10 @@ export const TEXT_CONFIG = {
 
   // Size settings
   size: {
-    default: 0.03,      // Base font size in world units
-    min: 0.015,         // Minimum (50% of default)
-    max: 0.06,          // Maximum (200% of default)
-    step: 0.003,        // Increment/decrement step (10% of default)
+    default: 0.09,      // Base font size in world units (3x original)
+    min: 0.045,         // Minimum (50% of default)
+    max: 0.18,          // Maximum (200% of default)
+    step: 0.009,        // Increment/decrement step (10% of default)
   },
 
   // Color settings
@@ -63,7 +63,7 @@ export const TEXT_CONFIG = {
   // Billboard settings (always face camera)
   billboard: {
     enabled: true,      // Always face camera
-    sizeAttenuation: false, // Constant screen size regardless of distance
+    sizeAttenuation: false, // Disable auto-scaling (we handle it manually)
   },
 
   // Positioning

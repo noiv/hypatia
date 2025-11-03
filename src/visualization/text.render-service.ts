@@ -132,10 +132,12 @@ export class TextRenderService {
    * Update text rendering based on camera
    * - Apply billboard behavior (face camera)
    * - Apply culling (hide labels behind globe)
+   * - Scale each label's fontSize based on its distance from camera
    */
   update(camera: THREE.Camera): void {
     // Get camera position
     const cameraPos = camera.position;
+    const referenceDistance = 3.0; // Reference viewing distance
 
     // Update all labels
     for (const textObjects of this.labels.values()) {
@@ -145,9 +147,18 @@ export class TextRenderService {
           text.quaternion.copy(camera.quaternion);
         }
 
+        // Calculate distance from camera to THIS specific label
+        const labelPos = text.position;
+        const distanceToLabel = cameraPos.distanceTo(labelPos);
+
+        // Scale fontSize based on distance to maintain constant screen size
+        // Labels farther from camera need larger fontSize to appear same size
+        const scaledFontSize = this.fontSize * (distanceToLabel / referenceDistance);
+        text.fontSize = scaledFontSize;
+        text.sync();
+
         // Culling: hide labels behind globe
         if (TEXT_CONFIG.performance.frustumCulling) {
-          const labelPos = text.position;
           const labelDir = labelPos.clone().normalize();
           const cameraDir = cameraPos.clone().normalize();
 
