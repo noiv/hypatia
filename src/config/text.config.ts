@@ -10,9 +10,14 @@ export const TEXT_CONFIG = {
   font: {
     // Inter: Modern sans-serif optimized for screen reading
     // Excellent legibility, clear number differentiation (1 vs l, 0 vs O)
-    // Open source, includes all weights
+    // Open source, locally hosted for performance
     family: 'Inter',
-    url: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap',
+
+    // Local font files (woff2 format for best compression)
+    files: {
+      regular: '/fonts/inter-regular.woff2',
+      semibold: '/fonts/inter-semibold.woff2',
+    },
 
     // Fallback chain for robustness
     fallback: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif'
