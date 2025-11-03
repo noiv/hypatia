@@ -19,6 +19,7 @@ declare module 'troika-three-text' {
     outlineOpacity: number;
     depthTest: boolean;
     depthWrite: boolean;
+    sizeAttenuation: boolean;
 
     sync(): void;
     dispose(): void;

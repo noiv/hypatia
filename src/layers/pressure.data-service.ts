@@ -124,7 +124,8 @@ export class PressureDataService {
     const float32Data = new Float32Array(fp16Data.length);
 
     for (let i = 0; i < fp16Data.length; i++) {
-      float32Data[i] = this.decodeFP16(fp16Data[i]);
+      const value = fp16Data[i];
+      float32Data[i] = value !== undefined ? this.decodeFP16(value) : 0;
     }
 
     return float32Data;

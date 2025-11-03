@@ -232,7 +232,7 @@ function generateContours(
     let max = -Infinity;
     for (let i = 0; i < pressureGrid.length; i++) {
       const v = pressureGrid[i];
-      if (!isNaN(v) && v > 0) {
+      if (v !== undefined && !isNaN(v) && v > 0) {
         if (v < min) min = v;
         if (v > max) max = v;
       }
@@ -344,7 +344,8 @@ async function loadPressureData(filePath: string): Promise<Float32Array> {
   const float32Data = new Float32Array(fp16Data.length);
 
   for (let i = 0; i < fp16Data.length; i++) {
-    float32Data[i] = decodeFP16(fp16Data[i]);
+    const value = fp16Data[i];
+    float32Data[i] = value !== undefined ? decodeFP16(value) : 0;
   }
 
   return float32Data;

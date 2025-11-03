@@ -44,6 +44,20 @@ export abstract class TimeSeriesLayer implements ILayer {
   }
 
   /**
+   * Set text service (no-op - time series layers don't produce text by default)
+   */
+  setTextService(_textService: any): void {
+    // No-op - time series layers don't produce text
+  }
+
+  /**
+   * Update text enabled state (no-op - time series layers don't produce text by default)
+   */
+  updateTextEnabled(_enabled: boolean): void {
+    // No-op - time series layers don't produce text
+  }
+
+  /**
    * Calculate interpolated time index from current time
    */
   protected calculateTimeIndex(currentTime: Date): number {
