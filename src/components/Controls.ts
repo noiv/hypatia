@@ -20,6 +20,10 @@ export interface ControlsAttrs {
   onWindToggle: () => void;
   showPressure: boolean;
   onPressureToggle: () => void;
+  showGraticule: boolean;
+  onGraticuleToggle: () => void;
+  showText: boolean;
+  onTextToggle: () => void;
 }
 
 export const Controls: m.Component<ControlsAttrs> = {
@@ -42,7 +46,11 @@ export const Controls: m.Component<ControlsAttrs> = {
       showWind,
       onWindToggle,
       showPressure,
-      onPressureToggle
+      onPressureToggle,
+      showGraticule,
+      onGraticuleToggle,
+      showText,
+      onTextToggle
     } = vnode.attrs;
 
     return m('div.controls', [
@@ -92,6 +100,18 @@ export const Controls: m.Component<ControlsAttrs> = {
         onclick: onPressureToggle,
         class: showPressure ? 'active' : ''
       }, showPressure ? '🌀 Pressure ON' : '🌀 Pressure OFF'),
+
+      // Graticule toggle button
+      m('button.btn', {
+        onclick: onGraticuleToggle,
+        class: showGraticule ? 'active' : ''
+      }, showGraticule ? '📐 Graticule ON' : '📐 Graticule OFF'),
+
+      // Text toggle button
+      m('button.btn', {
+        onclick: onTextToggle,
+        class: showText ? 'active' : ''
+      }, showText ? '🏷️  Text ON' : '🏷️  Text OFF'),
 
       // Blend slider
       m('div.blend-control', [

@@ -8,6 +8,7 @@ import { LayerFactory } from './LayerFactory';
 import type { SunRenderService } from './sun.render-service';
 import type { EarthRenderService } from './earth.render-service';
 import type { Wind10mRenderService } from './wind10m.render-service';
+import { TextRenderService } from './text.render-service';
 
 export class Scene {
   private scene: THREE.Scene;
@@ -24,6 +25,7 @@ export class Scene {
   private lastFrameTime: number = performance.now();
   private stats: any;
   private dataService: DataService;
+  private textService: TextRenderService;
 
   constructor(canvas: HTMLCanvasElement, preloadedImages?: Map<string, HTMLImageElement>) {
     this.dataService = new DataService();
@@ -81,6 +83,10 @@ export class Scene {
     // Ambient light (dim) so dark side isn't completely black
     const ambient = new THREE.AmbientLight(0x404040, 0.4);
     this.scene.add(ambient);
+
+    // Text rendering service
+    this.textService = new TextRenderService();
+    this.scene.add(this.textService.getSceneObject());
 
     // Add axes helpers
     this.addAxesHelpers();
@@ -234,6 +240,9 @@ export class Scene {
 
     // Render
     this.renderer.render(this.scene, this.camera);
+
+    // Update text labels LAST (after all layers have submitted text)
+    this.textService.update(this.camera);
 
     this.stats.end();
   };
@@ -397,6 +406,9 @@ export class Scene {
       this.scene.add(sunLayer.getLight().target);
     }
 
+    // Pass text service to layer (polymorphic call)
+    layer.setTextService(this.textService);
+
     // Update with current time
     layer.updateTime(this.currentTime);
 
@@ -468,6 +480,22 @@ export class Scene {
    */
   getVisibleLayers(): LayerId[] {
     return this.getCreatedLayers().filter(layerId => this.isLayerVisible(layerId));
+  }
+
+  /**
+   * Get text service for label management
+   */
+  getTextService(): TextRenderService {
+    return this.textService;
+  }
+
+  /**
+   * Set text enabled state (broadcasts to all layers)
+   */
+  setTextEnabled(enabled: boolean): void {
+    this.layers.forEach(layer => {
+      layer.updateTextEnabled(enabled);
+    });
   }
 
   /**

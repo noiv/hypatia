@@ -19,6 +19,7 @@ export interface AppState {
   scene: Scene | null;
   isFullscreen: boolean;
   blend: number;
+  textEnabled: boolean;
 
   // Bootstrap
   bootstrapStatus: BootstrapStatus;

@@ -5,6 +5,7 @@
  */
 
 import type * as THREE from 'three';
+import type { TextRenderService } from './text.render-service';
 
 /**
  * Base interface that all layers must implement
@@ -26,6 +27,19 @@ export interface ILayer {
    * Layers that don't use sun direction should implement as no-op
    */
   updateSunDirection(sunDir: THREE.Vector3): void;
+
+  /**
+   * Set text service reference for submitting text labels
+   * Layers that don't produce text should implement as no-op
+   */
+  setTextService(textService: TextRenderService): void;
+
+  /**
+   * Update text enabled state
+   * Layers that produce text should generate/clear labels based on this state
+   * Layers that don't produce text should implement as no-op
+   */
+  updateTextEnabled(enabled: boolean): void;
 
   /**
    * Set layer visibility

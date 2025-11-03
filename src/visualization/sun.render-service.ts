@@ -3,6 +3,7 @@ import { EARTH_RADIUS_UNITS } from '../utils/constants';
 import { ATMOSPHERE_CONFIG } from '../config/atmosphere.config';
 import { calculateSunPosition } from '../utils/time';
 import type { ILayer } from './ILayer';
+import type { TextRenderService } from './text.render-service';
 
 /**
  * Sun - Sun mesh and lighting
@@ -185,6 +186,20 @@ export class SunRenderService implements ILayer {
    */
   updateSunDirection(_sunDir: THREE.Vector3): void {
     // No-op - Sun is the light source
+  }
+
+  /**
+   * Set text service (no-op - this layer doesn't produce text)
+   */
+  setTextService(_textService: TextRenderService): void {
+    // No-op
+  }
+
+  /**
+   * Update text enabled state (no-op - this layer doesn't produce text)
+   */
+  updateTextEnabled(_enabled: boolean): void {
+    // No-op
   }
 
   /**

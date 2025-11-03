@@ -7,11 +7,15 @@
 import * as THREE from 'three';
 import type { ILayer } from './ILayer';
 import { latLonToCartesian } from '../utils/coordinates';
+import type { TextRenderService, TextLabel } from './text.render-service';
+import { TEXT_CONFIG } from '../config/text.config';
 
 interface GraticuleConfig {
   color?: number;
   opacity?: number;
   radius?: number;
+  textService?: TextRenderService;
+  showLabels?: boolean;
 }
 
 /**
@@ -31,6 +35,8 @@ export class GraticuleRenderService implements ILayer {
   private material: THREE.LineBasicMaterial;
   private currentLOD: number = -1;
   private readonly radius: number;
+  private textService: TextRenderService | null = null;
+  private textEnabled: boolean = false;
 
   constructor(config: GraticuleConfig = {}) {
     this.group = new THREE.Group();
@@ -49,6 +55,10 @@ export class GraticuleRenderService implements ILayer {
       depthTest: true,    // Respect depth - don't show back side through front
       depthWrite: false   // Don't write to depth buffer to avoid z-fighting
     });
+
+    // Text service for labels
+    this.textService = config.textService ?? null;
+    this.textEnabled = config.showLabels ?? false;
 
     // Start with medium LOD
     this.rebuildGeometry(1);
@@ -87,6 +97,11 @@ export class GraticuleRenderService implements ILayer {
     if (lodLevel !== this.currentLOD) {
       this.rebuildGeometry(lodLevel);
       this.currentLOD = lodLevel;
+
+      // Update labels when LOD changes
+      if (this.textEnabled) {
+        this.updateLabels();
+      }
     }
 
     // Update line width based on distance (not supported in WebGL LineBasicMaterial)
@@ -123,9 +138,117 @@ export class GraticuleRenderService implements ILayer {
   }
 
   /**
+   * Set text service for labels
+   */
+  setTextService(textService: TextRenderService): void {
+    this.textService = textService;
+    // Don't call updateLabels() here - wait for updateTextEnabled() to be called
+  }
+
+  /**
+   * Update text enabled state (broadcast from Scene)
+   */
+  updateTextEnabled(enabled: boolean): void {
+    this.textEnabled = enabled;
+    if (enabled) {
+      this.updateLabels();
+    } else {
+      this.clearLabels();
+    }
+  }
+
+  /**
+   * Clear labels
+   */
+  private clearLabels(): void {
+    if (this.textService) {
+      this.textService.clearLabels('graticule');
+    }
+  }
+
+  /**
+   * Update labels based on current LOD
+   */
+  private updateLabels(): void {
+    if (!this.textService || !this.textEnabled) {
+      return;
+    }
+
+    const config = LOD_LEVELS[this.currentLOD];
+    if (!config) return;
+
+    const labels = this.generateLabels(config.latStep, config.lonStep);
+    this.textService.setLabels('graticule', labels);
+  }
+
+  /**
+   * Generate labels for lat/lon grid intersections
+   */
+  private generateLabels(latStep: number, lonStep: number): TextLabel[] {
+    const labels: TextLabel[] = [];
+    const labelRadius = this.radius * TEXT_CONFIG.positioning.graticuleRadiusMultiplier;
+
+    // Latitude labels (on prime meridian - longitude 0)
+    for (let lat = -90; lat <= 90; lat += latStep) {
+      // Skip equator (too crowded), but include poles
+      if (lat === 0) continue;
+
+      const position = latLonToCartesian(lat, 0, labelRadius);
+      const text = this.formatLatitude(lat);
+      labels.push({
+        text,
+        position,
+        color: TEXT_CONFIG.color.graticule
+      });
+    }
+
+    // Longitude labels (on equator - latitude 0)
+    for (let lon = -180; lon < 180; lon += lonStep) {
+      // Skip prime meridian (0) as it overlaps with lat labels
+      if (lon === 0) continue;
+
+      const position = latLonToCartesian(0, lon, labelRadius);
+      const text = this.formatLongitude(lon);
+      labels.push({
+        text,
+        position,
+        color: TEXT_CONFIG.color.graticule
+      });
+    }
+
+    return labels;
+  }
+
+  /**
+   * Format latitude as string (e.g., "45°N", "30°S")
+   */
+  private formatLatitude(lat: number): string {
+    if (lat === 0) return '0°';
+    if (lat === 90) return '90°N';
+    if (lat === -90) return '90°S';
+
+    const abs = Math.abs(lat);
+    const dir = lat > 0 ? 'N' : 'S';
+    return `${abs}°${dir}`;
+  }
+
+  /**
+   * Format longitude as string (e.g., "90°E", "120°W")
+   */
+  private formatLongitude(lon: number): string {
+    if (lon === 0) return '0°';
+    if (lon === 180 || lon === -180) return '180°';
+
+    const abs = Math.abs(lon);
+    const dir = lon > 0 ? 'E' : 'W';
+    return `${abs}°${dir}`;
+  }
+
+  /**
    * Clean up resources
    */
   dispose(): void {
+    this.clearLabels();
     if (this.lineSegments) {
       this.lineSegments.geometry.dispose();
     }

@@ -11,6 +11,7 @@ import { PressureDataService, type TimeStep } from '../layers/pressure.data-serv
 import { configLoader } from '../config';
 import { PRESSURE_CONFIG } from '../config/pressure.config';
 import ContourWorker from '../workers/contourWorker?worker';
+import type { TextRenderService } from './text.render-service';
 
 interface WorkerResponse {
   vertices: Float32Array;
@@ -130,6 +131,20 @@ export class PressureRenderService extends TimeSeriesLayer {
     // Update geometry with new contour vertices
     this.geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
     this.geometry.computeBoundingSphere();
+  }
+
+  /**
+   * Set text service (no-op - this layer doesn't produce text)
+   */
+  setTextService(_textService: TextRenderService): void {
+    // No-op
+  }
+
+  /**
+   * Update text enabled state (no-op - this layer doesn't produce text)
+   */
+  updateTextEnabled(_enabled: boolean): void {
+    // No-op
   }
 
   /**

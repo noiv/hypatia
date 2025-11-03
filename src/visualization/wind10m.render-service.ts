@@ -15,6 +15,7 @@ import { EARTH_RADIUS_UNITS } from '../utils/constants';
 import { generateFibonacciSphere } from '../utils/sphereSeeds';
 import { Wind10mDataService, TimeStep } from '../layers/wind10m.data-service';
 import { configLoader } from '../config';
+import type { TextRenderService } from './text.render-service';
 
 export class Wind10mRenderService implements ILayer {
   public group: THREE.Group;
@@ -884,6 +885,20 @@ export class Wind10mRenderService implements ILayer {
    */
   updateSunDirection(_sunDir: THREE.Vector3): void {
     // No-op - wind layer doesn't use lighting
+  }
+
+  /**
+   * Set text service (no-op - this layer doesn't produce text)
+   */
+  setTextService(_textService: TextRenderService): void {
+    // No-op
+  }
+
+  /**
+   * Update text enabled state (no-op - this layer doesn't produce text)
+   */
+  updateTextEnabled(_enabled: boolean): void {
+    // No-op
   }
 
   /**

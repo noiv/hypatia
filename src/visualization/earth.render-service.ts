@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { EARTH_RADIUS_UNITS } from '../utils/constants';
 import { EARTH_CONFIG } from '../config/earth.config';
 import type { ILayer } from './ILayer';
+import type { TextRenderService } from './text.render-service';
 
 /**
  * Earth - Earth mesh with basemap textures and day/night lighting
@@ -259,5 +260,19 @@ export class EarthRenderService implements ILayer {
    */
   updateSunDirection(direction: THREE.Vector3): void {
     this.earth.setSunDirection(direction);
+  }
+
+  /**
+   * Set text service (no-op - this layer doesn't produce text)
+   */
+  setTextService(_textService: TextRenderService): void {
+    // No-op
+  }
+
+  /**
+   * Update text enabled state (no-op - this layer doesn't produce text)
+   */
+  updateTextEnabled(_enabled: boolean): void {
+    // No-op
   }
 }

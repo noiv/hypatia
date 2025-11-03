@@ -50,6 +50,7 @@ export const App: AppComponent = {
       currentTime: sanitizedState.time,
       isFullscreen: false,
       blend: 0.0,
+      textEnabled: sanitizedState.layers.includes('text'),
       scene: null,
       bootstrapStatus: 'loading',
       bootstrapProgress: null,
@@ -127,6 +128,26 @@ export const App: AppComponent = {
           }
         }
         m.redraw();
+      }
+
+      // Text size shortcuts: Cmd/Ctrl +/-/0
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey) {
+        if (e.code === 'Equal' || e.code === 'NumpadAdd') {
+          e.preventDefault();
+          if (scene) {
+            scene.getTextService().increaseFontSize();
+          }
+        } else if (e.code === 'Minus' || e.code === 'NumpadSubtract') {
+          e.preventDefault();
+          if (scene) {
+            scene.getTextService().decreaseFontSize();
+          }
+        } else if (e.code === 'Digit0' || e.code === 'Numpad0') {
+          e.preventDefault();
+          if (scene) {
+            scene.getTextService().resetFontSize();
+          }
+        }
       }
     };
     window.addEventListener('keydown', this._keydownHandler);
@@ -245,7 +266,9 @@ export const App: AppComponent = {
       // No URL state - no layers to load
       return;
     }
-    const layersToLoad = urlState.layers;
+
+    // Filter out 'text' - it's not a real layer, just a state flag
+    const layersToLoad = urlState.layers.filter(l => l !== 'text');
 
     if (layersToLoad.length > 0) {
       console.log(`Bootstrap.loading: ${layersToLoad.join(', ')}`);
@@ -268,17 +291,24 @@ export const App: AppComponent = {
     // After all layers loaded, update sun direction based on which layers are visible
     // This ensures earth/temp2m get correct sun direction (zero if sun not loaded)
     scene.updateTime(this.state.currentTime);
+
+    // Apply text enabled state from URL (broadcasts to all layers)
+    if (this.state.textEnabled) {
+      scene.setTextEnabled(true);
+    }
   },
 
   updateUrl() {
-    const { scene, currentTime } = this.state;
+    const { scene, currentTime, textEnabled } = this.state;
     if (!scene) return;
 
     // Get visible layers from scene
     const visibleLayers = scene.getVisibleLayers();
 
-    // All layers are optional in dev mode - include all visible layers in URL
-    const layers = visibleLayers;
+    // Add 'text' to layers if enabled
+    const layers = textEnabled
+      ? [...visibleLayers, 'text']
+      : visibleLayers;
 
     debouncedUpdateUrlState({
       time: currentTime,
@@ -420,7 +450,7 @@ export const App: AppComponent = {
   },
 
   renderControls() {
-    const { isFullscreen, blend, scene } = this.state;
+    const { isFullscreen, blend, scene, textEnabled } = this.state;
 
     // Don't render controls until scene is ready
     if (!scene) {
@@ -434,6 +464,7 @@ export const App: AppComponent = {
     const precipitationState = scene.getLayerState('precipitation');
     const windState = scene.getLayerState('wind10m');
     const pressureState = scene.getLayerState('pressure');
+    const graticuleState = scene.getLayerState('graticule');
 
     return m(Controls, {
       isFullscreen,
@@ -479,6 +510,19 @@ export const App: AppComponent = {
       showPressure: pressureState.created && pressureState.visible,
       onPressureToggle: async () => {
         await this.handleLayerToggle('pressure');
+      },
+      showGraticule: graticuleState.created && graticuleState.visible,
+      onGraticuleToggle: async () => {
+        await this.handleLayerToggle('graticule');
+      },
+      showText: textEnabled,
+      onTextToggle: () => {
+        this.state.textEnabled = !this.state.textEnabled;
+        if (scene) {
+          scene.setTextEnabled(this.state.textEnabled);
+        }
+        this.updateUrl();
+        m.redraw();
       }
     });
   },

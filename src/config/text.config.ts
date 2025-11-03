@@ -11,13 +11,7 @@ export const TEXT_CONFIG = {
     // Inter: Modern sans-serif optimized for screen reading
     // Excellent legibility, clear number differentiation (1 vs l, 0 vs O)
     // Open source, locally hosted for performance
-    family: 'Inter',
-
-    // Local font files (woff2 format for best compression)
-    files: {
-      regular: '/fonts/inter-regular.woff2',
-      semibold: '/fonts/inter-semibold.woff2',
-    },
+    url: '/fonts/inter-regular.ttf',
 
     // Fallback chain for robustness
     fallback: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif'
@@ -40,10 +34,10 @@ export const TEXT_CONFIG = {
 
   // Outline settings
   outline: {
-    enabled: true,      // Outline enabled by default for readability
-    width: 0.15,        // Outline width (percentage of fontSize)
+    enabled: false,     // Outline disabled - white text on dark space is readable
+    width: 0.05,        // Outline width (percentage of fontSize) - thin for readability
     color: 0x000000,    // Black outline
-    opacity: 0.8,       // 80% opacity
+    opacity: 0.5,       // 50% opacity - subtle
   },
 
   // Keyboard shortcuts

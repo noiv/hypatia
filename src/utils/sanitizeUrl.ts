@@ -101,7 +101,8 @@ export function sanitizeUrl(): AppUrlState {
         z: defaultPos.z,
         distance
       },
-      layers: []
+      layers: [],
+      graticuleLabels: false
     };
 
     // Update URL with defaults
@@ -195,7 +196,8 @@ export function sanitizeUrl(): AppUrlState {
       z: urlState.camera.z,
       distance: altitudeToDistance(sanitizedAltitude)
     },
-    layers: urlState.layers
+    layers: urlState.layers,
+    graticuleLabels: urlState.graticuleLabels ?? false
   };
 
   // Update URL if anything changed

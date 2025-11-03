@@ -4,6 +4,7 @@ import { PRECIPITATION_CONFIG } from '../config/precipitation.config';
 import { TimeSeriesLayer } from './render-service.base';
 import type { TimeStep } from '../layers/temp2m.data-service';
 import type { DataService } from '../services/DataService';
+import type { TextRenderService } from './text.render-service';
 
 export class PrecipitationRenderService extends TimeSeriesLayer {
   private mesh: THREE.Mesh;
@@ -77,6 +78,20 @@ export class PrecipitationRenderService extends TimeSeriesLayer {
     if (this.material.uniforms.opacity) {
       this.material.uniforms.opacity.value = opacity;
     }
+  }
+
+  /**
+   * Set text service (no-op - this layer doesn't produce text)
+   */
+  setTextService(_textService: TextRenderService): void {
+    // No-op
+  }
+
+  /**
+   * Update text enabled state (no-op - this layer doesn't produce text)
+   */
+  updateTextEnabled(_enabled: boolean): void {
+    // No-op
   }
 
   /**
