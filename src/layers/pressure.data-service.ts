@@ -1,4 +1,5 @@
 import type { DatasetInfo } from '../config';
+import { PRESSURE_CONFIG } from '../config/pressure.config';
 
 export interface TimeStep {
   date: string;    // YYYYMMDD
@@ -10,11 +11,11 @@ export interface TimeStep {
  * Pressure Data Service
  *
  * Loads MSL (mean sea level pressure) data at 2° resolution
- * Grid: 180×91 (coarse grid optimized for contour generation)
+ * Grid: 181×91 (with wrapping column for dateline continuity)
  */
 export class PressureDataService {
-  private static readonly WIDTH = 180;  // 2° resolution
-  private static readonly HEIGHT = 91;  // 2° resolution
+  private static readonly WIDTH = PRESSURE_CONFIG.grid.width;   // From config
+  private static readonly HEIGHT = PRESSURE_CONFIG.grid.height; // From config
   private static readonly BYTES_PER_FLOAT16 = 2; // fp16 = 2 bytes
   private readonly EXPECTED_SIZE: number;
 

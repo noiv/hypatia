@@ -20,9 +20,12 @@ interface WorkerResponse {
   timestamp: number;
 }
 
-// Grid dimensions for 2° resolution (with wrapping column)
-const GRID_WIDTH = 181;  // 180 + 1 wrapping column for dateline continuity
-const GRID_HEIGHT = 91;
+import { PRESSURE_CONFIG } from '../config/pressure.config';
+
+// Grid dimensions from config
+const GRID_WIDTH = PRESSURE_CONFIG.grid.width;
+const GRID_HEIGHT = PRESSURE_CONFIG.grid.height;
+const EARTH_RADIUS = PRESSURE_CONFIG.earth.radius;
 
 // Cache for loaded pressure grids (indexed by timestep)
 const pressureCache = new Map<number, Float32Array>();
@@ -112,7 +115,6 @@ function gridToLatLon(x: number, y: number): [number, number] {
  * Convert lat/lon to 3D sphere coordinates (Earth radius = 1.0)
  */
 function latLonToCartesian(lat: number, lon: number): [number, number, number] {
-  const EARTH_RADIUS = 1.0;
   const latRad = (lat * Math.PI) / 180;
   const lonRad = (lon * Math.PI) / 180;
 

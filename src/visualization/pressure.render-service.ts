@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { TimeSeriesLayer } from './render-service.base';
 import { PressureDataService, type TimeStep } from '../layers/pressure.data-service';
 import { configLoader } from '../config';
+import { PRESSURE_CONFIG } from '../config/pressure.config';
 import ContourWorker from '../workers/contourWorker?worker';
 
 interface WorkerResponse {
@@ -25,21 +26,16 @@ export class PressureRenderService extends TimeSeriesLayer {
   private readonly worker: Worker;
   private currentRequestTimestamp: number = 0;
 
-  // Standard meteorological isobar levels (4 hPa spacing)
-  private readonly isobarLevels = [
-    980, 984, 988, 992, 996, 1000, 1004, 1008, 1012, 1016, 1020, 1024
-  ];
-
   private constructor(timeSteps: TimeStep[]) {
     super(timeSteps);
 
-    // Create material (white contour lines)
+    // Create material from config
     this.material = new THREE.LineBasicMaterial({
-      color: 0xffffff,
-      opacity: 0.85,
-      transparent: true,
-      depthTest: true,
-      linewidth: 2
+      color: PRESSURE_CONFIG.visual.color,
+      opacity: PRESSURE_CONFIG.visual.opacity,
+      transparent: PRESSURE_CONFIG.visual.transparent,
+      depthTest: PRESSURE_CONFIG.visual.depthTest,
+      linewidth: PRESSURE_CONFIG.visual.linewidth
     });
 
     // Create geometry (initially empty)
@@ -115,7 +111,7 @@ export class PressureRenderService extends TimeSeriesLayer {
     this.worker.postMessage({
       stepA,
       blend,
-      isobarLevels: this.isobarLevels,
+      isobarLevels: PRESSURE_CONFIG.isobars.levels,
       timestamp,
       timeSteps: this.timeSteps
     });
