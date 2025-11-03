@@ -433,6 +433,7 @@ export const App: AppComponent = {
     const temp2mState = scene.getLayerState('temp2m');
     const precipitationState = scene.getLayerState('precipitation');
     const windState = scene.getLayerState('wind10m');
+    const pressureState = scene.getLayerState('pressure');
 
     return m(Controls, {
       isFullscreen,
@@ -474,6 +475,10 @@ export const App: AppComponent = {
       showWind: windState.created && windState.visible,
       onWindToggle: async () => {
         await this.handleLayerToggle('wind10m');
+      },
+      showPressure: pressureState.created && pressureState.visible,
+      onPressureToggle: async () => {
+        await this.handleLayerToggle('pressure');
       }
     });
   },

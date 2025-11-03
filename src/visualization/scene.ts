@@ -179,7 +179,19 @@ export class Scene {
     const intersects = this.raycaster.intersectObject(earthObject, false);
 
     if (intersects.length > 0) {
-      // Click detected on Earth
+      // Click detected on Earth - log lat/lon for debugging
+      const point = intersects[0]?.point;
+      if (point) {
+        // Convert cartesian to lat/lon
+        const x = point.x;
+        const y = point.y;
+        const z = point.z;
+
+        const lat = Math.asin(y) * (180 / Math.PI);
+        const lon = Math.atan2(z, x) * (180 / Math.PI);
+
+        console.log(`🌍 Clicked: Lat=${lat.toFixed(2)}°, Lon=${lon.toFixed(2)}°`);
+      }
     }
   };
 

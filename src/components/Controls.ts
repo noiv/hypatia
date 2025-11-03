@@ -18,6 +18,8 @@ export interface ControlsAttrs {
   onRainToggle: () => void;
   showWind: boolean;
   onWindToggle: () => void;
+  showPressure: boolean;
+  onPressureToggle: () => void;
 }
 
 export const Controls: m.Component<ControlsAttrs> = {
@@ -38,7 +40,9 @@ export const Controls: m.Component<ControlsAttrs> = {
       showRain,
       onRainToggle,
       showWind,
-      onWindToggle
+      onWindToggle,
+      showPressure,
+      onPressureToggle
     } = vnode.attrs;
 
     return m('div.controls', [
@@ -82,6 +86,12 @@ export const Controls: m.Component<ControlsAttrs> = {
         onclick: onWindToggle,
         class: showWind ? 'active' : ''
       }, showWind ? '🌬️  Wind ON' : '🌬️  Wind OFF'),
+
+      // Pressure toggle button
+      m('button.btn', {
+        onclick: onPressureToggle,
+        class: showPressure ? 'active' : ''
+      }, showPressure ? '🌀 Pressure ON' : '🌀 Pressure OFF'),
 
       // Blend slider
       m('div.blend-control', [

@@ -7,6 +7,7 @@ import { GraticuleRenderService } from './graticule.render-service';
 import { Temp2mRenderService } from './temp2m.render-service';
 import { PrecipitationRenderService } from './precipitation.render-service';
 import { Wind10mRenderService } from './wind10m.render-service';
+import { PressureRenderService } from './pressure.render-service';
 
 /**
  * LayerFactory - Polymorphic factory for creating all layer types
@@ -54,6 +55,9 @@ export class LayerFactory {
         await windLayer.loadWindData();
         return windLayer;
 
+      case 'pressure':
+        return PressureRenderService.create();
+
       default:
         // TypeScript exhaustiveness check
         const _exhaustive: never = layerId;
@@ -65,7 +69,7 @@ export class LayerFactory {
    * Get list of all available layer IDs
    */
   static getAllLayerIds(): LayerId[] {
-    return ['earth', 'sun', 'graticule', 'temp2m', 'precipitation', 'wind10m'];
+    return ['earth', 'sun', 'graticule', 'temp2m', 'precipitation', 'wind10m', 'pressure'];
   }
 
   /**
@@ -80,6 +84,6 @@ export class LayerFactory {
    * Get optional layers that can be toggled by user
    */
   static getOptionalLayers(): LayerId[] {
-    return ['earth', 'sun', 'graticule', 'temp2m', 'precipitation', 'wind10m'];
+    return ['earth', 'sun', 'graticule', 'temp2m', 'precipitation', 'wind10m', 'pressure'];
   }
 }

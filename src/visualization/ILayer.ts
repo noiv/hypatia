@@ -57,4 +57,5 @@ export type LayerId =
   | 'graticule'
   | 'temp2m'
   | 'precipitation'
-  | 'wind10m';
+  | 'wind10m'
+  | 'pressure';
