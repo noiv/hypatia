@@ -12,6 +12,8 @@ import { LayerStateService } from './LayerStateService';
 import { UrlLayerSyncService } from './UrlLayerSyncService';
 import { configLoader } from '../config';
 import { checkBrowserCapabilities, getCapabilityHelpUrls } from '../utils/capabilityCheck';
+import { preloadFont } from 'troika-three-text';
+import { TEXT_CONFIG } from '../config/text.config';
 
 export type BootstrapStatus = 'loading' | 'ready' | 'error';
 
@@ -73,11 +75,31 @@ export class AppBootstrapService {
 
     CONFIG: {
       start: 5,
-      end: 15,
+      end: 10,
       label: 'Loading configurations...',
       async run() {
         await configLoader.loadAll();
         await LayerStateService.initialize();
+      }
+    },
+
+    TEXT_PRELOAD: {
+      start: 10,
+      end: 15,
+      label: 'Preloading text glyphs...',
+      async run() {
+        return new Promise<void>((resolve) => {
+          preloadFont(
+            {
+              font: TEXT_CONFIG.font.url,
+              characters: TEXT_CONFIG.performance.characters
+            },
+            () => {
+              console.log('TextBootstrap: Glyphs preloaded');
+              resolve();
+            }
+          );
+        });
       }
     },
 
