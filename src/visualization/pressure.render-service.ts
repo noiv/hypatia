@@ -53,8 +53,6 @@ export class PressureRenderService extends TimeSeriesLayer {
     this.worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
       this.handleWorkerResponse(e.data);
     };
-
-    console.log('PressureRenderService: Initialized with worker');
   }
 
   /**
@@ -90,7 +88,6 @@ export class PressureRenderService extends TimeSeriesLayer {
 
     // Clamp to valid range
     if (stepA < 0 || stepA >= this.timeSteps.length - 1) {
-      console.warn(`PressureRenderService: Index ${index} out of range`);
       return;
     }
 
@@ -125,15 +122,12 @@ export class PressureRenderService extends TimeSeriesLayer {
 
     // Ignore stale responses
     if (timestamp < this.currentRequestTimestamp) {
-      console.log('PressureRenderService: Ignoring stale worker response');
       return;
     }
 
     // Update geometry with new contour vertices
     this.geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
     this.geometry.computeBoundingSphere();
-
-    console.log(`PressureRenderService: Updated with ${vertices.length / 6} line segments`);
   }
 
   /**
@@ -161,7 +155,5 @@ export class PressureRenderService extends TimeSeriesLayer {
     this.geometry.dispose();
     this.material.dispose();
     this.group.remove(this.lineSegments);
-
-    console.log('PressureRenderService: Disposed');
   }
 }

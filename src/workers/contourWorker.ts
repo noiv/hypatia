@@ -149,26 +149,18 @@ const MARCHING_SQUARES_EDGES: number[][] = [
 ];
 
 /**
- * Process single grid cell with marching squares
+ * Process single grid cell with marching squares (optimized - corner values precomputed)
  */
-function processCellEdges(
-  grid: Float32Array,
+function processCellEdgesOptimized(
   x: number,
   y: number,
+  v00: number,
+  v10: number,
+  v11: number,
+  v01: number,
   isoValue: number,
   vertices: number[]
 ): void {
-  // Get 4 corner values
-  const v00 = getPressure(grid, x, y);
-  const v10 = getPressure(grid, x + 1, y);
-  const v11 = getPressure(grid, x + 1, y + 1);
-  const v01 = getPressure(grid, x, y + 1);
-
-  // Skip if any corner is at pole
-  if (y === 0 || y >= GRID_HEIGHT - 1) {
-    return;
-  }
-
   // Calculate cell configuration (4-bit value)
   let cellIndex = 0;
   if (v00 >= isoValue) cellIndex |= 1;
@@ -217,8 +209,11 @@ function processCellEdges(
   }
 }
 
+// Debug flag for detailed logging
+const DEBUG_CONTOURS = false;
+
 /**
- * Generate contours for all isobar levels
+ * Generate contours for all isobar levels (optimized for batch processing)
  */
 function generateContours(
   pressureGrid: Float32Array,
@@ -226,32 +221,80 @@ function generateContours(
 ): Float32Array {
   const vertices: number[] = [];
 
-  // Debug: Sample some pressure values
-  console.log('[ContourWorker] Pressure grid stats:');
-  console.log('  Grid size:', pressureGrid.length, `(expected ${GRID_WIDTH * GRID_HEIGHT})`);
-  console.log('  Sample values:', pressureGrid.slice(0, 10));
-  console.log('  Min:', Math.min(...Array.from(pressureGrid).filter(v => !isNaN(v) && v > 0)));
-  console.log('  Max:', Math.max(...Array.from(pressureGrid).filter(v => !isNaN(v) && v > 0)));
+  // Debug: Sample some pressure values (optimized - no array copy)
+  if (DEBUG_CONTOURS) {
+    console.log('[ContourWorker] Pressure grid stats:');
+    console.log('  Grid size:', pressureGrid.length, `(expected ${GRID_WIDTH * GRID_HEIGHT})`);
+    console.log('  Sample values:', pressureGrid.slice(0, 10));
 
-  // Process each isobar level
-  for (const isoValue of isobarLevels) {
-    const startCount = vertices.length;
-
-    // Process each grid cell
-    // Stop at GRID_WIDTH - 2 to avoid processing the wrapping column boundary
-    for (let y = 0; y < GRID_HEIGHT - 1; y++) {
-      for (let x = 0; x < GRID_WIDTH - 1; x++) {
-        processCellEdges(pressureGrid, x, y, isoValue, vertices);
+    let min = Infinity;
+    let max = -Infinity;
+    for (let i = 0; i < pressureGrid.length; i++) {
+      const v = pressureGrid[i];
+      if (!isNaN(v) && v > 0) {
+        if (v < min) min = v;
+        if (v > max) max = v;
       }
     }
+    console.log('  Min:', min);
+    console.log('  Max:', max);
+  }
 
-    const segmentsAdded = (vertices.length - startCount) / 6;
-    if (segmentsAdded > 0) {
-      console.log(`  Isobar ${isoValue} Pa: ${segmentsAdded} segments`);
+  // Batch process: iterate grid once, test all isobar levels per cell
+  const segmentCounts = DEBUG_CONTOURS ? new Map<number, number>() : null;
+  if (segmentCounts) {
+    isobarLevels.forEach(level => segmentCounts.set(level, 0));
+  }
+
+  // Process each grid cell once
+  // Stop at GRID_WIDTH - 1 to avoid processing the wrapping column boundary
+  for (let y = 0; y < GRID_HEIGHT - 1; y++) {
+    for (let x = 0; x < GRID_WIDTH - 1; x++) {
+      // Get 4 corner values once
+      const v00 = getPressure(pressureGrid, x, y);
+      const v10 = getPressure(pressureGrid, x + 1, y);
+      const v11 = getPressure(pressureGrid, x + 1, y + 1);
+      const v01 = getPressure(pressureGrid, x, y + 1);
+
+      // Skip if any corner is at pole
+      if (y === 0 || y >= GRID_HEIGHT - 1) {
+        continue;
+      }
+
+      // Find min/max pressure in this cell
+      const cellMin = Math.min(v00, v10, v11, v01);
+      const cellMax = Math.max(v00, v10, v11, v01);
+
+      // Test all isobar levels that could intersect this cell
+      for (const isoValue of isobarLevels) {
+        // Skip if isobar can't intersect this cell
+        if (isoValue < cellMin || isoValue > cellMax) {
+          continue;
+        }
+
+        const startCount = vertices.length;
+        processCellEdgesOptimized(x, y, v00, v10, v11, v01, isoValue, vertices);
+
+        if (segmentCounts) {
+          const segmentsAdded = (vertices.length - startCount) / 6;
+          if (segmentsAdded > 0) {
+            segmentCounts.set(isoValue, (segmentCounts.get(isoValue) || 0) + segmentsAdded);
+          }
+        }
+      }
     }
   }
 
-  console.log(`[ContourWorker] Total vertices: ${vertices.length}, segments: ${vertices.length / 6}`);
+  // Log segment counts per isobar
+  if (DEBUG_CONTOURS && segmentCounts) {
+    isobarLevels.forEach(isoValue => {
+      const count = segmentCounts.get(isoValue) || 0;
+      if (count > 0) {
+        console.log(`  Isobar ${isoValue} Pa: ${count} segments`);
+      }
+    });
+  }
+
   return new Float32Array(vertices);
 }
 
@@ -300,10 +343,7 @@ async function loadPressureData(filePath: string): Promise<Float32Array> {
   const float32Data = new Float32Array(fp16Data.length);
 
   for (let i = 0; i < fp16Data.length; i++) {
-    const val = fp16Data[i];
-    if (val !== undefined) {
-      float32Data[i] = decodeFP16(val);
-    }
+    float32Data[i] = decodeFP16(fp16Data[i]);
   }
 
   return float32Data;
@@ -342,8 +382,6 @@ async function getPressureGrid(
 self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
   const { stepA, blend, isobarLevels, timestamp, timeSteps } = e.data;
 
-  const t0 = performance.now();
-
   try {
     // Load adjacent timesteps (from cache or network)
     const t1 = performance.now();
@@ -361,13 +399,18 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
     const vertices = generateContours(interpolatedPressure, isobarLevels);
     const t4 = performance.now();
 
-    // Log timing breakdown
-    console.log(`[ContourWorker] Timing breakdown:
-  Data loading: ${(t2 - t1).toFixed(2)}ms
-  Interpolation: ${(t3 - t2).toFixed(2)}ms
-  Marching squares: ${(t4 - t3).toFixed(2)}ms
-  Total (excl. transfer): ${(t4 - t1).toFixed(2)}ms
-  Vertices generated: ${vertices.length / 6} segments`);
+    const totalTime = (t4 - t1).toFixed(1);
+    const segments = vertices.length / 6;
+
+    // Compact one-line log
+    console.log(`Contour.ontime: ${isobarLevels.length} lvls, ${segments} segs, ${totalTime}ms`);
+
+    // Detailed timing (behind DEBUG_CONTOURS flag)
+    if (DEBUG_CONTOURS) {
+      console.log(`  Data loading: ${(t2 - t1).toFixed(2)}ms`);
+      console.log(`  Interpolation: ${(t3 - t2).toFixed(2)}ms`);
+      console.log(`  Marching squares: ${(t4 - t3).toFixed(2)}ms`);
+    }
 
     // Send back via Transferable (zero-copy)
     const response: WorkerResponse = {
