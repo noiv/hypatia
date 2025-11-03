@@ -86,8 +86,10 @@ export class PressureRenderService extends TimeSeriesLayer {
     const stepA = Math.floor(index);
     const blend = index - stepA;
 
-    // Clamp to valid range
+    // Clear geometry if out of valid range
     if (stepA < 0 || stepA >= this.timeSteps.length - 1) {
+      this.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
+      this.geometry.computeBoundingSphere();
       return;
     }
 
