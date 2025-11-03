@@ -238,8 +238,9 @@ function generateContours(
     const startCount = vertices.length;
 
     // Process each grid cell
+    // Stop at GRID_WIDTH - 2 to avoid processing the wrapping column boundary
     for (let y = 0; y < GRID_HEIGHT - 1; y++) {
-      for (let x = 0; x < GRID_WIDTH; x++) {
+      for (let x = 0; x < GRID_WIDTH - 1; x++) {
         processCellEdges(pressureGrid, x, y, isoValue, vertices);
       }
     }
@@ -341,18 +342,32 @@ async function getPressureGrid(
 self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
   const { stepA, blend, isobarLevels, timestamp, timeSteps } = e.data;
 
+  const t0 = performance.now();
+
   try {
     // Load adjacent timesteps (from cache or network)
+    const t1 = performance.now();
     const [pressureA, pressureB] = await Promise.all([
       getPressureGrid(stepA, timeSteps),
       getPressureGrid(stepA + 1, timeSteps)
     ]);
+    const t2 = performance.now();
 
     // Interpolate pressure field
     const interpolatedPressure = interpolatePressureField(pressureA, pressureB, blend);
+    const t3 = performance.now();
 
     // Generate contour vertices
     const vertices = generateContours(interpolatedPressure, isobarLevels);
+    const t4 = performance.now();
+
+    // Log timing breakdown
+    console.log(`[ContourWorker] Timing breakdown:
+  Data loading: ${(t2 - t1).toFixed(2)}ms
+  Interpolation: ${(t3 - t2).toFixed(2)}ms
+  Marching squares: ${(t4 - t3).toFixed(2)}ms
+  Total (excl. transfer): ${(t4 - t1).toFixed(2)}ms
+  Vertices generated: ${vertices.length / 6} segments`);
 
     // Send back via Transferable (zero-copy)
     const response: WorkerResponse = {
