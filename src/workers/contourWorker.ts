@@ -209,8 +209,9 @@ function processCellEdgesOptimized(
   }
 }
 
-// Debug flag for detailed logging
-const DEBUG_CONTOURS = false;
+// Debug flags
+const DEBUG_CONTOURS = false;  // Detailed grid stats and per-isobar segment counts
+const DEBUG_TIMING = false;    // Performance timing logs
 
 /**
  * Generate contours for all isobar levels (optimized for batch processing)
@@ -399,17 +400,18 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
     const vertices = generateContours(interpolatedPressure, isobarLevels);
     const t4 = performance.now();
 
-    const totalTime = (t4 - t1).toFixed(1);
-    const segments = vertices.length / 6;
+    // Performance timing (behind DEBUG_TIMING flag)
+    if (DEBUG_TIMING) {
+      const totalTime = (t4 - t1).toFixed(1);
+      const segments = vertices.length / 6;
+      console.log(`Contour.ontime: ${isobarLevels.length} lvls, ${segments} segs, ${totalTime}ms`);
 
-    // Compact one-line log
-    console.log(`Contour.ontime: ${isobarLevels.length} lvls, ${segments} segs, ${totalTime}ms`);
-
-    // Detailed timing (behind DEBUG_CONTOURS flag)
-    if (DEBUG_CONTOURS) {
-      console.log(`  Data loading: ${(t2 - t1).toFixed(2)}ms`);
-      console.log(`  Interpolation: ${(t3 - t2).toFixed(2)}ms`);
-      console.log(`  Marching squares: ${(t4 - t3).toFixed(2)}ms`);
+      // Detailed timing breakdown (behind DEBUG_CONTOURS flag)
+      if (DEBUG_CONTOURS) {
+        console.log(`  Data loading: ${(t2 - t1).toFixed(2)}ms`);
+        console.log(`  Interpolation: ${(t3 - t2).toFixed(2)}ms`);
+        console.log(`  Marching squares: ${(t4 - t3).toFixed(2)}ms`);
+      }
     }
 
     // Send back via Transferable (zero-copy)
