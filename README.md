@@ -42,37 +42,73 @@ Or from iPad on same network: `http://your-mac-name.local:8080`
 ```
 code/
 ├── src/
-│   ├── main.ts              # Entry point
-│   ├── app.ts               # Main Mithril component
-│   ├── components/          # UI components
-│   │   ├── TimeSlider.ts
-│   │   └── Controls.ts
-│   ├── services/            # Data loading
-│   │   └── DataLoader.ts
-│   ├── visualization/       # Three.js scene
-│   │   ├── Scene.ts
-│   │   ├── Earth.ts
-│   │   └── Sun.ts
-│   └── utils/               # Utilities
+│   ├── main.ts                    # Entry point
+│   ├── app.ts                     # Main Mithril component
+│   ├── components/                # UI components
+│   │   ├── TimeSlider.ts          # Time scrubbing
+│   │   ├── BlendSlider.ts         # Timestep blending
+│   │   ├── Controls.ts            # Layer toggles & fullscreen
+│   │   └── BootstrapModal.ts      # Reference modal
+│   ├── services/                  # Core services
+│   │   ├── DataService.ts         # Weather data coordination
+│   │   ├── DataLoader.ts          # Binary data loading
+│   │   ├── TimeService.ts         # Time management
+│   │   ├── LayerStateService.ts   # Layer visibility state
+│   │   ├── ECMWFService.ts        # ECMWF data fetching
+│   │   ├── ECMWFDiscoveryService.ts  # Available data discovery
+│   │   ├── GeolocationService.ts  # User location
+│   │   └── UserOptionsService.ts  # User preferences
+│   ├── layers/                    # Weather data services
+│   │   ├── temp2m.data-service.ts      # Temperature data
+│   │   ├── precipitation.data-service.ts  # Precipitation data
+│   │   └── wind10m.data-service.ts     # Wind data
+│   ├── visualization/             # Three.js rendering
+│   │   ├── scene.ts               # Scene setup
+│   │   ├── ILayer.ts              # Layer interface
+│   │   ├── LayerFactory.ts        # Layer creation
+│   │   ├── earth.render-service.ts       # Earth basemap
+│   │   ├── sun.render-service.ts         # Sun position
+│   │   ├── graticule.render-service.ts   # Lat/lon grid
+│   │   ├── temp2m.render-service.ts      # Temperature viz
+│   │   ├── precipitation.render-service.ts  # Precipitation viz
+│   │   └── wind10m.render-service.ts     # Wind viz (WebGPU)
+│   └── utils/                     # Utilities
 │       └── time.ts
 ├── public/
-│   ├── data/                # Weather data (.bin files)
+│   ├── data/                      # Weather data (.bin files)
 │   ├── images/
-│   │   └── rtopo2/          # Cube map textures
-│   └── manifest.json        # PWA manifest
+│   │   └── rtopo2/                # Cube map textures
+│   └── manifest.json              # PWA manifest
 └── scripts/
-    └── download_dev_data.py # Data download script
+    └── download_dev_data.py       # Data download script
 ```
 
-## Features (Milestone 1)
+## Features
 
-- ✅ 3D Earth with high-res cube map textures
-- ✅ Sun position with accurate declination
-- ✅ Time slider (full year range)
-- ✅ Orbit controls (smooth with damping)
-- ✅ Touch gestures (iPad support)
-- ✅ Fullscreen mode
-- ❌ Weather visualization (coming in next milestone)
+**3D Visualization:**
+- High-res Earth cube map textures (4096×4096 per face)
+- Accurate sun position with declination
+- Smooth orbit controls with damping
+- Touch gestures (iPad optimized)
+- Fullscreen mode
+
+**Weather Layers:**
+- Temperature (2m above surface)
+- Precipitation
+- Wind (10m above surface) - WebGPU compute shader with 16,384 animated streamlines
+- Graticule (lat/lon grid)
+
+**Time Controls:**
+- Full year range slider
+- Minute-accurate interpolation between timesteps
+- Blend slider for smooth transitions
+- Mouse wheel scrubbing
+
+**Data Architecture:**
+- Direct ECMWF data access (no backend required)
+- Partial downloads via byte-range requests (92.5% bandwidth savings)
+- Custom FP16 binary format decoder
+- Layer-based architecture with separation between data loading and rendering
 
 ## Controls
 
@@ -80,6 +116,8 @@ code/
 - **Mouse wheel**: Zoom in/out
 - **Wheel on slider**: Scrub time
 - **Two-finger pinch**: Zoom (iPad)
+- **Layer toggles**: Show/hide visualization layers
+- **Blend slider**: Control timestep interpolation
 - **Button**: Toggle fullscreen
 
 ## Data Format
@@ -106,10 +144,10 @@ Using **strict mode** with:
 ### Code Quality Rules
 
 **From CLAUDE.md:**
-- ❌ No defensive default parameters
-- ✅ Fail fast and explicit
-- ✅ Let TypeScript catch errors
-- ✅ Minimize `any` and type casting
+- No defensive default parameters
+- Fail fast and explicit
+- Let TypeScript catch errors
+- Minimize `any` and type casting
 
 ### Browser Testing
 
@@ -135,13 +173,29 @@ public/images/rtopo2/
 
 Each face: 4096 × 4096 pixels
 
+## Architecture
+
+**Layer System:**
+- `ILayer` interface defines layer contract (update, visibility, render distance)
+- `LayerFactory` creates layers polymorphically
+- Separation: `layers/` (data loading) vs `visualization/` (rendering)
+- TimeSeriesLayer base class for weather data layers
+
+**WebGPU Wind Visualization:**
+- Compute shader traces 16,384 wind streamlines
+- ~3.4ms per frame on M4 chip
+- Snake animation via color channel encoding
+- LineSegments2 for high-quality line rendering
+
+**Data Services:**
+- `DataService` coordinates all weather data
+- ECMWF direct S3 access with CORS support
+- Byte-range partial downloads (8.4MB vs 117MB per file)
+- FP16 decoder for efficient binary format
+
 ## Attribution
 
 Weather data: ECMWF IFS model
 - License: CC-BY-4.0
 - Required attribution: "Generated using Copernicus Climate Change Service information 2025"
 - Data source: https://www.ecmwf.int/en/forecasts/datasets/open-data
-
-## Next Steps
-
-See `FIRST_MILESTONE.md` for current development goals.
