@@ -44,6 +44,10 @@ export class Wind10mRenderService implements ILayer {
   private outputBuffer: GPUBuffer | null = null;
   private stagingBuffer: GPUBuffer | null = null;
   private windBuffers: GPUBuffer[] = [];
+  private blendBuffer: GPUBuffer | null = null;
+
+  // Bind group cache: key = "index0-index1", value = bind group
+  private bindGroupCache = new Map<string, GPUBindGroup>();
 
   // State
   private lastTimeIndex: number = -1;
@@ -327,6 +331,12 @@ export class Wind10mRenderService implements ILayer {
       compute: { module: shaderModule, entryPoint: 'main' },
     });
 
+    // Create reusable blend uniform buffer
+    this.blendBuffer = this.device.createBuffer({
+      size: 4,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+
     console.log('✅ WebGPU compute pipeline ready');
   }
 
@@ -422,26 +432,30 @@ export class Wind10mRenderService implements ILayer {
   private async doUpdate(index0: number, index1: number, blend: number): Promise<void> {
     const startTime = performance.now();
 
-    // Create blend uniform buffer
-    const blendBuffer = this.device.createBuffer({
-      size: 4,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    });
-    this.device.queue.writeBuffer(blendBuffer, 0, new Float32Array([blend]));
+    // Update blend uniform buffer (reuse instead of creating new)
+    this.device.queue.writeBuffer(this.blendBuffer!, 0, new Float32Array([blend]));
 
-    // Create bind group with current timestep data
-    const bindGroup = this.device.createBindGroup({
-      layout: this.bindGroupLayout!,
-      entries: [
-        { binding: 0, resource: { buffer: this.seedBuffer! } },
-        { binding: 1, resource: { buffer: this.outputBuffer! } },
-        { binding: 2, resource: { buffer: this.windBuffers[index0 * 2] } },      // U0
-        { binding: 3, resource: { buffer: this.windBuffers[index0 * 2 + 1] } },  // V0
-        { binding: 4, resource: { buffer: this.windBuffers[index1 * 2] } },      // U1
-        { binding: 5, resource: { buffer: this.windBuffers[index1 * 2 + 1] } },  // V1
-        { binding: 6, resource: { buffer: blendBuffer } },
-      ],
-    });
+    // Check bind group cache for this timestep pair
+    const cacheKey = `${index0}-${index1}`;
+    let bindGroup = this.bindGroupCache.get(cacheKey);
+    const wasInCache = !!bindGroup;
+
+    if (!bindGroup) {
+      // Create and cache bind group for this timestep pair
+      bindGroup = this.device.createBindGroup({
+        layout: this.bindGroupLayout!,
+        entries: [
+          { binding: 0, resource: { buffer: this.seedBuffer! } },
+          { binding: 1, resource: { buffer: this.outputBuffer! } },
+          { binding: 2, resource: { buffer: this.windBuffers[index0 * 2] } },      // U0
+          { binding: 3, resource: { buffer: this.windBuffers[index0 * 2 + 1] } },  // V0
+          { binding: 4, resource: { buffer: this.windBuffers[index1 * 2] } },      // U1
+          { binding: 5, resource: { buffer: this.windBuffers[index1 * 2 + 1] } },  // V1
+          { binding: 6, resource: { buffer: this.blendBuffer! } },
+        ],
+      });
+      this.bindGroupCache.set(cacheKey, bindGroup);
+    }
 
     // Execute compute shader
     const commandEncoder = this.device.createCommandEncoder();
@@ -476,7 +490,8 @@ export class Wind10mRenderService implements ILayer {
     const submitMs = submitTime - startTime;
     const mapMs = mapTime - submitTime;
     const geomMs = geometryTime - mapTime;
-    // console.log(`GPU ${this.seeds.length} lines: tot ${totalTime.toFixed(1)}, sub: ${submitMs.toFixed(1)}, map: ${mapMs.toFixed(1)}, geo: ${geomMs.toFixed(1)}`);
+    const cacheHit = wasInCache ? '✓ cache' : 'created';
+    console.log(`🌬️  Wind update: ${totalTime.toFixed(1)}ms [submit: ${submitMs.toFixed(1)}ms, map: ${mapMs.toFixed(1)}ms, geom: ${geomMs.toFixed(1)}ms] bindGroup: ${cacheHit}`);
   }
 
   /**
@@ -982,6 +997,28 @@ export class Wind10mRenderService implements ILayer {
     if (this.material) {
       this.material.dispose();
     }
-    // GPU buffers will be cleaned up automatically
+
+    // Clean up WebGPU resources
+    this.bindGroupCache.clear();
+    if (this.blendBuffer) {
+      this.blendBuffer.destroy();
+      this.blendBuffer = null;
+    }
+    if (this.seedBuffer) {
+      this.seedBuffer.destroy();
+      this.seedBuffer = null;
+    }
+    if (this.outputBuffer) {
+      this.outputBuffer.destroy();
+      this.outputBuffer = null;
+    }
+    if (this.stagingBuffer) {
+      this.stagingBuffer.destroy();
+      this.stagingBuffer = null;
+    }
+    for (const buffer of this.windBuffers) {
+      buffer.destroy();
+    }
+    this.windBuffers = [];
   }
 }
