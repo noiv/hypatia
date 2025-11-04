@@ -227,16 +227,17 @@ export class Scene {
       sunLayer.setCameraPosition(this.camera.position);
     }
 
+    // Update wind layer camera direction for visibility culling
+    const windLayer = this.layers.get('wind10m') as Wind10mRenderService | undefined;
+    if (windLayer) {
+      windLayer.updateCameraDirection(this.camera.position);
+      windLayer.updateAnimation(deltaTime);
+    }
+
     // Update all layers with camera distance (polymorphic call)
     this.layers.forEach(layer => {
       layer.updateDistance(distance);
     });
-
-    // Update wind layer animation (wind-specific)
-    const windLayer = this.layers.get('wind10m') as Wind10mRenderService | undefined;
-    if (windLayer) {
-      windLayer.updateAnimation(deltaTime);
-    }
 
     // Render
     this.renderer.render(this.scene, this.camera);

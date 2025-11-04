@@ -41,9 +41,16 @@ export class Wind10mRenderService implements ILayer {
   private stagingBuffer: GPUBuffer | null = null;
   private windBuffers: GPUBuffer[] = [];
   private blendBuffer: GPUBuffer | null = null;
+  private visibleIndicesBuffer: GPUBuffer | null = null;
+  private numVisibleBuffer: GPUBuffer | null = null;
 
   // Bind group cache: key = "index0-index1", value = bind group
   private bindGroupCache = new Map<string, GPUBindGroup>();
+
+  // Camera culling
+  private cameraDirection: THREE.Vector3 = new THREE.Vector3(0, 0, 1);
+  private visibleSeeds: Uint32Array | null = null;
+  private numVisibleSeeds: number = 0;
 
   // State
   private lastTimeIndex: number = -1;
@@ -109,6 +116,22 @@ export class Wind10mRenderService implements ILayer {
       usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
     });
 
+    // Create visible indices buffer (max size = all seeds)
+    const indicesSize = this.seeds.length * 4; // uint32 per index
+    this.visibleIndicesBuffer = this.device.createBuffer({
+      size: indicesSize,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+
+    // Initialize with all indices (no culling initially)
+    const allIndices = new Uint32Array(this.seeds.length);
+    for (let i = 0; i < this.seeds.length; i++) {
+      allIndices[i] = i;
+    }
+    this.device.queue.writeBuffer(this.visibleIndicesBuffer, 0, allIndices);
+    this.visibleSeeds = allIndices;
+    this.numVisibleSeeds = this.seeds.length;
+
     // Shader code
     const shaderCode = `
       struct Seed {
@@ -123,6 +146,7 @@ export class Wind10mRenderService implements ILayer {
       @group(0) @binding(4) var<storage, read> windU1: array<u32>;
       @group(0) @binding(5) var<storage, read> windV1: array<u32>;
       @group(0) @binding(6) var<uniform> blend: f32;
+      @group(0) @binding(7) var<storage, read> visibleIndices: array<u32>;
 
       const WIDTH: u32 = 1441u;
       const HEIGHT: u32 = 721u;
@@ -240,14 +264,17 @@ export class Wind10mRenderService implements ILayer {
 
       @compute @workgroup_size(64)
       fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-        let seedIdx = global_id.x;
-        if (seedIdx >= arrayLength(&seeds)) { return; }
+        let visibleIdx = global_id.x;
+        if (visibleIdx >= arrayLength(&visibleIndices)) { return; }
 
+        // Read actual seed index from visible indices buffer
+        let seedIdx = visibleIndices[visibleIdx];
         var pos = seeds[seedIdx].position;
         var normPos = normalize(pos);
 
         // Output first vertex: starting position on sphere
-        output[seedIdx * 32u] = vec4f(pos, 1.0);
+        // Write to compact output array (based on visibleIdx, not seedIdx)
+        output[visibleIdx * 32u] = vec4f(pos, 1.0);
 
         // Trace wind flow using Rodrigues rotation to stay on sphere
         for (var step = 1u; step < 32u; step++) {
@@ -273,7 +300,7 @@ export class Wind10mRenderService implements ILayer {
 
           // Skip if wind is too weak to avoid numerical issues
           if (windSpeed < 0.001) {
-            output[seedIdx * 32u + step] = vec4f(pos, 1.0);
+            output[visibleIdx * 32u + step] = vec4f(pos, 1.0);
             continue;
           }
 
@@ -298,9 +325,9 @@ export class Wind10mRenderService implements ILayer {
           if (isValid) {
             pos = newPos;
             normPos = normalize(pos);
-            output[seedIdx * 32u + step] = vec4f(pos, 1.0);
+            output[visibleIdx * 32u + step] = vec4f(pos, 1.0);
           } else {
-            output[seedIdx * 32u + step] = vec4f(pos, 1.0);
+            output[visibleIdx * 32u + step] = vec4f(pos, 1.0);
           }
         }
       }
@@ -318,6 +345,7 @@ export class Wind10mRenderService implements ILayer {
         { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
         { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
         { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
+        { binding: 7, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
       ],
     });
 
@@ -389,6 +417,39 @@ export class Wind10mRenderService implements ILayer {
   }
 
   /**
+   * Update camera direction for visibility culling
+   */
+  updateCameraDirection(cameraPosition: THREE.Vector3): void {
+    // Camera direction is from origin (center of sphere) to camera
+    this.cameraDirection.copy(cameraPosition).normalize();
+
+    // Calculate which seeds are camera-facing (dot product > 0)
+    const visibleIndices: number[] = [];
+    for (let i = 0; i < this.seeds.length; i++) {
+      const seed = this.seeds[i];
+      const seedNormal = new THREE.Vector3(seed.x, seed.y, seed.z).normalize();
+
+      // Seed is visible if its normal points towards camera (dot > 0)
+      if (seedNormal.dot(this.cameraDirection) > 0) {
+        visibleIndices.push(i);
+      }
+    }
+
+    // Update visible seeds buffer if count changed
+    if (visibleIndices.length !== this.numVisibleSeeds) {
+      this.numVisibleSeeds = visibleIndices.length;
+      this.visibleSeeds = new Uint32Array(visibleIndices);
+
+      if (this.device && this.visibleIndicesBuffer) {
+        this.device.queue.writeBuffer(this.visibleIndicesBuffer, 0, this.visibleSeeds);
+      }
+
+      // Clear bind group cache since visible set changed
+      this.bindGroupCache.clear();
+    }
+  }
+
+  /**
    * Update wind lines for current time using WebGPU compute (async version)
    */
   async updateTimeAsync(currentTime: Date): Promise<void> {
@@ -447,6 +508,7 @@ export class Wind10mRenderService implements ILayer {
           { binding: 4, resource: { buffer: this.windBuffers[index1 * 2] } },      // U1
           { binding: 5, resource: { buffer: this.windBuffers[index1 * 2 + 1] } },  // V1
           { binding: 6, resource: { buffer: this.blendBuffer! } },
+          { binding: 7, resource: { buffer: this.visibleIndicesBuffer! } },
         ],
       });
       this.bindGroupCache.set(cacheKey, bindGroup);
@@ -458,12 +520,14 @@ export class Wind10mRenderService implements ILayer {
     passEncoder.setPipeline(this.pipeline);
     passEncoder.setBindGroup(0, bindGroup);
 
-    const numWorkgroups = Math.ceil(this.seeds.length / 64);
+    // Dispatch only for visible seeds (culling optimization)
+    const numWorkgroups = Math.ceil(this.numVisibleSeeds / 64);
     passEncoder.dispatchWorkgroups(numWorkgroups);
     passEncoder.end();
 
     // Copy results to staging buffer (vec4 = 4 floats per vertex)
-    const outputSize = this.seeds.length * Wind10mRenderService.LINE_STEPS * 4 * 4;
+    // Only copy visible lines to reduce GPU->CPU transfer
+    const outputSize = this.numVisibleSeeds * Wind10mRenderService.LINE_STEPS * 4 * 4;
     commandEncoder.copyBufferToBuffer(this.outputBuffer!, 0, this.stagingBuffer!, 0, outputSize);
     this.device.queue.submit([commandEncoder.finish()]);
 
@@ -486,15 +550,16 @@ export class Wind10mRenderService implements ILayer {
     const mapMs = mapTime - submitTime;
     const geomMs = geometryTime - mapTime;
     const cacheHit = wasInCache ? '✓ cache' : 'created';
-    console.log(`🌬️  Wind update: ${totalTime.toFixed(1)}ms [submit: ${submitMs.toFixed(1)}ms, map: ${mapMs.toFixed(1)}ms, geom: ${geomMs.toFixed(1)}ms] bindGroup: ${cacheHit}`);
+    const cullPct = ((1 - this.numVisibleSeeds / this.seeds.length) * 100).toFixed(0);
+    console.log(`🌬️  Wind update: ${totalTime.toFixed(1)}ms [submit: ${submitMs.toFixed(1)}ms, map: ${mapMs.toFixed(1)}ms, geom: ${geomMs.toFixed(1)}ms] bindGroup: ${cacheHit}, culled: ${cullPct}% (${this.numVisibleSeeds}/${this.seeds.length})`);
   }
 
   /**
    * Update LineSegments2 geometry with computed vertices
    */
   private updateGeometry(vertices: Float32Array): void {
-    // Allocate arrays once and reuse them
-    const numSegments = this.seeds.length * (Wind10mRenderService.LINE_STEPS - 1);
+    // Allocate arrays based on visible seeds count
+    const numSegments = this.numVisibleSeeds * (Wind10mRenderService.LINE_STEPS - 1);
     const arraySize = numSegments * 6;
 
     if (!this.cachedPositions || this.cachedPositions.length !== arraySize) {
@@ -508,7 +573,7 @@ export class Wind10mRenderService implements ILayer {
     const cycleLength = Wind10mRenderService.LINE_STEPS + Wind10mRenderService.SNAKE_LENGTH;
     const totalSegments = Wind10mRenderService.LINE_STEPS - 1;
 
-    // Generate random offsets once and cache them
+    // Generate random offsets once and cache them (for all seeds, indexed by actual seed ID)
     if (!this.cachedRandomOffsets) {
       this.cachedRandomOffsets = new Float32Array(this.seeds.length);
       for (let i = 0; i < this.seeds.length; i++) {
@@ -519,8 +584,11 @@ export class Wind10mRenderService implements ILayer {
     let posIdx = 0;
     let colorIdx = 0;
 
-    for (let lineIdx = 0; lineIdx < this.seeds.length; lineIdx++) {
-      const randomOffset = this.cachedRandomOffsets[lineIdx];
+    // Process only visible lines
+    for (let lineIdx = 0; lineIdx < this.numVisibleSeeds; lineIdx++) {
+      // Get actual seed index from visible seeds array to use consistent random offset
+      const actualSeedIdx = this.visibleSeeds ? this.visibleSeeds[lineIdx] : lineIdx;
+      const randomOffset = this.cachedRandomOffsets[actualSeedIdx];
       const offset = lineIdx * Wind10mRenderService.LINE_STEPS * 4; // vec4 = 4 floats
       const normalizedOffset = randomOffset / cycleLength;
 
@@ -974,6 +1042,10 @@ export class Wind10mRenderService implements ILayer {
     if (this.blendBuffer) {
       this.blendBuffer.destroy();
       this.blendBuffer = null;
+    }
+    if (this.visibleIndicesBuffer) {
+      this.visibleIndicesBuffer.destroy();
+      this.visibleIndicesBuffer = null;
     }
     if (this.seedBuffer) {
       this.seedBuffer.destroy();
