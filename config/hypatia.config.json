@@ -15,7 +15,9 @@
     "defaultCenter": [0, 0],
     "defaultZoom": 2,
     "maxZoom": 8,
-    "minZoom": 1
+    "minZoom": 1,
+    "defaultAltitude": 19113000,
+    "defaultLayers": ["earth", "sun", "graticule"]
   },
   "performance": {
     "workerCount": 4,

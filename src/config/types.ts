@@ -21,6 +21,8 @@ export interface HypatiaConfig {
     defaultZoom: number;
     maxZoom: number;
     minZoom: number;
+    defaultAltitude: number;
+    defaultLayers: string[];
   };
   performance: {
     workerCount: number;

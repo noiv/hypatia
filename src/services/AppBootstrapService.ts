@@ -8,6 +8,7 @@ import { getCurrentTime } from './TimeService';
 import { getLatestRun, type ECMWFRun } from './ECMWFService';
 import { preloadImages, type LoadProgress } from './ResourceManager';
 import { getUserLocation, type UserLocation } from './GeolocationService';
+import { detectLocale, formatLocaleInfo, type LocaleInfo } from './LocaleService';
 import { LayerStateService } from './LayerStateService';
 import { UrlLayerSyncService } from './UrlLayerSyncService';
 import { configLoader } from '../config';
@@ -24,6 +25,7 @@ export interface BootstrapState {
   currentTime: Date | null;
   latestRun: ECMWFRun | null;
   userLocation: UserLocation | null;
+  localeInfo: LocaleInfo | null;
   preloadedImages: Map<string, HTMLImageElement> | null;
 }
 
@@ -73,8 +75,18 @@ export class AppBootstrapService {
       }
     },
 
-    CONFIG: {
+    LOCALE: {
       start: 5,
+      end: 7,
+      label: 'Detecting locale...',
+      async run(state) {
+        state.localeInfo = detectLocale();
+        console.log(formatLocaleInfo(state.localeInfo));
+      }
+    },
+
+    CONFIG: {
+      start: 7,
       end: 10,
       label: 'Loading configurations...',
       async run() {
@@ -274,6 +286,7 @@ export class AppBootstrapService {
       currentTime: null,
       latestRun: null,
       userLocation: null,
+      localeInfo: null,
       preloadedImages: null
     };
 

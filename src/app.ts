@@ -224,9 +224,27 @@ export const App: AppComponent = {
     if (result.bootstrapStatus === 'ready') {
       // Get layer state (already initialized in bootstrap)
       this.state.layerState = LayerStateService.getInstance();
+
+      // Re-sanitize URL with bootstrap state (locale, geolocation)
+      // If URL has default (0,0), update with locale-based default
+      if (result.localeInfo && window.location.search.includes('ll=0.000,0.000')) {
+        const sanitizedState = sanitizeUrl(result, true);  // Force use of bootstrap camera position
+        this.state.currentTime = sanitizedState.time;
+
+        // Update scene camera to new position
+        if (this.state.scene) {
+          this.state.scene.setCameraState(sanitizedState.camera, sanitizedState.camera.distance);
+        }
+      }
     }
 
-    console.log('[HYPATIA_LOADED]');
+    // Log loaded with memory
+    if ((performance as any).memory) {
+      const mem = (performance as any).memory;
+      console.log(`[HYPATIA_LOADED] Mem: ${(mem.usedJSHeapSize / 1024 / 1024).toFixed(1)}MB / ${(mem.totalJSHeapSize / 1024 / 1024).toFixed(1)}MB`);
+    } else {
+      console.log('[HYPATIA_LOADED]');
+    }
 
     m.redraw();
   },
@@ -375,6 +393,11 @@ export const App: AppComponent = {
   },
 
   view() {
+    // Guard against view being called before oninit completes
+    if (!this.state) {
+      return m('div.loading', 'Initializing...');
+    }
+
     const { bootstrapStatus, bootstrapProgress, bootstrapError, currentTime } = this.state;
 
     // Show bootstrap modal during loading or error

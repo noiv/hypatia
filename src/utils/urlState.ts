@@ -20,8 +20,15 @@ export interface AppUrlState {
   layers: string[];
 }
 
+export interface PartialUrlState {
+  time?: Date;
+  camera?: { x: number; y: number; z: number; distance: number };
+  layers?: string[];
+}
+
 /**
  * Parse URL search params to get application state
+ * Returns full state if all params present, null if URL empty
  */
 export function parseUrlState(): AppUrlState | null {
   const search = window.location.search.substring(1);
@@ -73,6 +80,55 @@ export function parseUrlState(): AppUrlState | null {
   const layers = layersStr ? layersStr.split(',').map(l => l.trim()).filter(l => l.length > 0) : [];
 
   return { time, camera, layers };
+}
+
+/**
+ * Parse partial URL state (returns what's available)
+ */
+export function parsePartialUrlState(): PartialUrlState {
+  const search = window.location.search.substring(1);
+  if (!search) {
+    return {};
+  }
+
+  const params = new URLSearchParams(search);
+  const partial: PartialUrlState = {};
+
+  // Parse time if present
+  const dtStr = params.get('dt');
+  if (dtStr) {
+    const time = parseDateFromUrl(dtStr);
+    if (time) {
+      partial.time = time;
+    }
+  }
+
+  // Parse altitude and lat/lon if both present
+  const altStr = params.get('alt');
+  const llStr = params.get('ll');
+  if (altStr && llStr) {
+    const altitudeMeters = parseFloat(altStr);
+    const latLon = parseLatLonFromUrl(llStr);
+
+    if (!isNaN(altitudeMeters) && latLon) {
+      const cameraDistance = altitudeToDistance(altitudeMeters);
+      const cameraPositionVec = latLonToCartesian(latLon.lat, latLon.lon, cameraDistance);
+      partial.camera = {
+        x: cameraPositionVec.x,
+        y: cameraPositionVec.y,
+        z: cameraPositionVec.z,
+        distance: cameraDistance
+      };
+    }
+  }
+
+  // Parse layers if present
+  const layersStr = params.get('layers');
+  if (layersStr) {
+    partial.layers = layersStr.split(',').map(l => l.trim()).filter(l => l.length > 0);
+  }
+
+  return partial;
 }
 
 /**
