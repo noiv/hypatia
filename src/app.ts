@@ -112,10 +112,67 @@ export const App: AppComponent = {
       // Arrow keys: adjust time
       if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
         e.preventDefault();
-        const delta = e.code === 'ArrowLeft' ? -1 : 1;
-        const newTime = new Date(currentTime.getTime() + delta * 60 * 60 * 1000);
-        const clampedTime = clampTimeToDataRange(newTime);
+        const direction = e.code === 'ArrowLeft' ? -1 : 1;
 
+        let newTime: Date;
+
+        if (e.ctrlKey || e.metaKey) {
+          // Ctrl/Cmd + Arrow: Jump by 24 hours
+          newTime = new Date(currentTime.getTime() + direction * 24 * 60 * 60 * 1000);
+        } else if (e.shiftKey) {
+          // Shift + Arrow: Jump to next full 10 minutes
+          const minutes = currentTime.getMinutes();
+          const seconds = currentTime.getSeconds();
+          const milliseconds = currentTime.getMilliseconds();
+
+          // Calculate how many minutes to next 10-minute mark
+          const currentMinuteInCycle = minutes % 10;
+          let minutesToAdd: number;
+
+          if (direction > 0) {
+            // Forward: go to next 10-minute mark
+            minutesToAdd = currentMinuteInCycle === 0 && seconds === 0 && milliseconds === 0
+              ? 10  // Already on mark, go to next
+              : 10 - currentMinuteInCycle;
+          } else {
+            // Backward: go to previous 10-minute mark
+            minutesToAdd = currentMinuteInCycle === 0 && seconds === 0 && milliseconds === 0
+              ? -10  // Already on mark, go to previous
+              : -currentMinuteInCycle;
+          }
+
+          newTime = new Date(currentTime);
+          newTime.setMinutes(minutes + minutesToAdd, 0, 0);
+        } else {
+          // Arrow alone: Jump to next full hour
+          const minutes = currentTime.getMinutes();
+          const seconds = currentTime.getSeconds();
+          const milliseconds = currentTime.getMilliseconds();
+
+          if (direction > 0) {
+            // Forward: go to next full hour
+            if (minutes === 0 && seconds === 0 && milliseconds === 0) {
+              // Already on full hour, go to next hour
+              newTime = new Date(currentTime.getTime() + 60 * 60 * 1000);
+            } else {
+              // Round up to next hour
+              newTime = new Date(currentTime);
+              newTime.setHours(currentTime.getHours() + 1, 0, 0, 0);
+            }
+          } else {
+            // Backward: go to previous full hour
+            if (minutes === 0 && seconds === 0 && milliseconds === 0) {
+              // Already on full hour, go to previous hour
+              newTime = new Date(currentTime.getTime() - 60 * 60 * 1000);
+            } else {
+              // Round down to current hour
+              newTime = new Date(currentTime);
+              newTime.setMinutes(0, 0, 0);
+            }
+          }
+        }
+
+        const clampedTime = clampTimeToDataRange(newTime);
         this.state.currentTime = clampedTime;
         if (scene) {
           scene.updateTime(clampedTime);

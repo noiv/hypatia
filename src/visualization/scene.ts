@@ -5,8 +5,8 @@ import type { LayerRenderState } from '../config/types';
 import type { ILayer, LayerId } from './ILayer';
 import type { AnimationState } from './AnimationState';
 import { LayerFactory } from './LayerFactory';
-import type { SunRenderService } from './sun.render-service';
 import type { EarthRenderService } from './earth.render-service';
+import type { SunRenderService } from './sun.render-service';
 import { TextRenderService } from './text.render-service';
 import * as perform from '../utils/performance';
 import { mouseToNDC, raycastObject, cartesianToLatLon } from '../utils/raycasting';
@@ -362,13 +362,6 @@ export class Scene {
     // Store and add to scene
     this.layers.set(layerId, layer);
     this.scene.add(layer.getSceneObject());
-
-    // Special handling for sun layer - add directional light
-    if (layerId === 'sun') {
-      const sunLayer = layer as SunRenderService;
-      this.scene.add(sunLayer.getLight());
-      this.scene.add(sunLayer.getLight().target);
-    }
 
     return true;
   }

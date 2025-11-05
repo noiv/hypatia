@@ -104,10 +104,12 @@ export class SunRenderService implements ILayer {
     this.layerId = layerId;
     this.sun = sun;
 
-    // Create group containing sun (and optionally atmosphere)
+    // Create group containing sun, light, and optionally atmosphere
     this.group = new THREE.Group();
     this.group.name = 'SunRenderService';
     this.group.add(this.sun.mesh);
+    this.group.add(this.sun.getLight());
+    this.group.add(this.sun.getLight().target);
 
     // Atmosphere shader - disabled by default (not ready)
     if (enableAtmosphere) {
