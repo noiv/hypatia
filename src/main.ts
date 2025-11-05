@@ -1,5 +1,6 @@
 import m from 'mithril';
 import { App } from './app';
+import '../public/styles.css';
 
 // Log initial load with memory
 if ((performance as any).memory) {

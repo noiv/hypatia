@@ -5,18 +5,26 @@
  */
 
 import m from 'mithril';
+
+import * as perform from './utils/performance';
+
+import type { AppState } from './state/AppState';
+
+import { configLoader } from './config';
+
 import { Scene } from './visualization/scene';
+
 import { TimeSlider } from './components/TimeSlider';
 import { Controls } from './components/Controls';
 import { BootstrapModal } from './components/BootstrapModal';
-import { parseUrlState, debouncedUpdateUrlState } from './utils/urlState';
+
 import { sanitizeUrl } from './utils/sanitizeUrl';
 import { clampTimeToDataRange } from './utils/timeUtils';
-import { configLoader } from './config';
-import type { AppState } from './state/AppState';
+import { WheelGestureDetector } from './utils/wheelGestureDetector';
+import { parseUrlState, debouncedUpdateUrlState } from './utils/urlState';
+
 import { LayerStateService } from './services/LayerStateService';
 import { AppBootstrapService } from './services/AppBootstrapService';
-import { WheelGestureDetector } from './utils/wheelGestureDetector';
 
 interface AppComponent extends m.Component {
   state: AppState;
@@ -35,6 +43,7 @@ interface AppComponent extends m.Component {
   updateUrl(): void;
   handleLayerToggle(layerId: string): Promise<void>;
   renderControls(): m.Vnode<any, any> | null;
+  renderPerformance(): m.Vnode<any, any> | null;
   handleReferenceClick(): void;
 }
 
@@ -103,7 +112,7 @@ export const App: AppComponent = {
       // Arrow keys: adjust time
       if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
         e.preventDefault();
-        const delta = e.code === 'ArrowLeft' ? -6 : 6;
+        const delta = e.code === 'ArrowLeft' ? -1 : 1;
         const newTime = new Date(currentTime.getTime() + delta * 60 * 60 * 1000);
         const clampedTime = clampTimeToDataRange(newTime);
 
@@ -135,17 +144,26 @@ export const App: AppComponent = {
         if (e.code === 'Equal' || e.code === 'NumpadAdd') {
           e.preventDefault();
           if (scene) {
-            scene.getTextService().increaseFontSize();
+            const textService = scene.getTextService();
+            if (textService) {
+              textService.increaseFontSize();
+            }
           }
         } else if (e.code === 'Minus' || e.code === 'NumpadSubtract') {
           e.preventDefault();
           if (scene) {
-            scene.getTextService().decreaseFontSize();
+            const textService = scene.getTextService();
+            if (textService) {
+              textService.decreaseFontSize();
+            }
           }
         } else if (e.code === 'Digit0' || e.code === 'Numpad0') {
           e.preventDefault();
           if (scene) {
-            scene.getTextService().resetFontSize();
+            const textService = scene.getTextService();
+            if (textService) {
+              textService.resetFontSize();
+            }
           }
         }
       }
@@ -168,7 +186,7 @@ export const App: AppComponent = {
     canvas.addEventListener('click', this._clickHandler);
 
     // Wheel events - App handles horizontal scroll for time change
-    // OrbitControls handles vertical scroll for zoom (disabled during horizontal gestures)
+    // OrbitControls handles vertical scroll for zoom (only when over Earth)
     this._wheelHandler = (e: WheelEvent) => {
       if (!this._wheelGestureDetector) return;
 
@@ -199,7 +217,19 @@ export const App: AppComponent = {
         this.updateUrl();
         m.redraw();
       }
-      // Vertical scroll is handled by OrbitControls (enabled by default)
+      // Handle vertical scroll (zoom) - only when over Earth
+      else if (gestureMode === 'vertical') {
+        const isOverEarth = scene.checkMouseOverEarth(e.clientX, e.clientY);
+        if (!isOverEarth) {
+          e.preventDefault();
+          scene.toggleControls(false);
+          // Re-enable on next gesture reset
+        }
+        // If over Earth, ensure controls are enabled for zoom
+        else {
+          scene.toggleControls(true);
+        }
+      }
     };
     canvas.addEventListener('wheel', this._wheelHandler, { passive: false });
 
@@ -285,8 +315,7 @@ export const App: AppComponent = {
       return;
     }
 
-    // Filter out 'text' - it's not a real layer, just a state flag
-    const layersToLoad = urlState.layers.filter(l => l !== 'text');
+    const layersToLoad = urlState.layers;
 
     if (layersToLoad.length > 0) {
       console.log(`Bootstrap.loading: ${layersToLoad.join(', ')}`);
@@ -310,7 +339,7 @@ export const App: AppComponent = {
     // This ensures earth/temp2m get correct sun direction (zero if sun not loaded)
     scene.updateTime(this.state.currentTime);
 
-    // Apply text enabled state from URL (broadcasts to all layers)
+    // Apply text enabled state (text layer must be created first)
     if (this.state.textEnabled) {
       scene.setTextEnabled(true);
     }
@@ -447,6 +476,7 @@ export const App: AppComponent = {
 
         // Controls
         this.renderControls(),
+        this.renderPerformance(),
 
         // Time Slider
         m(TimeSlider, {
@@ -470,6 +500,19 @@ export const App: AppComponent = {
         })
       ])
     ]);
+  },
+
+  renderPerformance() {
+    return m('.performance',
+      m('.info', {
+        oncreate: (vnode: any) => {
+          // Pass DOM reference to scene for direct updates
+          if (this.state.scene) {
+            this.state.scene.setPerformanceElement(vnode.dom as HTMLElement);
+          }
+        }
+      }, perform.line())
+    );
   },
 
   renderControls() {
@@ -539,9 +582,17 @@ export const App: AppComponent = {
         await this.handleLayerToggle('graticule');
       },
       showText: textEnabled,
-      onTextToggle: () => {
+      onTextToggle: async () => {
         this.state.textEnabled = !this.state.textEnabled;
         if (scene) {
+          if (this.state.textEnabled) {
+            // Create text layer if not exists, then enable
+            await scene.createLayer('text');
+            scene.setLayerVisible('text', true);
+          } else {
+            // Disable text layer
+            scene.setLayerVisible('text', false);
+          }
           scene.setTextEnabled(this.state.textEnabled);
         }
         this.updateUrl();

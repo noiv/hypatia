@@ -1,14 +1,15 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-// import { latLonToCartesian } from '../utils/coordinates';
 import { DataService } from '../services/DataService';
 import type { LayerRenderState } from '../config/types';
 import type { ILayer, LayerId } from './ILayer';
+import type { AnimationState } from './AnimationState';
 import { LayerFactory } from './LayerFactory';
 import type { SunRenderService } from './sun.render-service';
 import type { EarthRenderService } from './earth.render-service';
-import type { Wind10mRenderService } from './wind10m.render-service';
 import { TextRenderService } from './text.render-service';
+import * as perform from '../utils/performance';
+import { mouseToNDC, raycastObject, cartesianToLatLon } from '../utils/raycasting';
 
 export class Scene {
   private scene: THREE.Scene;
@@ -21,11 +22,12 @@ export class Scene {
   private animationId: number | null = null;
   private onCameraChangeCallback: (() => void) | null = null;
   private raycaster: THREE.Raycaster;
-  private mouseOverEarth: boolean = false;
   private lastFrameTime: number = performance.now();
   private stats: any;
+  private perform: any;
+  private performanceElement: HTMLElement | null = null;
   private dataService: DataService;
-  private textService: TextRenderService;
+  private textEnabled: boolean = false;
 
   constructor(canvas: HTMLCanvasElement, preloadedImages?: Map<string, HTMLImageElement>) {
     this.dataService = new DataService();
@@ -70,6 +72,9 @@ export class Scene {
     this.stats.dom.style.right = '0px';
     document.body.appendChild(this.stats.dom);
 
+    // high-res performance render measurements
+    this.perform = perform;
+
     // Controls - smooth with damping for "mass" feeling
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
@@ -83,10 +88,6 @@ export class Scene {
     // Ambient light (dim) so dark side isn't completely black
     const ambient = new THREE.AmbientLight(0x404040, 0.4);
     this.scene.add(ambient);
-
-    // Text rendering service
-    this.textService = new TextRenderService();
-    this.scene.add(this.textService.getSceneObject());
 
     // Add axes helpers
     this.addAxesHelpers();
@@ -153,127 +154,117 @@ export class Scene {
     this.renderer.setSize(width, height);
 
     // Update Line2 material resolution for wind layer
-    const windLayer = this.layers.get('wind10m') as Wind10mRenderService | undefined;
-    if (windLayer) {
-      windLayer.setResolution(width, height);
+    const windLayer = this.layers.get('wind10m');
+    if (windLayer && 'setResolution' in windLayer && typeof (windLayer as any).setResolution === 'function') {
+      (windLayer as any).setResolution(width, height);
     }
   };
 
-  onMouseDown = (e: MouseEvent) => {
-    // Check if mouse is over Earth
-    this.checkEarthIntersection(e.clientX, e.clientY);
+  onMouseDown = (_e: MouseEvent) => {
+    // Reserved for future use (cursor changes, drag detection, etc.)
   };
 
   onClick = (e: MouseEvent) => {
-    const canvas = this.renderer.domElement;
-    const rect = canvas.getBoundingClientRect();
-
-    // Convert to normalized device coordinates (-1 to +1)
-    const mouse = new THREE.Vector2(
-      ((e.clientX - rect.left) / rect.width) * 2 - 1,
-      -((e.clientY - rect.top) / rect.height) * 2 + 1
-    );
-
-    // Update raycaster
-    this.raycaster.setFromCamera(mouse, this.camera);
-
-    // Check intersection with Earth mesh
     const earthLayer = this.layers.get('earth');
     if (!earthLayer) return;
 
-    const earthObject = earthLayer.getSceneObject();
-    const intersects = this.raycaster.intersectObject(earthObject, false);
+    const mouse = mouseToNDC(e.clientX, e.clientY, this.renderer.domElement);
+    const intersection = raycastObject(mouse, this.camera, earthLayer.getSceneObject(), this.raycaster);
 
-    if (intersects.length > 0) {
-      // Click detected on Earth - log lat/lon for debugging
-      const point = intersects[0]?.point;
-      if (point) {
-        // Convert cartesian to lat/lon
-        const x = point.x;
-        const y = point.y;
-        const z = point.z;
-
-        const lat = Math.asin(y) * (180 / Math.PI);
-        const lon = Math.atan2(z, x) * (180 / Math.PI);
-
-        console.log(`🌍 Clicked: Lat=${lat.toFixed(2)}°, Lon=${lon.toFixed(2)}°`);
-      }
+    if (intersection?.point) {
+      const { lat, lon } = cartesianToLatLon(intersection.point);
+      console.log(`🌍 Clicked: Lat=${lat.toFixed(2)}°, Lon=${lon.toFixed(2)}°`);
     }
-  };
-
-  private animate = () => {
-    this.stats.begin();
-
-    this.animationId = requestAnimationFrame(this.animate);
-
-    // Calculate delta time
-    const currentTime = performance.now();
-    const deltaTime = (currentTime - this.lastFrameTime) / 1000; // Convert to seconds
-    this.lastFrameTime = currentTime;
-
-    // Adjust rotation speed based on altitude above surface
-    // Makes mouse pointer "stick" to same location while dragging
-    const distance = this.camera.position.length();
-    const altitude = distance - 1.0; // altitude above Earth surface (radius = 1)
-    const baseSpeed = 1.0;
-    this.controls.rotateSpeed = baseSpeed * altitude;
-
-    // Update controls (damping)
-    this.controls.update();
-
-    // Update sun layer camera position (for atmosphere shader if enabled)
-    const sunLayer = this.layers.get('sun') as SunRenderService | undefined;
-    if (sunLayer) {
-      sunLayer.setCameraPosition(this.camera.position);
-    }
-
-    // Update all layers with camera distance (polymorphic call)
-    this.layers.forEach(layer => {
-      layer.updateDistance(distance);
-    });
-
-    // Update wind layer animation (wind-specific)
-    const windLayer = this.layers.get('wind10m') as Wind10mRenderService | undefined;
-    if (windLayer) {
-      windLayer.updateAnimation(deltaTime);
-    }
-
-    // Render
-    this.renderer.render(this.scene, this.camera);
-
-    // Update text labels LAST (after all layers have submitted text)
-    this.textService.update(this.camera);
-
-    this.stats.end();
   };
 
   /**
-   * Update time - updates all layers polymorphically
+   *  ANIMATE
+   */
+
+  private animate = () => {
+    this.stats.begin();
+    this.perform.done('fps')
+    this.perform.start('fps')
+    this.perform.start('frame')
+
+    this.animationId = requestAnimationFrame(this.animate);
+
+    // Calculate frame timing
+    const currentTime = performance.now();
+    const deltaTime = (currentTime - this.lastFrameTime) / 1000;
+    this.lastFrameTime = currentTime;
+
+    // Update controls
+    const distance = this.camera.position.length();
+    const altitude = distance - 1.0;
+    this.controls.rotateSpeed = 1.0 * altitude;
+    this.controls.update();
+
+    // Build animation state once
+    const animState: AnimationState = {
+      time: this.currentTime,
+      deltaTime,
+      camera: {
+        position: this.camera.position,
+        distance,
+        quaternion: this.camera.quaternion
+      },
+      sunDirection: this.getSunDirection(),
+      textEnabled: this.textEnabled,
+      collectedText: new Map()
+    };
+
+    // Single iteration over sorted layers
+    this.perform.start('update');
+    const sortedLayers = this.getSortedLayers();
+    sortedLayers.forEach(layer => {
+      layer.update(animState);
+    });
+    this.perform.done('update');
+
+    // Render
+    this.perform.start('render');
+    this.renderer.render(this.scene, this.camera);
+    this.perform.done('render');
+
+    this.stats.end();
+    this.perform.done('frame');
+
+    // Update performance display directly (no Mithril redraw)
+    if (this.performanceElement) {
+      this.performanceElement.textContent = this.perform.line();
+    }
+  };
+
+  /**
+   * Update time - stores new time for next animate() frame
    */
   updateTime(time: Date) {
     this.currentTime = time;
+    // Next animate() will pick up the change
+  }
 
-    // Update all layers (polymorphic call)
-    this.layers.forEach(layer => {
-      layer.updateTime(time);
-    });
-
-    // Update sun direction for all layers (polymorphic call)
+  /**
+   * Get sun direction for lighting
+   * Returns zero vector if sun layer not present or not visible
+   */
+  private getSunDirection(): THREE.Vector3 {
     const sunLayer = this.layers.get('sun') as SunRenderService | undefined;
-
-    // Get sun direction - use neutral direction if sun layer not present or not visible
-    let sunDir: THREE.Vector3;
     if (sunLayer && sunLayer.getSceneObject().visible) {
-      sunDir = sunLayer.getSunDirection();
-    } else {
-      // No sun or sun disabled - use flat lighting (no day/night effect)
-      sunDir = new THREE.Vector3(0, 0, 0);
+      return sunLayer.getSunDirection();
     }
+    // No sun or sun disabled - use flat lighting (no day/night effect)
+    return new THREE.Vector3(0, 0, 0);
+  }
 
-    // Update all layers with sun direction (polymorphic call)
-    this.layers.forEach(layer => {
-      layer.updateSunDirection(sunDir);
-    });
+  /**
+   * Get layers sorted by updateOrder from config
+   */
+  private getSortedLayers(): ILayer[] {
+    return Array.from(this.layers.values())
+      .sort((a, b) => {
+        return a.getConfig().updateOrder - b.getConfig().updateOrder;
+      });
   }
 
   /**
@@ -326,50 +317,23 @@ export class Scene {
 
 
   /**
-   * Check if mouse position intersects Earth
-   * @param x - Mouse X in pixels
-   * @param y - Mouse Y in pixels
-   * @returns true if mouse is over Earth
-   */
-  checkEarthIntersection(x: number, y: number): boolean {
-    const canvas = this.renderer.domElement;
-    const rect = canvas.getBoundingClientRect();
-
-    // Convert to normalized device coordinates (-1 to +1)
-    const mouse = new THREE.Vector2(
-      ((x - rect.left) / rect.width) * 2 - 1,
-      -((y - rect.top) / rect.height) * 2 + 1
-    );
-
-    // Update raycaster
-    this.raycaster.setFromCamera(mouse, this.camera);
-
-    // Check intersection with Earth mesh
-    const earthLayer = this.layers.get('earth');
-    if (!earthLayer) {
-      this.mouseOverEarth = false;
-      return false;
-    }
-
-    const earthObject = earthLayer.getSceneObject();
-    const intersects = this.raycaster.intersectObject(earthObject, false);
-
-    this.mouseOverEarth = intersects.length > 0;
-    return this.mouseOverEarth;
-  }
-
-  /**
-   * Get whether mouse is currently over Earth
-   */
-  isMouseOverEarth(): boolean {
-    return this.mouseOverEarth;
-  }
-
-  /**
    * Toggle orbit controls
    */
   toggleControls(enabled: boolean) {
     this.controls.enabled = enabled;
+  }
+
+  /**
+   * Check if mouse position is over Earth
+   * Used for conditional zoom control
+   */
+  checkMouseOverEarth(clientX: number, clientY: number): boolean {
+    const earthLayer = this.layers.get('earth');
+    if (!earthLayer) return false;
+
+    const mouse = mouseToNDC(clientX, clientY, this.renderer.domElement);
+    const intersection = raycastObject(mouse, this.camera, earthLayer.getSceneObject(), this.raycaster);
+    return !!intersection;
   }
 
   // ========================================================================
@@ -406,12 +370,6 @@ export class Scene {
       this.scene.add(sunLayer.getLight().target);
     }
 
-    // Pass text service to layer (polymorphic call)
-    layer.setTextService(this.textService);
-
-    // Update with current time
-    layer.updateTime(this.currentTime);
-
     return true;
   }
 
@@ -422,11 +380,7 @@ export class Scene {
     const layer = this.layers.get(layerId);
     if (layer) {
       layer.setVisible(visible);
-
-      // Special handling: when sun visibility changes, update sun direction immediately
-      if (layerId === 'sun') {
-        this.updateTime(this.currentTime);
-      }
+      // Sun direction updates automatically on next frame via animate()
     }
   }
 
@@ -485,17 +439,24 @@ export class Scene {
   /**
    * Get text service for label management
    */
-  getTextService(): TextRenderService {
-    return this.textService;
+  getTextService(): TextRenderService | undefined {
+    const textLayer = this.layers.get('text');
+    return textLayer as TextRenderService | undefined;
   }
 
   /**
    * Set text enabled state (broadcasts to all layers)
    */
   setTextEnabled(enabled: boolean): void {
-    this.layers.forEach(layer => {
-      layer.updateTextEnabled(enabled);
-    });
+    this.textEnabled = enabled;
+    // Next animate() will pick up the change
+  }
+
+  /**
+   * Set performance display element for direct DOM updates
+   */
+  setPerformanceElement(element: HTMLElement): void {
+    this.performanceElement = element;
   }
 
   /**

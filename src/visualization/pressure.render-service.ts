@@ -11,7 +11,7 @@ import { PressureDataService, type TimeStep } from '../layers/pressure.data-serv
 import { configLoader } from '../config';
 import { PRESSURE_CONFIG } from '../config/pressure.config';
 import ContourWorker from '../workers/contourWorker?worker';
-import type { TextRenderService } from './text.render-service';
+import type { LayerId } from './ILayer';
 
 interface WorkerResponse {
   vertices: Float32Array;
@@ -27,8 +27,8 @@ export class PressureRenderService extends TimeSeriesLayer {
   private readonly worker: Worker;
   private currentRequestTimestamp: number = 0;
 
-  private constructor(timeSteps: TimeStep[]) {
-    super(timeSteps);
+  private constructor(layerId: LayerId, timeSteps: TimeStep[]) {
+    super(layerId, timeSteps);
 
     // Create material from config
     this.material = new THREE.LineBasicMaterial({
@@ -59,7 +59,7 @@ export class PressureRenderService extends TimeSeriesLayer {
   /**
    * Factory method to create pressure layer
    */
-  static async create(): Promise<PressureRenderService> {
+  static async create(layerId: LayerId): Promise<PressureRenderService> {
     // Get dataset info for pressure
     const datasetInfo = configLoader.getDatasetInfo('msl');
     if (!datasetInfo) {
@@ -76,7 +76,7 @@ export class PressureRenderService extends TimeSeriesLayer {
     // Generate timesteps
     const timeSteps = pressureDataService.generateTimeSteps();
 
-    return new PressureRenderService(timeSteps);
+    return new PressureRenderService(layerId, timeSteps);
   }
 
   /**
@@ -136,16 +136,6 @@ export class PressureRenderService extends TimeSeriesLayer {
   /**
    * Set text service (no-op - this layer doesn't produce text)
    */
-  setTextService(_textService: TextRenderService): void {
-    // No-op
-  }
-
-  /**
-   * Update text enabled state (no-op - this layer doesn't produce text)
-   */
-  updateTextEnabled(_enabled: boolean): void {
-    // No-op
-  }
 
   /**
    * Set layer visibility
@@ -159,6 +149,13 @@ export class PressureRenderService extends TimeSeriesLayer {
    */
   getSceneObject(): THREE.Object3D {
     return this.group;
+  }
+
+  /**
+   * Get layer configuration
+   */
+  getConfig() {
+    return PRESSURE_CONFIG;
   }
 
   /**

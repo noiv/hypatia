@@ -4,14 +4,14 @@ import { PRECIPITATION_CONFIG } from '../config/precipitation.config';
 import { TimeSeriesLayer } from './render-service.base';
 import type { TimeStep } from '../layers/temp2m.data-service';
 import type { DataService } from '../services/DataService';
-import type { TextRenderService } from './text.render-service';
+import type { LayerId } from './ILayer';
 
 export class PrecipitationRenderService extends TimeSeriesLayer {
   private mesh: THREE.Mesh;
   private material: THREE.ShaderMaterial;
 
-  private constructor(dataTexture: THREE.Data3DTexture, timeSteps: TimeStep[], timeStepCount: number) {
-    super(timeSteps);
+  private constructor(layerId: LayerId, dataTexture: THREE.Data3DTexture, timeSteps: TimeStep[], timeStepCount: number) {
+    super(layerId, timeSteps);
 
     // Use SphereGeometry
     const radius = EARTH_RADIUS_UNITS * (1 + PRECIPITATION_CONFIG.visual.altitudeKm / 6371);
@@ -48,9 +48,9 @@ export class PrecipitationRenderService extends TimeSeriesLayer {
   /**
    * Factory method to create PrecipitationRenderService with data loading
    */
-  static async create(dataService: DataService): Promise<PrecipitationRenderService> {
+  static async create(layerId: LayerId, dataService: DataService): Promise<PrecipitationRenderService> {
     const layerData = await dataService.loadLayer('precipitation');
-    return new PrecipitationRenderService(layerData.texture, layerData.timeSteps, layerData.timeSteps.length);
+    return new PrecipitationRenderService(layerId, layerData.texture, layerData.timeSteps, layerData.timeSteps.length);
   }
 
   // ILayer interface implementation
@@ -83,16 +83,6 @@ export class PrecipitationRenderService extends TimeSeriesLayer {
   /**
    * Set text service (no-op - this layer doesn't produce text)
    */
-  setTextService(_textService: TextRenderService): void {
-    // No-op
-  }
-
-  /**
-   * Update text enabled state (no-op - this layer doesn't produce text)
-   */
-  updateTextEnabled(_enabled: boolean): void {
-    // No-op
-  }
 
   /**
    * Show/hide layer (ILayer interface)
@@ -111,6 +101,13 @@ export class PrecipitationRenderService extends TimeSeriesLayer {
     if (this.material) {
       this.material.dispose();
     }
+  }
+
+  /**
+   * Get layer configuration
+   */
+  getConfig() {
+    return PRECIPITATION_CONFIG;
   }
 
   private getVertexShader(): string {

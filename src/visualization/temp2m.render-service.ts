@@ -4,14 +4,14 @@ import { TEMP2M_CONFIG } from '../config/temp2m.config';
 import { TimeSeriesLayer } from './render-service.base';
 import type { TimeStep } from '../layers/temp2m.data-service';
 import type { DataService } from '../services/DataService';
-import type { TextRenderService } from './text.render-service';
+import type { LayerId } from './ILayer';
 
 export class Temp2mRenderService extends TimeSeriesLayer {
   private mesh: THREE.Mesh;
   private material: THREE.ShaderMaterial;
 
-  private constructor(dataTexture: THREE.Data3DTexture, timeSteps: TimeStep[], timeStepCount: number) {
-    super(timeSteps);
+  private constructor(layerId: LayerId, dataTexture: THREE.Data3DTexture, timeSteps: TimeStep[], timeStepCount: number) {
+    super(layerId, timeSteps);
 
     // Use SphereGeometry for better vertex distribution
     // This avoids triangles spanning across the dateline
@@ -52,9 +52,9 @@ export class Temp2mRenderService extends TimeSeriesLayer {
   /**
    * Factory method to create Temp2mRenderService with data loading
    */
-  static async create(dataService: DataService): Promise<Temp2mRenderService> {
+  static async create(layerId: LayerId, dataService: DataService): Promise<Temp2mRenderService> {
     const layerData = await dataService.loadLayer('temp2m');
-    return new Temp2mRenderService(layerData.texture, layerData.timeSteps, layerData.timeSteps.length);
+    return new Temp2mRenderService(layerId, layerData.texture, layerData.timeSteps, layerData.timeSteps.length);
   }
 
   // ILayer interface implementation
@@ -78,24 +78,10 @@ export class Temp2mRenderService extends TimeSeriesLayer {
   /**
    * Update sun direction for day/night shading
    */
-  updateSunDirection(direction: THREE.Vector3) {
+  protected updateSunDirection(direction: THREE.Vector3) {
     if (this.material.uniforms.sunDirection) {
       this.material.uniforms.sunDirection.value.copy(direction);
     }
-  }
-
-  /**
-   * Set text service (no-op - this layer doesn't produce text)
-   */
-  setTextService(_textService: TextRenderService): void {
-    // No-op
-  }
-
-  /**
-   * Update text enabled state (no-op - this layer doesn't produce text)
-   */
-  updateTextEnabled(_enabled: boolean): void {
-    // No-op
   }
 
   /**
@@ -124,6 +110,13 @@ export class Temp2mRenderService extends TimeSeriesLayer {
     if (this.material) {
       this.material.dispose();
     }
+  }
+
+  /**
+   * Get layer configuration
+   */
+  getConfig() {
+    return TEMP2M_CONFIG;
   }
 
   private getVertexShader(): string {

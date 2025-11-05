@@ -446,3 +446,19 @@ html, body {
 .retry-btn:hover {
   background: rgba(255, 255, 255, 0.2);
 }
+
+div.performance {
+  display:block;
+  position: absolute;
+  top: 0;
+  left: 200px;
+  background-color: rgba(102, 102, 102, 0.669);
+  /* width: 200px; */
+}
+
+div.performance .info {
+  font-family: monospace;
+  font-size: 16px;
+  text-wrap: nowrap;
+  padding: 4px 2px;
+}

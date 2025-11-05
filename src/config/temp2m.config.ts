@@ -4,6 +4,8 @@
  */
 
 export interface Temp2mConfig {
+  /** Layer update order (lower = earlier) */
+  updateOrder: number;
   /** Temperature range in Celsius */
   tempRange: {
     min: number;
@@ -45,6 +47,7 @@ export interface Temp2mConfig {
  * Color palette matches legacy cfg.assets.js tmp2m configuration
  */
 export const TEMP2M_CONFIG: Temp2mConfig = {
+  updateOrder: 4,
   tempRange: {
     min: -30,
     max: 40,

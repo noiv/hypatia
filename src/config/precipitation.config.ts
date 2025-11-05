@@ -4,6 +4,9 @@
  */
 
 export const PRECIPITATION_CONFIG = {
+  // Layer update order (lower = earlier)
+  updateOrder: 5,
+
   // Geometry configuration
   geometry: {
     widthSegments: 180,

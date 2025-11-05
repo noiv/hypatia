@@ -6,7 +6,8 @@
  * Implements ILayer interface for polymorphic layer management
  */
 
-import type { ILayer } from './ILayer';
+import type { ILayer, LayerId } from './ILayer';
+import type { AnimationState } from './AnimationState';
 import * as THREE from 'three';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
@@ -15,13 +16,16 @@ import { EARTH_RADIUS_UNITS } from '../utils/constants';
 import { generateFibonacciSphere } from '../utils/sphereSeeds';
 import { Wind10mDataService, TimeStep } from '../layers/wind10m.data-service';
 import { configLoader } from '../config';
-import type { TextRenderService } from './text.render-service';
+import { WIND10M_CONFIG } from '../config/wind10m.config';
 
 export class Wind10mRenderService implements ILayer {
+  private layerId: LayerId;
   public group: THREE.Group;
   private seeds: THREE.Vector3[];
   private lines: LineSegments2 | THREE.Mesh | null = null;
   private material: LineMaterial | THREE.ShaderMaterial | null = null;
+  private lastTime?: Date;
+  private lastDistance?: number;
 
   // Performance mode: 'linesegments2' or 'custom'
   private static readonly USE_CUSTOM_GEOMETRY = false;
@@ -55,7 +59,8 @@ export class Wind10mRenderService implements ILayer {
   private static readonly TAPER_SEGMENTS = 4;
   private static readonly SNAKE_LENGTH = 10;
 
-  constructor(numSeeds: number = 16384) {
+  constructor(layerId: LayerId, numSeeds: number = 16384) {
+    this.layerId = layerId;
     this.group = new THREE.Group();
     this.group.name = 'wind-layer-gpu-compute';
 
@@ -832,6 +837,36 @@ export class Wind10mRenderService implements ILayer {
   // ILayer interface implementation
 
   /**
+   * Update layer based on animation state
+   */
+  update(state: AnimationState): void {
+    // Check time change
+    if (!this.lastTime || state.time.getTime() !== this.lastTime.getTime()) {
+      this.updateTimeAsync(state.time).catch(err => {
+        console.error('Failed to update wind layer:', err);
+      });
+      this.lastTime = state.time;
+    }
+
+    // Check distance change
+    if (this.lastDistance !== state.camera.distance) {
+      this.updateLineWidth(state.camera.distance);
+      this.lastDistance = state.camera.distance;
+    }
+
+    // Update animation
+    if (this.material && state.deltaTime > 0) {
+      const animationSpeed = 20.0;
+      const cycleLength = Wind10mRenderService.LINE_STEPS + Wind10mRenderService.SNAKE_LENGTH;
+      this.animationPhase = (this.animationPhase + state.deltaTime * animationSpeed) % cycleLength;
+
+      if ('animationPhase' in this.material.uniforms) {
+        this.material.uniforms.animationPhase.value = this.animationPhase;
+      }
+    }
+  }
+
+  /**
    * Update layer based on current time
    * Delegates to async updateTimeAsync for GPU compute
    */
@@ -925,25 +960,19 @@ export class Wind10mRenderService implements ILayer {
     }
   }
 
-  updateAnimation(deltaTime: number): void {
-    if (!this.material) return;
-
-    const animationSpeed = 20.0;
-    const cycleLength = Wind10mRenderService.LINE_STEPS + Wind10mRenderService.SNAKE_LENGTH;
-    this.animationPhase = (this.animationPhase + deltaTime * animationSpeed) % cycleLength;
-
-    const uniforms = (this.material as any).uniforms;
-    if (uniforms?.animationPhase) {
-      uniforms.animationPhase.value = this.animationPhase;
-    }
-  }
-
   getNumSeeds(): number {
     return this.seeds.length;
   }
 
   getLineWidth(): number | undefined {
     return this.material?.linewidth;
+  }
+
+  /**
+   * Get layer configuration
+   */
+  getConfig() {
+    return WIND10M_CONFIG;
   }
 
   dispose(): void {

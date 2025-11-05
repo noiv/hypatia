@@ -6,6 +6,9 @@
  */
 
 export const TEXT_CONFIG = {
+  // Layer update order (text layer runs last)
+  updateOrder: 100,
+
   // Font settings
   font: {
     // Inter: Modern sans-serif optimized for screen reading

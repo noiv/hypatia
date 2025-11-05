@@ -5,41 +5,31 @@
  */
 
 import type * as THREE from 'three';
-import type { TextRenderService } from './text.render-service';
+import type { AnimationState } from './AnimationState';
+
+/**
+ * Base layer config - all layer configs must include these fields
+ */
+export interface LayerConfig {
+  updateOrder: number;
+  [key: string]: any; // Allow additional config properties
+}
 
 /**
  * Base interface that all layers must implement
  */
 export interface ILayer {
   /**
-   * Update layer based on current time
+   * Update layer state based on animation frame data
+   *
+   * Layers should:
+   * - Check what changed (compare to cached values)
+   * - Perform necessary updates (textures, geometry, etc.)
+   * - Optionally add text labels to state.collectedText
+   *
+   * @param state - Immutable animation state for this frame
    */
-  updateTime(time: Date): void;
-
-  /**
-   * Update layer based on camera distance from origin
-   * Used for distance-dependent effects (e.g., line width)
-   */
-  updateDistance(distance: number): void;
-
-  /**
-   * Update sun direction for lighting
-   * Layers that don't use sun direction should implement as no-op
-   */
-  updateSunDirection(sunDir: THREE.Vector3): void;
-
-  /**
-   * Set text service reference for submitting text labels
-   * Layers that don't produce text should implement as no-op
-   */
-  setTextService(textService: TextRenderService): void;
-
-  /**
-   * Update text enabled state
-   * Layers that produce text should generate/clear labels based on this state
-   * Layers that don't produce text should implement as no-op
-   */
-  updateTextEnabled(enabled: boolean): void;
+  update(state: AnimationState): void;
 
   /**
    * Set layer visibility
@@ -57,6 +47,11 @@ export interface ILayer {
   getSceneObject(): THREE.Object3D;
 
   /**
+   * Get layer configuration
+   */
+  getConfig(): LayerConfig;
+
+  /**
    * Clean up resources
    */
   dispose(): void;
@@ -72,4 +67,5 @@ export type LayerId =
   | 'temp2m'
   | 'precipitation'
   | 'wind10m'
-  | 'pressure';
+  | 'pressure'
+  | 'text';

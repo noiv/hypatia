@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { EARTH_RADIUS_UNITS } from '../utils/constants';
 import { EARTH_CONFIG } from '../config/earth.config';
-import type { ILayer } from './ILayer';
-import type { TextRenderService } from './text.render-service';
+import type { ILayer, LayerId } from './ILayer';
+import type { AnimationState } from './AnimationState';
 
 /**
  * Earth - Earth mesh with basemap textures and day/night lighting
@@ -196,35 +196,34 @@ class Earth {
  */
 export class EarthRenderService implements ILayer {
   private earth: Earth;
+  private layerId: LayerId;
+  private lastSunDirection?: THREE.Vector3;
 
-  private constructor(earth: Earth) {
+  private constructor(layerId: LayerId, earth: Earth) {
+    this.layerId = layerId;
     this.earth = earth;
   }
 
   /**
    * Factory method to create EarthRenderService
    */
-  static async create(preloadedImages?: Map<string, HTMLImageElement>): Promise<EarthRenderService> {
+  static async create(layerId: LayerId, preloadedImages?: Map<string, HTMLImageElement>): Promise<EarthRenderService> {
     const earth = new Earth(preloadedImages);
-    return new EarthRenderService(earth);
+    return new EarthRenderService(layerId, earth);
   }
 
   // ILayer interface implementation
 
   /**
-   * Update layer based on current time
-   * Earth doesn't change with time, but must implement interface
+   * Update layer based on animation state
    */
-  updateTime(_time: Date): void {
-    // No-op - Earth doesn't change with time
-  }
-
-  /**
-   * Update layer based on camera distance
-   * Earth doesn't change with distance, but must implement interface
-   */
-  updateDistance(_distance: number): void {
-    // No-op - Earth doesn't change with distance
+  update(state: AnimationState): void {
+    // Check sun direction change
+    if (!this.lastSunDirection || !this.lastSunDirection.equals(state.sunDirection)) {
+      this.earth.setSunDirection(state.sunDirection);
+      this.lastSunDirection = state.sunDirection.clone();
+    }
+    // Earth doesn't need time or distance updates
   }
 
   /**
@@ -249,30 +248,16 @@ export class EarthRenderService implements ILayer {
   }
 
   /**
+   * Get layer configuration
+   */
+  getConfig() {
+    return EARTH_CONFIG;
+  }
+
+  /**
    * Set basemap blend (0.0 = first basemap, 1.0 = second basemap)
    */
   setBlend(blend: number): void {
     this.earth.setBlend(blend);
-  }
-
-  /**
-   * Update sun direction for lighting calculation
-   */
-  updateSunDirection(direction: THREE.Vector3): void {
-    this.earth.setSunDirection(direction);
-  }
-
-  /**
-   * Set text service (no-op - this layer doesn't produce text)
-   */
-  setTextService(_textService: TextRenderService): void {
-    // No-op
-  }
-
-  /**
-   * Update text enabled state (no-op - this layer doesn't produce text)
-   */
-  updateTextEnabled(_enabled: boolean): void {
-    // No-op
   }
 }
