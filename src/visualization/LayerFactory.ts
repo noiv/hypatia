@@ -8,6 +8,7 @@ import { Temp2mRenderService } from './temp2m.render-service';
 import { PrecipitationRenderService } from './precipitation.render-service';
 import { Wind10mRenderService } from './wind10m.render-service';
 import { PressureRenderService } from './pressure.render-service';
+import { TextRenderService } from './text.render-service';
 
 /**
  * LayerFactory - Polymorphic factory for creating all layer types
@@ -34,29 +35,32 @@ export class LayerFactory {
   ): Promise<ILayer> {
     switch (layerId) {
       case 'earth':
-        return EarthRenderService.create(preloadedImages);
+        return EarthRenderService.create(layerId, preloadedImages);
 
       case 'sun':
-        return SunRenderService.create(currentTime, false); // Atmosphere shader disabled (not ready)
+        return SunRenderService.create(layerId, currentTime, false); // Atmosphere shader disabled (not ready)
 
       case 'graticule':
-        return GraticuleRenderService.create();
+        return GraticuleRenderService.create(layerId);
 
       case 'temp2m':
-        return Temp2mRenderService.create(dataService);
+        return Temp2mRenderService.create(layerId, dataService);
 
       case 'precipitation':
-        return PrecipitationRenderService.create(dataService);
+        return PrecipitationRenderService.create(layerId, dataService);
 
       case 'wind10m':
         // Renderer guaranteed to exist (WebGL2 checked during bootstrap)
-        const windLayer = new Wind10mRenderService();
+        const windLayer = new Wind10mRenderService(layerId);
         await windLayer.initGPU(renderer!);
         await windLayer.loadWindData();
         return windLayer;
 
       case 'pressure':
-        return PressureRenderService.create();
+        return PressureRenderService.create(layerId);
+
+      case 'text':
+        return TextRenderService.create(layerId);
 
       default:
         // TypeScript exhaustiveness check
@@ -69,7 +73,7 @@ export class LayerFactory {
    * Get list of all available layer IDs
    */
   static getAllLayerIds(): LayerId[] {
-    return ['earth', 'sun', 'graticule', 'temp2m', 'precipitation', 'wind10m', 'pressure'];
+    return ['earth', 'sun', 'graticule', 'temp2m', 'precipitation', 'wind10m', 'pressure', 'text'];
   }
 
   /**
@@ -84,6 +88,6 @@ export class LayerFactory {
    * Get optional layers that can be toggled by user
    */
   static getOptionalLayers(): LayerId[] {
-    return ['earth', 'sun', 'graticule', 'temp2m', 'precipitation', 'wind10m', 'pressure'];
+    return ['earth', 'sun', 'graticule', 'temp2m', 'precipitation', 'wind10m', 'pressure', 'text'];
   }
 }

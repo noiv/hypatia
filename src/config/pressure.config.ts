@@ -4,6 +4,9 @@
  */
 
 export const PRESSURE_CONFIG = {
+  // Layer update order (lower = earlier)
+  updateOrder: 7,
+
   // Data grid dimensions (2° resolution with wrapping column)
   grid: {
     width: 181,   // 180 + 1 wrapping column for dateline continuity

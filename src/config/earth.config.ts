@@ -3,6 +3,8 @@
  */
 
 export interface EarthConfig {
+  /** Layer update order (lower = earlier) */
+  updateOrder: number;
   /** Geometry settings for cubed sphere */
   geometry: {
     /** Segments per box edge (creates cubed sphere when normalized) */
@@ -29,6 +31,7 @@ export interface EarthConfig {
  * Default Earth basemap configuration
  */
 export const EARTH_CONFIG: EarthConfig = {
+  updateOrder: 1,
   geometry: {
     segments: 16, // 16×16×16 cubed sphere
   },

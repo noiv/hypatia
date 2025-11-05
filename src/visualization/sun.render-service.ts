@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { EARTH_RADIUS_UNITS } from '../utils/constants';
 import { ATMOSPHERE_CONFIG } from '../config/atmosphere.config';
 import { calculateSunPosition } from '../utils/time';
-import type { ILayer } from './ILayer';
-import type { TextRenderService } from './text.render-service';
+import type { ILayer, LayerId } from './ILayer';
+import type { AnimationState } from './AnimationState';
 
 /**
  * Sun - Sun mesh and lighting
@@ -92,18 +92,24 @@ class Sun {
 export class SunRenderService implements ILayer {
   private sun: Sun;
   private group: THREE.Group;
+  private layerId: LayerId;
+  private lastTime?: Date;
+  private lastCameraPosition?: THREE.Vector3;
 
   // Atmosphere mesh (disabled - shader not ready)
   private atmosphereMesh?: THREE.Mesh;
   private atmosphereMaterial?: THREE.ShaderMaterial;
 
-  private constructor(sun: Sun, enableAtmosphere: boolean = false) {
+  private constructor(layerId: LayerId, sun: Sun, enableAtmosphere: boolean = false) {
+    this.layerId = layerId;
     this.sun = sun;
 
-    // Create group containing sun (and optionally atmosphere)
+    // Create group containing sun, light, and optionally atmosphere
     this.group = new THREE.Group();
     this.group.name = 'SunRenderService';
     this.group.add(this.sun.mesh);
+    this.group.add(this.sun.getLight());
+    this.group.add(this.sun.getLight().target);
 
     // Atmosphere shader - disabled by default (not ready)
     if (enableAtmosphere) {
@@ -150,10 +156,10 @@ export class SunRenderService implements ILayer {
    * @param currentTime - Initial time for sun position
    * @param enableAtmosphere - Enable atmosphere shader (default: false, not ready)
    */
-  static async create(currentTime: Date, enableAtmosphere: boolean = false): Promise<SunRenderService> {
+  static async create(layerId: LayerId, currentTime: Date, enableAtmosphere: boolean = false): Promise<SunRenderService> {
     const sun = new Sun();
     sun.updatePosition(currentTime);
-    const layer = new SunRenderService(sun, enableAtmosphere);
+    const layer = new SunRenderService(layerId, sun, enableAtmosphere);
     if (layer.atmosphereMesh) {
       layer.setSunPosition(sun.mesh.position);
     }
@@ -163,43 +169,25 @@ export class SunRenderService implements ILayer {
   // ILayer interface implementation
 
   /**
-   * Update layer based on current time
+   * Update layer based on animation state
    */
-  updateTime(time: Date): void {
-    this.sun.updatePosition(time);
-    if (this.atmosphereMesh) {
-      this.setSunPosition(this.sun.mesh.position);
+  update(state: AnimationState): void {
+    // Check time change
+    if (!this.lastTime || state.time.getTime() !== this.lastTime.getTime()) {
+      this.sun.updatePosition(state.time);
+      if (this.atmosphereMesh) {
+        this.setSunPosition(this.sun.mesh.position);
+      }
+      this.lastTime = state.time;
     }
-  }
 
-  /**
-   * Update layer based on camera distance
-   * Sun doesn't change with distance, but must implement interface
-   */
-  updateDistance(_distance: number): void {
-    // No-op - Sun doesn't change with distance
-  }
-
-  /**
-   * Update sun direction
-   * Sun doesn't consume sun direction (it is the sun!)
-   */
-  updateSunDirection(_sunDir: THREE.Vector3): void {
-    // No-op - Sun is the light source
-  }
-
-  /**
-   * Set text service (no-op - this layer doesn't produce text)
-   */
-  setTextService(_textService: TextRenderService): void {
-    // No-op
-  }
-
-  /**
-   * Update text enabled state (no-op - this layer doesn't produce text)
-   */
-  updateTextEnabled(_enabled: boolean): void {
-    // No-op
+    // Check camera position change for atmosphere shader
+    if (this.atmosphereMaterial?.uniforms.viewPosition) {
+      if (!this.lastCameraPosition || !this.lastCameraPosition.equals(state.camera.position)) {
+        this.atmosphereMaterial.uniforms.viewPosition.value.copy(state.camera.position);
+        this.lastCameraPosition = state.camera.position.clone();
+      }
+    }
   }
 
   /**
@@ -230,6 +218,13 @@ export class SunRenderService implements ILayer {
   }
 
   /**
+   * Get layer configuration
+   */
+  getConfig() {
+    return ATMOSPHERE_CONFIG;
+  }
+
+  /**
    * Update sun position for atmospheric scattering (if atmosphere enabled)
    */
   setSunPosition(position: THREE.Vector3) {
@@ -238,14 +233,6 @@ export class SunRenderService implements ILayer {
     }
   }
 
-  /**
-   * Update camera position for ray origin (if atmosphere enabled)
-   */
-  setCameraPosition(position: THREE.Vector3) {
-    if (this.atmosphereMaterial?.uniforms.viewPosition) {
-      this.atmosphereMaterial.uniforms.viewPosition.value.copy(position);
-    }
-  }
 
   /**
    * Get the directional light for scene lighting

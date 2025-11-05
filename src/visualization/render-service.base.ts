@@ -5,7 +5,8 @@
  */
 
 import type * as THREE from 'three';
-import type { ILayer } from './ILayer';
+import type { ILayer, LayerId } from './ILayer';
+import type { AnimationState } from './AnimationState';
 import type { TimeStep } from '../layers/temp2m.data-service';
 
 /**
@@ -13,48 +14,40 @@ import type { TimeStep } from '../layers/temp2m.data-service';
  */
 export abstract class TimeSeriesLayer implements ILayer {
   protected timeSteps: TimeStep[];
+  protected layerId: LayerId;
+  protected lastTime?: Date;
+  protected lastSunDirection?: THREE.Vector3;
 
-  constructor(timeSteps: TimeStep[]) {
+  constructor(layerId: LayerId, timeSteps: TimeStep[]) {
+    this.layerId = layerId;
     this.timeSteps = timeSteps;
   }
 
   /**
-   * Update layer based on current time
-   * Calculates time index and delegates to setTimeIndex
+   * Update layer based on animation state
+   * Delegates to subclass hooks for specific changes
    */
-  updateTime(time: Date): void {
-    const timeIndex = this.calculateTimeIndex(time);
-    this.setTimeIndex(timeIndex);
-  }
+  update(state: AnimationState): void {
+    // Check time change
+    if (!this.lastTime || state.time.getTime() !== this.lastTime.getTime()) {
+      const timeIndex = this.calculateTimeIndex(state.time);
+      this.setTimeIndex(timeIndex);
+      this.lastTime = state.time;
+    }
 
-  /**
-   * Update layer based on camera distance
-   * Default implementation is no-op; subclasses can override if needed
-   */
-  updateDistance(_distance: number): void {
-    // No-op - time series layers don't change with distance by default
+    // Check sun direction change (if subclass uses it)
+    if (!this.lastSunDirection || !this.lastSunDirection.equals(state.sunDirection)) {
+      this.updateSunDirection(state.sunDirection);
+      this.lastSunDirection = state.sunDirection.clone();
+    }
   }
 
   /**
    * Update sun direction for lighting
    * Default implementation is no-op; subclasses can override if needed
    */
-  updateSunDirection(_sunDir: THREE.Vector3): void {
-    // No-op - time series layers don't use sun direction by default
-  }
-
-  /**
-   * Set text service (no-op - time series layers don't produce text by default)
-   */
-  setTextService(_textService: any): void {
-    // No-op - time series layers don't produce text
-  }
-
-  /**
-   * Update text enabled state (no-op - time series layers don't produce text by default)
-   */
-  updateTextEnabled(_enabled: boolean): void {
-    // No-op - time series layers don't produce text
+  protected updateSunDirection(_sunDir: THREE.Vector3): void {
+    // No-op - subclasses override if they use sun direction
   }
 
   /**
@@ -106,5 +99,6 @@ export abstract class TimeSeriesLayer implements ILayer {
   abstract setTimeIndex(index: number): void;
   abstract setVisible(visible: boolean): void;
   abstract getSceneObject(): THREE.Object3D;
+  abstract getConfig(): any;
   abstract dispose(): void;
 }

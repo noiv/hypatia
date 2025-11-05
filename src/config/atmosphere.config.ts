@@ -5,6 +5,9 @@
  */
 
 export const ATMOSPHERE_CONFIG = {
+  // Layer update order (sun layer uses this config)
+  updateOrder: 2,
+
   // Geometry configuration
   geometry: {
     widthSegments: 64,

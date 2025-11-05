@@ -5,17 +5,17 @@
  */
 
 import * as THREE from 'three';
-import type { ILayer } from './ILayer';
+import type { ILayer, LayerId } from './ILayer';
+import type { AnimationState } from './AnimationState';
 import { latLonToCartesian } from '../utils/coordinates';
-import type { TextRenderService, TextLabel } from './text.render-service';
+import type { TextLabel } from './text.render-service';
 import { TEXT_CONFIG } from '../config/text.config';
+import { GRATICULE_CONFIG } from '../config/graticule.config';
 
 interface GraticuleConfig {
   color?: number;
   opacity?: number;
   radius?: number;
-  textService?: TextRenderService;
-  showLabels?: boolean;
 }
 
 /**
@@ -30,15 +30,17 @@ const LOD_LEVELS = [
 ];
 
 export class GraticuleRenderService implements ILayer {
+  private layerId: LayerId;
   private group: THREE.Group;
   private lineSegments: THREE.LineSegments | null = null;
   private material: THREE.LineBasicMaterial;
   private currentLOD: number = -1;
   private readonly radius: number;
-  private textService: TextRenderService | null = null;
-  private textEnabled: boolean = false;
+  private lastDistance?: number;
+  private lastSubmittedLOD: number = -1;
 
-  constructor(config: GraticuleConfig = {}) {
+  constructor(layerId: LayerId, config: GraticuleConfig = {}) {
+    this.layerId = layerId;
     this.group = new THREE.Group();
     this.group.name = 'graticule';
 
@@ -56,10 +58,6 @@ export class GraticuleRenderService implements ILayer {
       depthWrite: false   // Don't write to depth buffer to avoid z-fighting
     });
 
-    // Text service for labels
-    this.textService = config.textService ?? null;
-    this.textEnabled = config.showLabels ?? false;
-
     // Start with medium LOD
     this.rebuildGeometry(1);
   }
@@ -67,22 +65,45 @@ export class GraticuleRenderService implements ILayer {
   /**
    * Factory method to create GraticuleRenderService
    */
-  static async create(config?: GraticuleConfig): Promise<GraticuleRenderService> {
-    return new GraticuleRenderService(config);
+  static async create(layerId: LayerId, config?: GraticuleConfig): Promise<GraticuleRenderService> {
+    return new GraticuleRenderService(layerId, config);
   }
 
   /**
-   * Update time (no-op for graticule)
+   * Update layer based on animation state
    */
-  updateTime(_time: Date): void {
-    // No-op - graticule doesn't change with time
+  update(state: AnimationState): void {
+    // Check distance change for LOD
+    if (this.lastDistance !== state.camera.distance) {
+      this.updateDistanceLOD(state.camera.distance);
+      this.lastDistance = state.camera.distance;
+    }
+
+    // Submit text labels if enabled and layer is visible
+    if (state.textEnabled && this.group.visible && this.currentLOD >= 0) {
+      if (this.currentLOD !== this.lastSubmittedLOD) {
+        const level = LOD_LEVELS[this.currentLOD];
+        if (level) {
+          const labels = this.generateLabels(level.latStep, level.lonStep);
+          state.collectedText.set(this.layerId, labels);
+          this.lastSubmittedLOD = this.currentLOD;
+        }
+      } else {
+        // LOD hasn't changed, but still need to submit to keep labels alive
+        const level = LOD_LEVELS[this.currentLOD];
+        if (level) {
+          const labels = this.generateLabels(level.latStep, level.lonStep);
+          state.collectedText.set(this.layerId, labels);
+        }
+      }
+    }
   }
 
   /**
    * Update based on camera distance
    * Switches LOD levels and updates line width
    */
-  updateDistance(distance: number): void {
+  private updateDistanceLOD(distance: number): void {
     // Determine LOD level
     let lodLevel = 0;
     for (let i = 0; i < LOD_LEVELS.length; i++) {
@@ -97,11 +118,6 @@ export class GraticuleRenderService implements ILayer {
     if (lodLevel !== this.currentLOD) {
       this.rebuildGeometry(lodLevel);
       this.currentLOD = lodLevel;
-
-      // Update labels when LOD changes
-      if (this.textEnabled) {
-        this.updateLabels();
-      }
     }
 
     // Update line width based on distance (not supported in WebGL LineBasicMaterial)
@@ -112,9 +128,6 @@ export class GraticuleRenderService implements ILayer {
   /**
    * Update sun direction (no-op for graticule)
    */
-  updateSunDirection(_sunDir: THREE.Vector3): void {
-    // No-op - graticule doesn't use lighting
-  }
 
   /**
    * Set layer visibility
@@ -140,46 +153,25 @@ export class GraticuleRenderService implements ILayer {
   /**
    * Set text service for labels
    */
-  setTextService(textService: TextRenderService): void {
-    this.textService = textService;
-    // Don't call updateLabels() here - wait for updateTextEnabled() to be called
-  }
 
   /**
    * Update text enabled state (broadcast from Scene)
    */
-  updateTextEnabled(enabled: boolean): void {
-    this.textEnabled = enabled;
-    if (enabled) {
-      this.updateLabels();
-    } else {
-      this.clearLabels();
-    }
+
+  /**
+   * Get layer configuration
+   */
+  getConfig() {
+    return GRATICULE_CONFIG;
   }
 
   /**
    * Clear labels
    */
-  private clearLabels(): void {
-    if (this.textService) {
-      this.textService.clearLabels('graticule');
-    }
-  }
 
   /**
    * Update labels based on current LOD
    */
-  private updateLabels(): void {
-    if (!this.textService || !this.textEnabled) {
-      return;
-    }
-
-    const config = LOD_LEVELS[this.currentLOD];
-    if (!config) return;
-
-    const labels = this.generateLabels(config.latStep, config.lonStep);
-    this.textService.setLabels('graticule', labels);
-  }
 
   /**
    * Generate labels for lat/lon grid intersections
@@ -248,7 +240,6 @@ export class GraticuleRenderService implements ILayer {
    * Clean up resources
    */
   dispose(): void {
-    this.clearLabels();
     if (this.lineSegments) {
       this.lineSegments.geometry.dispose();
     }

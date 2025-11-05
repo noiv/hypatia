@@ -13,6 +13,8 @@
 import * as THREE from 'three';
 import { Text } from 'troika-three-text';
 import { TEXT_CONFIG } from '../config/text.config';
+import type { ILayer, LayerId } from './ILayer';
+import type { AnimationState } from './AnimationState';
 
 export interface TextLabel {
   text: string;
@@ -22,14 +24,17 @@ export interface TextLabel {
 
 /**
  * TextRenderService manages text labels in the 3D scene
+ * Implements ILayer to be called last in update order
  */
-export class TextRenderService {
+export class TextRenderService implements ILayer {
+  private layerId: LayerId;
   private group: THREE.Group;
   private labels: Map<string, Text[]> = new Map(); // layerId -> Text objects
   private fontSize: number;
   private fontUrl: string;
 
-  constructor() {
+  private constructor(layerId: LayerId) {
+    this.layerId = layerId;
     this.group = new THREE.Group();
     this.group.name = 'text-labels';
     this.group.renderOrder = 2000; // Render on top of everything
@@ -39,6 +44,13 @@ export class TextRenderService {
 
     // Pre-load font
     this.loadFont();
+  }
+
+  /**
+   * Factory method to create TextRenderService
+   */
+  static async create(layerId: LayerId): Promise<TextRenderService> {
+    return new TextRenderService(layerId);
   }
 
   /**
@@ -129,14 +141,46 @@ export class TextRenderService {
   }
 
   /**
+   * ILayer update method - called every frame
+   * Consumes state.collectedText from other layers and updates text labels
+   */
+  update(state: AnimationState): void {
+    if (state.textEnabled) {
+      // Update text service with collected labels from other layers
+      // Only update if label count changed (avoid recreating every frame)
+      state.collectedText.forEach((labels, layerId) => {
+        const existing = this.labels.get(layerId);
+        if (!existing || existing.length !== labels.length) {
+          this.setLabels(layerId, labels);
+        }
+      });
+
+      // Clear labels for layers that didn't submit text this frame
+      const existingLayerIds = Array.from(this.labels.keys());
+      for (const layerId of existingLayerIds) {
+        if (!state.collectedText.has(layerId)) {
+          this.clearLabels(layerId);
+        }
+      }
+    } else {
+      // Text disabled - clear all labels
+      const existingLayerIds = Array.from(this.labels.keys());
+      for (const layerId of existingLayerIds) {
+        this.clearLabels(layerId);
+      }
+    }
+
+    // Update text rendering (billboard, culling, distance scaling)
+    this.updateTextRendering(state.camera.position, state.camera.quaternion);
+  }
+
+  /**
    * Update text rendering based on camera
    * - Apply billboard behavior (face camera)
    * - Apply culling (hide labels behind globe)
    * - Scale each label's fontSize based on its distance from camera
    */
-  update(camera: THREE.Camera): void {
-    // Get camera position
-    const cameraPos = camera.position;
+  private updateTextRendering(cameraPos: THREE.Vector3, cameraQuaternion: THREE.Quaternion): void {
     const referenceDistance = 3.0; // Reference viewing distance
 
     // Update all labels
@@ -144,7 +188,7 @@ export class TextRenderService {
       for (const text of textObjects) {
         // Billboard: make text face camera
         if (TEXT_CONFIG.billboard.enabled) {
-          text.quaternion.copy(camera.quaternion);
+          text.quaternion.copy(cameraQuaternion);
         }
 
         // Calculate distance from camera to THIS specific label
@@ -168,6 +212,13 @@ export class TextRenderService {
         }
       }
     }
+  }
+
+  /**
+   * Set layer visibility (ILayer interface)
+   */
+  setVisible(visible: boolean): void {
+    this.group.visible = visible;
   }
 
   /**
@@ -211,6 +262,13 @@ export class TextRenderService {
    */
   getSceneObject(): THREE.Group {
     return this.group;
+  }
+
+  /**
+   * Get layer configuration
+   */
+  getConfig() {
+    return TEXT_CONFIG;
   }
 
   /**
