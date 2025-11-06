@@ -46,9 +46,13 @@ export const EARTH_CONFIG: EarthConfig = {
         path: '/images/basemaps/rtopo2',
       },
       {
-        name: 'gmlc',
-        path: '/images/basemaps/gmlc',
+        name: 'marble',
+        path: '/images/basemaps/marble',
       },
+      // {
+      //   name: 'gmlc',
+      //   path: '/images/basemaps/gmlc',
+      // },
     ],
   },
 };
