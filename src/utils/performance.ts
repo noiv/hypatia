@@ -16,19 +16,28 @@ export const measurements: Record<TTask, TData> = {
     fps:    { last: 0, stamp: 0, buffer: createRingBuffer(60) },
 }
 
-function trim(num: number): string {
-    return ('0000' + Math.round(num * 10) / 10).slice(-4);
+function trimMs(num: number): string {
+    // Format as XX.X (4 characters: 00.0 to 99.9)
+    const rounded = Math.round(num * 10) / 10;
+    return rounded.toFixed(1).padStart(4, '0');
+}
+
+function trimFps(num: number): string {
+    // Convert milliseconds to FPS: 1000 / ms
+    // Format as XXX (3 characters: " 60" or "120")
+    const fps = num > 0 ? Math.round(1000 / num) : 0;
+    return fps.toString().padStart(3, ' ');
 }
 
 export function line () {
 
-    const upd = trim(measurements.update.buffer.avg());
-    const ren = trim(measurements.render.buffer.avg());
-    const frm = trim(measurements.frame.buffer.avg());
+    const upd = trimMs(measurements.update.buffer.avg());
+    const ren = trimMs(measurements.render.buffer.avg());
+    const frm = trimMs(measurements.frame.buffer.avg());
 
-    // needs fps/second tramsform
-    const fps = trim(measurements.fps.buffer.avg());
-    
+    // Convert time between frames (ms) to FPS
+    const fps = trimFps(measurements.fps.buffer.avg());
+
     return `upd: ${upd} ren: ${ren} frm: ${frm} fps: ${fps}`
 
 }

@@ -49,6 +49,14 @@ export class Wind10mRenderService implements ILayer {
   // Bind group cache: key = "index0-index1", value = bind group
   private bindGroupCache = new Map<string, GPUBindGroup>();
 
+  // Camera-facing culling
+  private visibleSeeds: Uint32Array | null = null;  // Indices of camera-facing seeds
+  private visibleCount: number = 0;
+  private lastCameraPosition: THREE.Vector3 = new THREE.Vector3();
+  private visibleSeedBuffer: GPUBuffer | null = null;
+  private visibleOutputBuffer: GPUBuffer | null = null;
+  private visibleStagingBuffer: GPUBuffer | null = null;
+
   // State
   private lastTimeIndex: number = -1;
   private animationPhase: number = 0;
@@ -394,15 +402,56 @@ export class Wind10mRenderService implements ILayer {
   }
 
   /**
+   * Calculate which seeds are camera-facing
+   * Returns array of visible seed indices
+   *
+   * NOTE: Currently culls at geometry stage (CPU). For better performance,
+   * could implement GPU-side culling with compact seed buffer and indirect dispatch,
+   * which would skip compute entirely for back-facing seeds and reduce GPU->CPU transfer.
+   */
+  private calculateVisibleSeeds(cameraPosition: THREE.Vector3): { indices: Uint32Array, count: number } {
+    // Normalize camera direction (from origin to camera)
+    const cameraDir = cameraPosition.clone().normalize();
+
+    // Allocate buffer for visible indices if needed
+    if (!this.visibleSeeds || this.visibleSeeds.length !== this.seeds.length) {
+      this.visibleSeeds = new Uint32Array(this.seeds.length);
+    }
+
+    let count = 0;
+    for (let i = 0; i < this.seeds.length; i++) {
+      // Normalize seed position (direction from origin to seed)
+      const seedDir = this.seeds[i].clone().normalize();
+
+      // Dot product > 0 means seed is on camera-facing hemisphere
+      const dot = seedDir.dot(cameraDir);
+
+      if (dot > 0) {
+        this.visibleSeeds[count++] = i;
+      }
+    }
+
+    return { indices: this.visibleSeeds, count };
+  }
+
+  /**
    * Update wind lines for current time using WebGPU compute (async version)
    */
-  async updateTimeAsync(currentTime: Date): Promise<void> {
+  async updateTimeAsync(currentTime: Date, cameraPosition: THREE.Vector3): Promise<void> {
     if (this.timesteps.length === 0 || !this.device || !this.pipeline || !this.dataService) return;
 
     const timeIndex = this.dataService.timeToIndex(currentTime, this.timesteps);
 
+    // Check if camera moved significantly (recalculate visible seeds)
+    const cameraMoved = this.lastCameraPosition.distanceToSquared(cameraPosition) > 0.01;
+    if (cameraMoved) {
+      this.lastCameraPosition.copy(cameraPosition);
+      const { indices, count } = this.calculateVisibleSeeds(cameraPosition);
+      this.visibleCount = count;
+    }
+
     // Only recompute if time changed significantly
-    if (Math.abs(timeIndex - this.lastTimeIndex) < 0.001) {
+    if (Math.abs(timeIndex - this.lastTimeIndex) < 0.001 && !cameraMoved) {
       return;
     }
 
@@ -491,16 +540,37 @@ export class Wind10mRenderService implements ILayer {
     const mapMs = mapTime - submitTime;
     const geomMs = geometryTime - mapTime;
     const cacheHit = wasInCache ? '✓ cache' : 'created';
-    console.log(`🌬️  Wind update: ${totalTime.toFixed(1)}ms [submit: ${submitMs.toFixed(1)}ms, map: ${mapMs.toFixed(1)}ms, geom: ${geomMs.toFixed(1)}ms] bindGroup: ${cacheHit}`);
+    const visibilityPct = this.visibleCount > 0 ? ((this.visibleCount / this.seeds.length) * 100).toFixed(0) : '100';
+    console.log(`🌬️  Wind update: ${totalTime.toFixed(1)}ms [submit: ${submitMs.toFixed(1)}ms, map: ${mapMs.toFixed(1)}ms, geom: ${geomMs.toFixed(1)}ms] bindGroup: ${cacheHit}, visible: ${visibilityPct}%`);
   }
 
   /**
    * Update LineSegments2 geometry with computed vertices
    */
   private updateGeometry(vertices: Float32Array): void {
-    // Allocate arrays once and reuse them
-    const numSegments = this.seeds.length * (Wind10mRenderService.LINE_STEPS - 1);
-    const arraySize = numSegments * 6;
+    // Build visibility lookup for fast checking
+    const isVisible = new Uint8Array(this.seeds.length);
+    if (this.visibleSeeds && this.visibleCount > 0) {
+      for (let i = 0; i < this.visibleCount; i++) {
+        isVisible[this.visibleSeeds[i]] = 1;
+      }
+    } else {
+      // If no culling active, all seeds are visible
+      for (let i = 0; i < this.seeds.length; i++) {
+        isVisible[i] = 1;
+      }
+    }
+
+    // Count visible segments
+    let visibleSegmentCount = 0;
+    for (let lineIdx = 0; lineIdx < this.seeds.length; lineIdx++) {
+      if (isVisible[lineIdx]) {
+        visibleSegmentCount += Wind10mRenderService.LINE_STEPS - 1;
+      }
+    }
+
+    // Allocate arrays once and reuse them (based on visible segments only)
+    const arraySize = visibleSegmentCount * 6;
 
     if (!this.cachedPositions || this.cachedPositions.length !== arraySize) {
       this.cachedPositions = new Float32Array(arraySize);
@@ -525,6 +595,10 @@ export class Wind10mRenderService implements ILayer {
     let colorIdx = 0;
 
     for (let lineIdx = 0; lineIdx < this.seeds.length; lineIdx++) {
+      // Skip invisible seeds (camera culling)
+      if (!isVisible[lineIdx]) {
+        continue;
+      }
       const randomOffset = this.cachedRandomOffsets[lineIdx];
       const offset = lineIdx * Wind10mRenderService.LINE_STEPS * 4; // vec4 = 4 floats
       const normalizedOffset = randomOffset / cycleLength;
@@ -855,9 +929,11 @@ export class Wind10mRenderService implements ILayer {
    * Update layer based on animation state
    */
   update(state: AnimationState): void {
-    // Check time change
-    if (!this.lastTime || state.time.getTime() !== this.lastTime.getTime()) {
-      this.updateTimeAsync(state.time).catch(err => {
+    // Check time change OR camera movement (for culling update)
+    const cameraMoved = this.lastCameraPosition.distanceToSquared(state.camera.position) > 0.01;
+
+    if (!this.lastTime || state.time.getTime() !== this.lastTime.getTime() || cameraMoved) {
+      this.updateTimeAsync(state.time, state.camera.position).catch(err => {
         console.error('Failed to update wind layer:', err);
       });
       this.lastTime = state.time;
@@ -1015,6 +1091,18 @@ export class Wind10mRenderService implements ILayer {
     if (this.stagingBuffer) {
       this.stagingBuffer.destroy();
       this.stagingBuffer = null;
+    }
+    if (this.visibleSeedBuffer) {
+      this.visibleSeedBuffer.destroy();
+      this.visibleSeedBuffer = null;
+    }
+    if (this.visibleOutputBuffer) {
+      this.visibleOutputBuffer.destroy();
+      this.visibleOutputBuffer = null;
+    }
+    if (this.visibleStagingBuffer) {
+      this.visibleStagingBuffer.destroy();
+      this.visibleStagingBuffer = null;
     }
     for (const buffer of this.windBuffers) {
       buffer.destroy();
