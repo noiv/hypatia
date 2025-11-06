@@ -18,7 +18,7 @@ export interface UserOptions {
 let cachedOptions: UserOptions | null = null;
 
 /**
- * Load user options from public/user.options.json
+ * Load user options from public/config/user.options.json
  */
 export async function getUserOptions(): Promise<UserOptions> {
   if (cachedOptions) {
@@ -26,7 +26,7 @@ export async function getUserOptions(): Promise<UserOptions> {
   }
 
   try {
-    const response = await fetch('/user.options.json');
+    const response = await fetch('/config/user.options.json');
     if (!response.ok) {
       throw new Error(`Failed to load user options: ${response.statusText}`);
     }
