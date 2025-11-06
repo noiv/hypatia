@@ -44,12 +44,12 @@ export async function preloadImages(
         });
       }
     } catch (error) {
-      console.error(`❌ Failed to load ${resource.path}:`, error);
+      console.error(`Failed to load ${resource.path}:`, error);
       // Continue loading other resources even if one fails
     }
   }
 
-  console.log(`✅ Preloaded ${images.size}/${resources.length} ${priority} resources (${(total / 1024 / 1024).toFixed(2)} MB)`);
+  console.log(`Preloaded ${images.size}/${resources.length} ${priority} resources (${(total / 1024 / 1024).toFixed(2)} MB)`);
 
   return images;
 }

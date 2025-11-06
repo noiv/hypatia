@@ -14,11 +14,9 @@ export interface UserLocation {
  * Get user's current location
  */
 export async function getUserLocation(): Promise<UserLocation | null> {
-  console.log('📍 Requesting user location...');
-
   // Check if geolocation is supported
   if (!('geolocation' in navigator)) {
-    console.warn('⚠️  Geolocation not supported by browser');
+    console.warn('Geolocation not supported by browser');
     return null;
   }
 
@@ -37,7 +35,7 @@ export async function getUserLocation(): Promise<UserLocation | null> {
       accuracy: position.coords.accuracy
     };
 
-    console.log(`✅ User location: ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`);
+    console.log(`User location: ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`);
     console.log(`   Accuracy: ${Math.round(location.accuracy)} meters`);
 
     return location;

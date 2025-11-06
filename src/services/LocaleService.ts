@@ -118,15 +118,5 @@ export function detectLocale(): LocaleInfo {
  * Format locale info for logging
  */
 export function formatLocaleInfo(info: LocaleInfo): string {
-  return `
-🌍 Locale: ${info.locale} (${info.defaultLocation.name})
-📍 Default Location: ${info.defaultLocation.lat.toFixed(2)}°N, ${info.defaultLocation.lon.toFixed(2)}°E
-🕐 Timezone: ${info.timezone}
-📏 Units:
-   • Temperature: °${info.units.temperature}
-   • Wind Speed: ${info.units.windSpeed}
-   • Pressure: ${info.units.pressure}
-   • Distance: ${info.units.distance}
-   • Precipitation: ${info.units.precipitation}
-`.trim();
+  return `Locale: ${info.locale} (${info.defaultLocation.name}) | Timezone: ${info.timezone}`;
 }

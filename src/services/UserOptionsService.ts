@@ -32,7 +32,7 @@ export async function getUserOptions(): Promise<UserOptions> {
     }
 
     cachedOptions = await response.json();
-    console.log('📋 User options loaded:', cachedOptions);
+    console.log('User options loaded:', cachedOptions);
     return cachedOptions!;
   } catch (error) {
     console.warn('Failed to load user options, using defaults:', error);

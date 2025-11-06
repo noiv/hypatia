@@ -92,7 +92,6 @@ class Sun {
 export class SunRenderService implements ILayer {
   private sun: Sun;
   private group: THREE.Group;
-  private layerId: LayerId;
   private lastTime?: Date;
   private lastCameraPosition?: THREE.Vector3;
 
@@ -100,8 +99,7 @@ export class SunRenderService implements ILayer {
   private atmosphereMesh?: THREE.Mesh;
   private atmosphereMaterial?: THREE.ShaderMaterial;
 
-  private constructor(layerId: LayerId, sun: Sun, enableAtmosphere: boolean = false) {
-    this.layerId = layerId;
+  private constructor(_layerId: LayerId, sun: Sun, enableAtmosphere: boolean = false) {
     this.sun = sun;
 
     // Create group containing sun, light, and optionally atmosphere

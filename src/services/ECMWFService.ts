@@ -22,7 +22,7 @@ export async function getLatestRun(currentTime: Date): Promise<ECMWFRun | null> 
     const runInfo = await discoverLatestRun();
     const actualDelay = (currentTime.getTime() - runInfo.timestamp.getTime()) / 3600000;
 
-    console.log(`✅ Latest ECMWF run: ${runInfo.date} ${runInfo.cycle} (${actualDelay.toFixed(1)}h delay)`);
+    console.log(`Latest ECMWF run: ${runInfo.date} ${runInfo.cycle} (${actualDelay.toFixed(1)}h delay)`);
 
     return {
       date: runInfo.date,

@@ -67,5 +67,5 @@ export type LayerId =
   | 'temp2m'
   | 'precipitation'
   | 'wind10m'
-  | 'pressure'
+  | 'pressure_msl'
   | 'text';

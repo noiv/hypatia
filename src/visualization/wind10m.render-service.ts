@@ -79,7 +79,7 @@ export class Wind10mRenderService implements ILayer {
     // Generate uniformly distributed seed points on sphere using Fibonacci lattice
     this.seeds = generateFibonacciSphere(8192, EARTH_RADIUS_UNITS);
 
-    console.log(`🌬️  Wind10mRenderService: Generated ${this.seeds.length} grid points`);
+    console.log(`Wind10mRenderService: Generated ${this.seeds.length} grid points`);
   }
 
   /**
@@ -93,7 +93,7 @@ export class Wind10mRenderService implements ILayer {
     }
 
     this.device = await adapter.requestDevice();
-    console.log('🌬️  Initializing WebGPU compute pipeline...');
+    console.log('Initializing WebGPU compute pipeline...');
 
     // Create seed buffer
     const seedData = new Float32Array(this.seeds.length * 4);
@@ -345,7 +345,7 @@ export class Wind10mRenderService implements ILayer {
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
-    console.log('✅ WebGPU compute pipeline ready');
+    console.log('WebGPU compute pipeline ready');
   }
 
   /**
@@ -541,7 +541,7 @@ export class Wind10mRenderService implements ILayer {
     const geomMs = geometryTime - mapTime;
     const cacheHit = wasInCache ? '✓ cache' : 'created';
     const visibilityPct = this.visibleCount > 0 ? ((this.visibleCount / this.seeds.length) * 100).toFixed(0) : '100';
-    console.log(`🌬️  Wind update: ${totalTime.toFixed(1)}ms [submit: ${submitMs.toFixed(1)}ms, map: ${mapMs.toFixed(1)}ms, geom: ${geomMs.toFixed(1)}ms] bindGroup: ${cacheHit}, visible: ${visibilityPct}%`);
+    console.log(`Wind update: ${totalTime.toFixed(1)}ms [submit: ${submitMs.toFixed(1)}ms, map: ${mapMs.toFixed(1)}ms, geom: ${geomMs.toFixed(1)}ms] bindGroup: ${cacheHit}, visible: ${visibilityPct}%`);
   }
 
   /**
@@ -773,7 +773,7 @@ export class Wind10mRenderService implements ILayer {
     this.lines = new LineSegments2(geometry, this.material);
     this.group.add(this.lines);
 
-    console.log(`✅ Created wind lines: ${this.seeds.length} lines, ${positions.length / 6} segments`);
+    console.log(`Created wind lines: ${this.seeds.length} lines, ${positions.length / 6} segments`);
   }
 
   /**
@@ -920,7 +920,7 @@ export class Wind10mRenderService implements ILayer {
     this.lines = new THREE.Mesh(geometry, this.material);
     this.group.add(this.lines);
 
-    console.log(`✅ Created custom wind lines: ${this.seeds.length} lines, ${numSegments} segments`);
+    console.log(`Created custom wind lines: ${this.seeds.length} lines, ${numSegments} segments`);
   }
 
   // ILayer interface implementation

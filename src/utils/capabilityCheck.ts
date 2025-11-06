@@ -32,7 +32,7 @@ export function checkBrowserCapabilities(): CapabilityCheckResult {
   }
 
   // Check WebGL2 support
-  if (VERBOSE_LOGGING) console.log('\n📊 WebGL2 Check:');
+  if (VERBOSE_LOGGING) console.log('\nWebGL2 Check:');
   const canvas = document.createElement('canvas');
   const gl = canvas.getContext('webgl2');
   if (!gl) {
@@ -40,7 +40,7 @@ export function checkBrowserCapabilities(): CapabilityCheckResult {
     missing.push('WebGL2');
   } else {
     if (VERBOSE_LOGGING) {
-      console.log('✅ WebGL2 available');
+      console.log('WebGL2 available');
       console.log('   Vendor:', gl.getParameter(gl.VENDOR));
       console.log('   Renderer:', gl.getParameter(gl.RENDERER));
       console.log('   Version:', gl.getParameter(gl.VERSION));
@@ -49,7 +49,7 @@ export function checkBrowserCapabilities(): CapabilityCheckResult {
 
   // Check WebGPU support
   if (VERBOSE_LOGGING) {
-    console.log('\n⚡ WebGPU Check:');
+    console.log('\nWebGPU Check:');
     console.log('   navigator.gpu exists:', !!navigator.gpu);
   }
 
@@ -57,20 +57,20 @@ export function checkBrowserCapabilities(): CapabilityCheckResult {
     console.error('❌ WebGPU not available');
     if (VERBOSE_LOGGING) {
       console.log('   Common causes:');
-      console.log('   • Browser too old (need Chrome 113+, Safari 18+, Edge 113+)');
-      console.log('   • Feature flag disabled');
-      console.log('   • iOS/iPadOS < 26');
-      console.log('   • macOS Safari < 18');
+      console.log('   - Browser too old (need Chrome 113+, Safari 18+, Edge 113+)');
+      console.log('   - Feature flag disabled');
+      console.log('   - iOS/iPadOS < 26');
+      console.log('   - macOS Safari < 18');
     }
     missing.push('WebGPU');
   } else {
-    if (VERBOSE_LOGGING) console.log('✅ navigator.gpu exists');
+    if (VERBOSE_LOGGING) console.log('navigator.gpu exists');
 
     // Try to request adapter for detailed info
     if (VERBOSE_LOGGING) {
       navigator.gpu.requestAdapter().then((adapter: any) => {
         if (adapter) {
-          console.log('✅ WebGPU adapter available');
+          console.log('WebGPU adapter available');
           console.log('   Adapter info:', {
             vendor: adapter.info?.vendor,
             architecture: adapter.info?.architecture,
@@ -89,12 +89,12 @@ export function checkBrowserCapabilities(): CapabilityCheckResult {
   }
 
   if (VERBOSE_LOGGING) {
-    console.log('\n📋 Summary:');
+    console.log('\nSummary:');
   }
 
   if (missing.length === 0) {
     if (VERBOSE_LOGGING) {
-      console.log('✅ All required capabilities present');
+      console.log('All required capabilities present');
     }
   } else {
     console.error('❌ Missing capabilities:', missing.join(', '));

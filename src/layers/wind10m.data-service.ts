@@ -145,7 +145,7 @@ export class Wind10mDataService {
       this.loadBinaryFile(timestep.vFilePath)
     ]);
 
-    console.log(`✅ Loaded wind U/V components (${u.length} values each)`);
+    console.log(`Loaded wind U/V components (${u.length} values each)`);
 
     return { u, v };
   }
@@ -182,7 +182,7 @@ export class Wind10mDataService {
       }
     }
 
-    console.log(`✅ Loaded ${timesteps.length} wind timesteps (${uData.length} U + ${vData.length} V)`);
+    console.log(`Loaded ${timesteps.length} wind timesteps (${uData.length} U + ${vData.length} V)`);
 
     return { uData, vData };
   }

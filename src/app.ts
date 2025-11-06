@@ -25,9 +25,11 @@ import { parseUrlState, debouncedUpdateUrlState } from './utils/urlState';
 
 import { LayerStateService } from './services/LayerStateService';
 import { AppBootstrapService } from './services/AppBootstrapService';
+import { detectLocale, formatLocaleInfo } from './services/LocaleService';
 
 interface AppComponent extends m.Component {
   state: AppState;
+  isBootstrapping: boolean;
   _keydownHandler?: (e: KeyboardEvent) => void;
   _mousedownHandler?: (e: MouseEvent) => void;
   _clickHandler?: (e: MouseEvent) => void;
@@ -49,10 +51,16 @@ interface AppComponent extends m.Component {
 
 export const App: AppComponent = {
   state: null as any, // Initialized in oninit
+  isBootstrapping: true, // Prevent URL updates during bootstrap
 
   async oninit() {
-    // Sanitize URL and get corrected state
-    const sanitizedState = sanitizeUrl();
+    // Detect locale immediately (uses browser APIs, no async needed)
+    const localeInfo = detectLocale();
+    console.log(formatLocaleInfo(localeInfo));
+
+    // Sanitize URL and get corrected state (with locale for default camera position)
+    const bootstrapState = { localeInfo } as any;
+    const sanitizedState = sanitizeUrl(bootstrapState);
 
     // Initialize state synchronously
     this.state = {
@@ -311,18 +319,6 @@ export const App: AppComponent = {
     if (result.bootstrapStatus === 'ready') {
       // Get layer state (already initialized in bootstrap)
       this.state.layerState = LayerStateService.getInstance();
-
-      // Re-sanitize URL with bootstrap state (locale, geolocation)
-      // If URL has default (0,0), update with locale-based default
-      if (result.localeInfo && window.location.search.includes('ll=0.000,0.000')) {
-        const sanitizedState = sanitizeUrl(result, true);  // Force use of bootstrap camera position
-        this.state.currentTime = sanitizedState.time;
-
-        // Update scene camera to new position
-        if (this.state.scene) {
-          this.state.scene.setCameraState(sanitizedState.camera, sanitizedState.camera.distance);
-        }
-      }
     }
 
     // Log loaded with memory
@@ -332,6 +328,9 @@ export const App: AppComponent = {
     } else {
       console.log('[HYPATIA_LOADED]');
     }
+
+    // Bootstrap complete - allow URL updates now
+    this.isBootstrapping = false;
 
     m.redraw();
   },
@@ -378,9 +377,12 @@ export const App: AppComponent = {
       console.log(`Bootstrap.loading: ${layersToLoad.join(', ')}`);
     }
 
-    for (const layerId of layersToLoad) {
+    for (const urlKey of layersToLoad) {
       try {
         m.redraw();
+
+        // Convert URL key to layer ID (temp -> temp2m, etc.)
+        const layerId = configLoader.urlKeyToLayerId(urlKey);
 
         // Create and show layer
         await scene.createLayer(layerId as any);
@@ -388,7 +390,7 @@ export const App: AppComponent = {
 
         m.redraw();
       } catch (error) {
-        console.error(`Bootstrap.error: ${layerId}`, error);
+        console.error(`Bootstrap.error: ${urlKey}`, error);
       }
     }
 
@@ -403,16 +405,26 @@ export const App: AppComponent = {
   },
 
   updateUrl() {
+    // Don't update URL during bootstrap - preserve URL parameters from page load
+    if (this.isBootstrapping) {
+      return;
+    }
+
     const { scene, currentTime, textEnabled } = this.state;
     if (!scene) return;
 
-    // Get visible layers from scene
-    const visibleLayers = scene.getVisibleLayers();
+    // Get visible layers from scene (returns LayerIDs like 'temp2m')
+    const visibleLayerIds = scene.getVisibleLayers();
 
-    // Add 'text' to layers if enabled
-    const layers = textEnabled
-      ? [...visibleLayers, 'text']
-      : visibleLayers;
+    // Convert LayerIDs to URL keys (temp2m -> temp, etc.)
+    const visibleUrlKeys = visibleLayerIds.map(layerId =>
+      configLoader.layerIdToUrlKey(layerId)
+    );
+
+    // Add 'text' to layers if enabled and not already present
+    const layers = textEnabled && !visibleUrlKeys.includes('text')
+      ? [...visibleUrlKeys, 'text']
+      : visibleUrlKeys;
 
     debouncedUpdateUrlState({
       time: currentTime,
@@ -586,7 +598,7 @@ export const App: AppComponent = {
     const temp2mState = scene.getLayerState('temp2m');
     const precipitationState = scene.getLayerState('precipitation');
     const windState = scene.getLayerState('wind10m');
-    const pressureState = scene.getLayerState('pressure');
+    const pressureState = scene.getLayerState('pressure_msl');
     const graticuleState = scene.getLayerState('graticule');
 
     return m(Controls, {
@@ -632,7 +644,7 @@ export const App: AppComponent = {
       },
       showPressure: pressureState.created && pressureState.visible,
       onPressureToggle: async () => {
-        await this.handleLayerToggle('pressure');
+        await this.handleLayerToggle('pressure_msl');
       },
       showGraticule: graticuleState.created && graticuleState.visible,
       onGraticuleToggle: async () => {

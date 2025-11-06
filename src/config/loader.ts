@@ -143,6 +143,30 @@ class ConfigLoader {
   }
 
   /**
+   * Convert layer ID to URL key
+   * For weather data layers (temp2m, wind10m, etc.), returns the urlKey from config
+   * For base layers (earth, sun, graticule, text), returns the ID as-is
+   */
+  layerIdToUrlKey(layerId: string): string {
+    const layer = this.getLayerById(layerId);
+    return layer ? layer.urlKey : layerId;
+  }
+
+  /**
+   * Convert URL key to layer ID
+   * For weather data layers (temp -> temp2m, etc.), returns the layer ID from config
+   * For base layers (earth, sun, graticule, text), returns the key as-is
+   */
+  urlKeyToLayerId(urlKey: string): string {
+    // If config not loaded yet, return urlKey as-is
+    if (!this.layersConfig) {
+      return urlKey;
+    }
+    const layer = this.getLayerByUrlKey(urlKey);
+    return layer ? layer.id : urlKey;
+  }
+
+  /**
    * Get all enabled-by-default layers
    */
   getDefaultLayers(): Layer[] {

@@ -196,11 +196,9 @@ class Earth {
  */
 export class EarthRenderService implements ILayer {
   private earth: Earth;
-  private layerId: LayerId;
   private lastSunDirection?: THREE.Vector3;
 
-  private constructor(layerId: LayerId, earth: Earth) {
-    this.layerId = layerId;
+  private constructor(_layerId: LayerId, earth: Earth) {
     this.earth = earth;
   }
 

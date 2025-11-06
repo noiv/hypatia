@@ -27,14 +27,12 @@ export interface TextLabel {
  * Implements ILayer to be called last in update order
  */
 export class TextRenderService implements ILayer {
-  private layerId: LayerId;
   private group: THREE.Group;
   private labels: Map<string, Text[]> = new Map(); // layerId -> Text objects
   private fontSize: number;
   private fontUrl: string;
 
-  private constructor(layerId: LayerId) {
-    this.layerId = layerId;
+  private constructor(_layerId: LayerId) {
     this.group = new THREE.Group();
     this.group.name = 'text-labels';
     this.group.renderOrder = 2000; // Render on top of everything

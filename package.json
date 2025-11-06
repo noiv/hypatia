@@ -7,7 +7,8 @@
     "dev": "vite --host --port 8080",
     "build": "tsc && vite build",
     "preview": "vite preview --host --port 8080",
-    "download-data": "python3 scripts/download_dev_data.py"
+    "download-data": "python3 scripts/download_dev_data.py",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "mithril": "^2.2.2",

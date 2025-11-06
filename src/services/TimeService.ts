@@ -27,13 +27,13 @@ export async function getCurrentTime(): Promise<Date> {
   // Check if time server is enabled
   if (!options.timeServer.enabled) {
     const localTime = new Date();
-    console.log('⏰ Using browser time:', localTime.toISOString());
+    console.log('Using browser time:', localTime.toISOString());
     return localTime;
   }
 
   // Fetch from time server
   try {
-    console.log('⏰ Fetching current time from time server...');
+    console.log('Fetching current time from time server...');
 
     const response = await fetch('https://timeapi.io/api/Time/current/zone?timeZone=UTC', {
       signal: AbortSignal.timeout(5000)
@@ -46,7 +46,7 @@ export async function getCurrentTime(): Promise<Date> {
     const data: TimeApiResponse = await response.json();
     const serverTime = new Date(data.dateTime);
 
-    console.log(`✅ Time server: ${serverTime.toISOString()}`);
+    console.log(`Time server: ${serverTime.toISOString()}`);
     console.log(`   Timezone: ${data.timeZone}`);
 
     return serverTime;

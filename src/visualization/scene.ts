@@ -173,7 +173,7 @@ export class Scene {
 
     if (intersection?.point) {
       const { lat, lon } = cartesianToLatLon(intersection.point);
-      console.log(`🌍 Clicked: Lat=${lat.toFixed(2)}°, Lon=${lon.toFixed(2)}°`);
+      console.log(`Clicked: Lat=${lat.toFixed(2)}, Lon=${lon.toFixed(2)}`);
     }
   };
 

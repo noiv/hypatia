@@ -74,19 +74,16 @@ function getDefaultCameraPosition(bootstrapState: BootstrapState | null): { lat:
   // Try locale-based centroid
   if (bootstrapState?.localeInfo?.defaultLocation) {
     const { lat, lon } = bootstrapState.localeInfo.defaultLocation;
-    console.log(`📍 Using locale default location: ${lat.toFixed(2)}°, ${lon.toFixed(2)}°`);
     return { lat, lon };
   }
 
   // Try geolocation
   if (bootstrapState?.userLocation) {
     const { latitude, longitude } = bootstrapState.userLocation;
-    console.log(`📍 Using geolocation: ${latitude.toFixed(2)}°, ${longitude.toFixed(2)}°`);
     return { lat: latitude, lon: longitude };
   }
 
   // Fallback to (0,0)
-  console.log('📍 Using fallback location: 0°, 0°');
   return { lat: 0, lon: 0 };
 }
 
@@ -113,14 +110,14 @@ export function sanitizeUrl(bootstrapState: BootstrapState | null = null, forceB
   const time = partial.time || getDefaultTime();
 
   // Fill in camera position
-  let camera = partial.camera;
+  let camera: { x: number; y: number; z: number; distance: number };
 
   // Use bootstrap position if: no camera in URL, OR forceBootstrapCamera flag is set
-  const shouldUseBootstrapDefault = !camera || forceBootstrapCamera;
+  const shouldUseBootstrapDefault = !partial.camera || forceBootstrapCamera;
 
   if (shouldUseBootstrapDefault) {
     const { lat, lon } = getDefaultCameraPosition(bootstrapState);
-    const distance = camera?.distance || altitudeToDistance(defaultAltitude);
+    const distance = partial.camera?.distance || altitudeToDistance(defaultAltitude);
     const position = latLonToCartesian(lat, lon, distance);
     camera = {
       x: position.x,
@@ -128,6 +125,9 @@ export function sanitizeUrl(bootstrapState: BootstrapState | null = null, forceB
       z: position.z,
       distance
     };
+  } else {
+    // TypeScript: partial.camera is guaranteed to exist here (else we'd be in the if block)
+    camera = partial.camera!;
   }
 
   // Fill in layers
@@ -160,14 +160,12 @@ export function validateUrlState(state: AppUrlState): AppUrlState {
   // Validate altitude
   const currentAltitude = distanceToAltitude(state.camera.distance);
   if (currentAltitude < ALTITUDE_BOUNDS.min) {
-    console.log(`📍 Altitude ${currentAltitude}m below minimum, clamping to ${ALTITUDE_BOUNDS.min}m`);
     validatedState.camera = {
       ...state.camera,
       distance: altitudeToDistance(ALTITUDE_BOUNDS.min)
     };
     needsUpdate = true;
   } else if (currentAltitude > ALTITUDE_BOUNDS.max) {
-    console.log(`📍 Altitude ${currentAltitude}m above maximum, clamping to ${ALTITUDE_BOUNDS.max}m`);
     validatedState.camera = {
       ...state.camera,
       distance: altitudeToDistance(ALTITUDE_BOUNDS.max)
@@ -183,20 +181,16 @@ export function validateUrlState(state: AppUrlState): AppUrlState {
     if (state.time < dataRange.startTime) {
       const timeDiff = dataRange.startTime.getTime() - state.time.getTime();
       if (timeDiff > SIGNIFICANT_THRESHOLD_MS) {
-        console.log(`📍 Time significantly before data range, using default`);
         validatedState.time = getDefaultTime();
       } else {
-        console.log(`📍 Time slightly before data range, clamping to start`);
         validatedState.time = dataRange.startTime;
       }
       needsUpdate = true;
     } else if (state.time > dataRange.endTime) {
       const timeDiff = state.time.getTime() - dataRange.endTime.getTime();
       if (timeDiff > SIGNIFICANT_THRESHOLD_MS) {
-        console.log(`📍 Time significantly after data range, using default`);
         validatedState.time = getDefaultTime();
       } else {
-        console.log(`📍 Time slightly after data range, clamping to end`);
         validatedState.time = dataRange.endTime;
       }
       needsUpdate = true;
@@ -212,7 +206,6 @@ export function validateUrlState(state: AppUrlState): AppUrlState {
   const { lat, lon } = cartesianToLatLon(posVec);
 
   if (isNaN(lat) || isNaN(lon)) {
-    console.log('📍 Invalid camera position, using default');
     let defaultAltitude = 19113000;
     try {
       const hypatiaConfig = configLoader.getHypatiaConfig();
@@ -232,7 +225,6 @@ export function validateUrlState(state: AppUrlState): AppUrlState {
   }
 
   if (needsUpdate) {
-    console.log('📍 URL validated, updating address bar');
     updateUrlState(validatedState);
   }
 

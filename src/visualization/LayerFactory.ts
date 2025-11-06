@@ -56,7 +56,7 @@ export class LayerFactory {
         await windLayer.loadWindData();
         return windLayer;
 
-      case 'pressure':
+      case 'pressure_msl':
         return PressureRenderService.create(layerId);
 
       case 'text':
@@ -73,7 +73,7 @@ export class LayerFactory {
    * Get list of all available layer IDs
    */
   static getAllLayerIds(): LayerId[] {
-    return ['earth', 'sun', 'graticule', 'temp2m', 'precipitation', 'wind10m', 'pressure', 'text'];
+    return ['earth', 'sun', 'graticule', 'temp2m', 'precipitation', 'wind10m', 'pressure_msl', 'text'];
   }
 
   /**
@@ -88,6 +88,6 @@ export class LayerFactory {
    * Get optional layers that can be toggled by user
    */
   static getOptionalLayers(): LayerId[] {
-    return ['earth', 'sun', 'graticule', 'temp2m', 'precipitation', 'wind10m', 'pressure', 'text'];
+    return ['earth', 'sun', 'graticule', 'temp2m', 'precipitation', 'wind10m', 'pressure_msl', 'text'];
   }
 }

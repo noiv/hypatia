@@ -8,7 +8,7 @@ import { getCurrentTime } from './TimeService';
 import { getLatestRun, type ECMWFRun } from './ECMWFService';
 import { preloadImages, type LoadProgress } from './ResourceManager';
 import { getUserLocation, type UserLocation } from './GeolocationService';
-import { detectLocale, formatLocaleInfo, type LocaleInfo } from './LocaleService';
+import { detectLocale, type LocaleInfo } from './LocaleService';
 import { LayerStateService } from './LayerStateService';
 import { UrlLayerSyncService } from './UrlLayerSyncService';
 import { configLoader } from '../config';
@@ -81,7 +81,6 @@ export class AppBootstrapService {
       label: 'Detecting locale...',
       async run(state) {
         state.localeInfo = detectLocale();
-        console.log(formatLocaleInfo(state.localeInfo));
       }
     },
 
@@ -107,7 +106,6 @@ export class AppBootstrapService {
               characters: TEXT_CONFIG.performance.characters
             },
             () => {
-              console.log('TextBootstrap: Glyphs preloaded');
               resolve();
             }
           );
