@@ -2,12 +2,12 @@ import m from 'mithril';
 
 export interface BlendSliderAttrs {
   blend: number;
-  onBlendChange: (blend: number) => void;
+  onChange: (blend: number) => void;
 }
 
 export const BlendSlider: m.Component<BlendSliderAttrs> = {
   view(vnode) {
-    const { blend, onBlendChange } = vnode.attrs;
+    const { blend, onChange } = vnode.attrs;
 
     return m('input[type=range].blend-slider', {
       min: 0,
@@ -17,7 +17,7 @@ export const BlendSlider: m.Component<BlendSliderAttrs> = {
       oninput: (e: Event) => {
         const target = e.target as HTMLInputElement;
         const newBlend = parseFloat(target.value);
-        onBlendChange(newBlend);
+        onChange(newBlend);
       }
     });
   }
