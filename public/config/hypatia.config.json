@@ -19,6 +19,25 @@
     "defaultAltitude": 19113000,
     "defaultLayers": ["earth", "sun", "graticule"]
   },
+  "camera": {
+    "minDistance": 1.157,
+    "maxDistance": 10.0,
+    "defaultDistance": 3.0,
+    "dampingFactor": 0.05,
+    "rotateSpeed": 0.5,
+    "zoomSpeed": 0.8,
+    "invertZoom": true,
+    "rotationFriction": 0.92,
+    "rotationSensitivity": 0.005,
+    "minVelocity": 0.0001,
+    "maxVelocity": 5.0,
+    "doubleTapZoomFactor": 0.8,
+    "doubleTapAnimationMs": 1000,
+    "doubleTapThresholdMs": 300,
+    "doubleTapDistanceThreshold": 30,
+    "gestureTimeoutMs": 100,
+    "timeScrubMinutesPerPixel": 1
+  },
   "performance": {
     "workerCount": 4,
     "cacheStrategy": "progressive",
