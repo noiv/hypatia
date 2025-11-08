@@ -139,7 +139,13 @@ export const App: AppComponent = {
     // Register event handlers
     this.eventManager!.register(window, 'keydown', this.keyboardShortcuts!.handleKeydown as EventListener);
     this.eventManager!.register(canvas, 'mousedown', (e) => this.viewportControls!.handleMouseDown(e as MouseEvent));
+    this.eventManager!.register(canvas, 'mousemove', (e) => this.viewportControls!.handleMouseMove(e as MouseEvent));
+    this.eventManager!.register(canvas, 'mouseup', (e) => this.viewportControls!.handleMouseUp(e as MouseEvent));
     this.eventManager!.register(canvas, 'click', (e) => this.viewportControls!.handleClick(e as MouseEvent));
+    this.eventManager!.register(canvas, 'dblclick', (e) => this.viewportControls!.handleDoubleClick(e as MouseEvent));
+    this.eventManager!.register(canvas, 'touchstart', (e) => this.viewportControls!.handleTouchStart(e as TouchEvent));
+    this.eventManager!.register(canvas, 'touchmove', (e) => this.viewportControls!.handleTouchMove(e as TouchEvent), { passive: false });
+    this.eventManager!.register(canvas, 'touchend', (e) => this.viewportControls!.handleTouchEnd(e as TouchEvent));
     this.eventManager!.register(
       canvas,
       'wheel',

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { DataService } from '../services/DataService';
-import { ViewportControlsService, type ViewportControlsCallbacks } from '../services/ViewportControlsService';
+import { ViewportControlsService, type ViewportControlsCallbacks, tweenGroup } from '../services/ViewportControlsService';
 import type { LayerRenderState } from '../config/types';
 import type { ILayer, LayerId } from './ILayer';
 import type { AnimationState } from './AnimationState';
@@ -98,14 +98,26 @@ export class Scene {
    * Create viewport controls service (called after Scene construction)
    */
   createViewportControls(callbacks: ViewportControlsCallbacks): ViewportControlsService {
-    const canvas = this.renderer.domElement;
     this.viewportControls = new ViewportControlsService(
       this.camera,
-      canvas,
       this,
       callbacks
     );
     return this.viewportControls;
+  }
+
+  /**
+   * Get renderer (for ViewportControlsService)
+   */
+  getRenderer(): THREE.WebGLRenderer {
+    return this.renderer;
+  }
+
+  /**
+   * Get layer by ID (for ViewportControlsService)
+   */
+  getLayer(layerId: LayerId): ILayer | undefined {
+    return this.layers.get(layerId);
   }
 
   private addAxesHelpers() {
@@ -196,14 +208,16 @@ export class Scene {
     const deltaTime = (currentTime - this.lastFrameTime) / 1000;
     this.lastFrameTime = currentTime;
 
+    // Update tween animations
+    tweenGroup.update();
+
     // Update viewport controls
-    const distance = this.camera.position.length();
     if (this.viewportControls) {
-      this.viewportControls.updateRotateSpeed(distance);
       this.viewportControls.update();
     }
 
     // Build animation state once
+    const distance = this.camera.position.length();
     const animState: AnimationState = {
       time: this.currentTime,
       deltaTime,
@@ -313,6 +327,7 @@ export class Scene {
 
   /**
    * Check if mouse position is over Earth using screen-space projection
+   * Accounts for camera distance - calculates visible radius based on silhouette edge
    * Works regardless of Earth layer visibility
    */
   checkMouseOverEarth(clientX: number, clientY: number): boolean {
@@ -334,17 +349,28 @@ export class Scene {
     const centerX = (centerScreen.x * 0.5 + 0.5) * rect.width;
     const centerY = (1 - (centerScreen.y * 0.5 + 0.5)) * rect.height;
 
-    // Project a point on Earth's surface to get projected radius
+    // Calculate visible radius based on camera distance
+    // Find a point on Earth's silhouette edge (perpendicular to view direction)
     const EARTH_RADIUS = 1; // EARTH_RADIUS_UNITS
-    const surfacePoint = new THREE.Vector3(EARTH_RADIUS, 0, 0);
-    const surfaceScreen = surfacePoint.clone().project(this.camera);
 
-    const surfaceX = (surfaceScreen.x * 0.5 + 0.5) * rect.width;
-    const surfaceY = (1 - (surfaceScreen.y * 0.5 + 0.5)) * rect.height;
+    // Get camera's view direction and perpendicular vector
+    const viewDirection = new THREE.Vector3(0, 0, 0).sub(this.camera.position).normalize();
+    const upVector = this.camera.up.clone().normalize();
 
-    // Calculate projected radius
+    // Create a perpendicular vector to find a point on the silhouette
+    const perpVector = new THREE.Vector3().crossVectors(viewDirection, upVector).normalize();
+
+    // Calculate point on Earth's edge perpendicular to view direction
+    // This point is on the visible silhouette from camera's perspective
+    const edgePoint = perpVector.multiplyScalar(EARTH_RADIUS);
+    const edgeScreen = edgePoint.clone().project(this.camera);
+
+    const edgeX = (edgeScreen.x * 0.5 + 0.5) * rect.width;
+    const edgeY = (1 - (edgeScreen.y * 0.5 + 0.5)) * rect.height;
+
+    // Calculate projected radius (distance from center to edge in screen space)
     const projectedRadius = Math.sqrt(
-      Math.pow(surfaceX - centerX, 2) + Math.pow(surfaceY - centerY, 2)
+      Math.pow(edgeX - centerX, 2) + Math.pow(edgeY - centerY, 2)
     );
 
     // Check if mouse is within projected circle

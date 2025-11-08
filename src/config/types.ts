@@ -24,6 +24,25 @@ export interface HypatiaConfig {
     defaultAltitude: number;
     defaultLayers: string[];
   };
+  camera: {
+    minDistance: number;
+    maxDistance: number;
+    defaultDistance: number;
+    dampingFactor: number;
+    rotateSpeed: number;
+    zoomSpeed: number;
+    invertZoom: boolean;
+    rotationFriction: number;
+    rotationSensitivity: number;
+    minVelocity: number;
+    maxVelocity: number;
+    doubleTapZoomFactor: number;
+    doubleTapAnimationMs: number;
+    doubleTapThresholdMs: number;
+    doubleTapDistanceThreshold: number;
+    gestureTimeoutMs: number;
+    timeScrubMinutesPerPixel: number;
+  };
   performance: {
     workerCount: number;
     cacheStrategy: string;
