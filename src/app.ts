@@ -9,10 +9,12 @@ import m from 'mithril';
 import { configLoader } from './config';
 
 // Components
-import { TimeSlider } from './components/TimeSlider';
+import { TimeCirclePanel } from './components/TimeCirclePanel';
+import { TimeBarPanel } from './components/TimeBarPanel';
 import { BootstrapModal } from './components/BootstrapModal';
-import { Header } from './components/Header';
-import { LayerPanel } from './components/LayerPanel';
+import { HeaderPanel } from './components/HeaderPanel';
+import { FullscreenPanel } from './components/FullscreenPanel';
+import { LayersPanel } from './components/LayersPanel';
 import { PerformancePanel } from './components/PerformancePanel';
 
 // Services
@@ -418,42 +420,42 @@ export const App: AppComponent = {
     const { startTime, endTime } = this.getDataRange();
 
     // Show main app when ready
-    return m('div.app-container.ready', [
-      m('div.ui-overlay', [
-        m(Header, {
-          currentTime: state.currentTime,
-          onLogoClick: () => window.location.href = '/'
-        }),
+    return m('div.app-container.ready.no-events', [
+      m(HeaderPanel, {
+        onLogoClick: () => window.location.href = '/'
+      }),
 
-        m(LayerPanel, {
-          layerStates: this.getLayerStates(),
-          textEnabled: state.textEnabled,
-          onLayerToggle: (id) => this.handleLayerToggle(id),
-          onTextToggle: () => this.handleTextToggle(),
-          isFullscreen: state.isFullscreen,
-          onFullscreenToggle: () => this.handleFullscreenToggle(),
-          blend: state.blend,
-          onBlendChange: (newBlend) => {
-            this.stateService!.setBlend(newBlend);
-            this.sceneService!.getScene()?.setBasemapBlend(newBlend);
-          },
-          onReferenceClick: () => {
-            this.logicService!.handleReferenceClick();
-            m.redraw();
-          }
-        }),
+      m(FullscreenPanel, {
+        isFullscreen: state.isFullscreen,
+        onToggle: () => this.handleFullscreenToggle()
+      }),
 
-        m(TimeSlider, {
-          currentTime: state.currentTime,
-          startTime,
-          endTime,
-          onTimeChange: (time) => this.handleTimeChange(time)
-        }),
+      m(LayersPanel, {
+        layerStates: this.getLayerStates(),
+        textEnabled: state.textEnabled,
+        onLayerToggle: (id) => this.handleLayerToggle(id),
+        onTextToggle: () => this.handleTextToggle(),
+        blend: state.blend,
+        onBlendChange: (newBlend) => {
+          this.stateService!.setBlend(newBlend);
+          this.sceneService!.getScene()?.setBasemapBlend(newBlend);
+        }
+      }),
 
-        m(PerformancePanel, {
-          onElementCreated: (el) => state.scene?.setPerformanceElement(el)
-        })
-      ])
+      m(TimeCirclePanel, {
+        currentTime: state.currentTime
+      }),
+
+      m(TimeBarPanel, {
+        currentTime: state.currentTime,
+        startTime,
+        endTime,
+        onTimeChange: (time) => this.handleTimeChange(time)
+      }),
+
+      m(PerformancePanel, {
+        onElementCreated: (el) => state.scene?.setPerformanceElement(el)
+      })
     ]);
   }
 };

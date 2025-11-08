@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="64" viewBox="0 0 280 64" fill="none">
+  <!-- Icon: Bottom-aligned circles of increasing size -->
+  <g transform="translate(32, 32)">
+    <!-- Largest circle (outermost) -->
+    <circle cx="0" cy="0" r="28" fill="#4A90E2" opacity="0.3"/>
+    <!-- Second largest -->
+    <circle cx="0" cy="6" r="22" fill="#4A90E2" opacity="0.5"/>
+    <!-- Third -->
+    <circle cx="0" cy="11" r="17" fill="#4A90E2" opacity="0.7"/>
+    <!-- Fourth -->
+    <circle cx="0" cy="15" r="13" fill="#4A90E2" opacity="0.85"/>
+    <!-- Smallest (center) -->
+    <circle cx="0" cy="20" r="8" fill="#4A90E2"/>
+  </g>
+
+  <!-- Text: HYPATIA (white) -->
+  <text x="72" y="42" font-family="Inter, -apple-system, BlinkMacSystemFont, sans-serif" font-size="32" font-weight="500" fill="#ffffff">HYPATIA</text>
+</svg>

@@ -1,14 +1,20 @@
+/**
+ * Time Bar Panel Component
+ *
+ * Displays timeline slider with controls at bottom
+ */
+
 import m from 'mithril';
 import { clampTimeToDataRange } from '../utils/timeUtils';
 
-export interface TimeSliderAttrs {
+export interface TimeBarPanelAttrs {
   currentTime: Date;
   startTime: Date;
   endTime: Date;
   onTimeChange: (time: Date) => void;
 }
 
-export const TimeSlider: m.Component<TimeSliderAttrs> = {
+export const TimeBarPanel: m.Component<TimeBarPanelAttrs> = {
   view(vnode) {
     const { currentTime, startTime, endTime, onTimeChange } = vnode.attrs;
 
@@ -22,21 +28,6 @@ export const TimeSlider: m.Component<TimeSliderAttrs> = {
         month: 'short',
         day: '2-digit'
       });
-    };
-
-    const formatTimeDisplay = (date: Date) => {
-      const year = date.getFullYear();
-      const monthDay = date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric'
-      });
-      const time = date.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      });
-
-      return { year, monthDay, time };
     };
 
     // Jump to current time
@@ -60,22 +51,11 @@ export const TimeSlider: m.Component<TimeSliderAttrs> = {
     const totalDays = Math.ceil((endTime.getTime() - startTime.getTime()) / (24 * 60 * 60 * 1000));
     const ticks = Array.from({ length: totalDays + 1 }, (_, i) => i / totalDays);
 
-    const timeDisplay = formatTimeDisplay(currentTime);
-
-    return m('div.time-slider-container', [
-      // Centered time display
-      m('div.time-display-overlay', [
-        m('div.time-display-circle', [
-          m('div.time-year', timeDisplay.year),
-          m('div.time-date', timeDisplay.monthDay),
-          m('div.time-time', timeDisplay.time)
-        ])
-      ]),
-
+    return m('div.time-bar.panel.no-events', [
       // Timeline with ticks
-      m('div.time-slider-wrapper', [
+      m('div.time-bar-wrapper', [
         // Tick marks
-        m('div.time-ticks',
+        m('div.time-ticks.no-events',
           ticks.map(tick =>
             m('div.time-tick', {
               style: `left: ${tick * 100}%`

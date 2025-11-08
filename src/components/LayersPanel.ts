@@ -1,5 +1,5 @@
 /**
- * Layer Panel Component
+ * Layers Panel Component
  *
  * Displays layer toggle buttons organized by groups
  * Simplified from Controls component - uses Map instead of individual boolean props
@@ -15,7 +15,7 @@ export interface LayerState {
   loading?: boolean;
 }
 
-export interface LayerPanelAttrs {
+export interface LayersPanelAttrs {
   // Layer states
   layerStates: Map<LayerId, LayerState>;
   textEnabled: boolean;
@@ -25,11 +25,8 @@ export interface LayerPanelAttrs {
   onTextToggle: () => Promise<void>;
 
   // Other controls
-  isFullscreen: boolean;
-  onFullscreenToggle: () => void;
   blend: number;
   onBlendChange: (blend: number) => void;
-  onReferenceClick: () => void;
 }
 
 const LAYER_DISPLAY_NAMES: Record<LayerId, string> = {
@@ -43,18 +40,15 @@ const LAYER_DISPLAY_NAMES: Record<LayerId, string> = {
   text: 'Text'
 };
 
-export const LayerPanel: m.Component<LayerPanelAttrs> = {
+export const LayersPanel: m.Component<LayersPanelAttrs> = {
   view(vnode) {
     const {
       layerStates,
       textEnabled,
       onLayerToggle,
       onTextToggle,
-      isFullscreen,
-      onFullscreenToggle,
       blend,
-      onBlendChange,
-      onReferenceClick
+      onBlendChange
     } = vnode.attrs;
 
     const renderLayerButton = (layerId: LayerId) => {
@@ -69,28 +63,16 @@ export const LayerPanel: m.Component<LayerPanelAttrs> = {
       }, LAYER_DISPLAY_NAMES[layerId] + (isLoading ? '...' : ''));
     };
 
-    return m('div.controls', [
-      // Fullscreen toggle
-      m('button.btn', {
-        class: isFullscreen ? 'active' : '',
-        onclick: onFullscreenToggle
-      }, 'Fullscreen'),
-
-      // Blend slider
-      m(BlendSlider, {
-        blend,
-        onChange: onBlendChange
-      }),
-
-      // Reference button
-      m('button.btn', {
-        onclick: onReferenceClick
-      }, 'Reference'),
-
+    return m('div.layers.panel', [
       // Base layers
       m('div.layer-group', [
         m('h4', 'Base'),
         renderLayerButton('earth'),
+        // Blend slider after Earth button
+        m(BlendSlider, {
+          blend,
+          onChange: onBlendChange
+        }),
         renderLayerButton('sun'),
         renderLayerButton('graticule'),
       ]),

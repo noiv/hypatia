@@ -324,16 +324,47 @@ export class Scene {
   }
 
   /**
-   * Check if mouse position is over Earth
-   * Used for conditional zoom control
+   * Check if mouse position is over Earth using screen-space projection
+   * Works regardless of Earth layer visibility
    */
   checkMouseOverEarth(clientX: number, clientY: number): boolean {
-    const earthLayer = this.layers.get('earth');
-    if (!earthLayer) return false;
+    const canvas = this.renderer.domElement;
+    const rect = canvas.getBoundingClientRect();
 
-    const mouse = mouseToNDC(clientX, clientY, this.renderer.domElement);
-    const intersection = raycastObject(mouse, this.camera, earthLayer.getSceneObject(), this.raycaster);
-    return !!intersection;
+    // Convert client coordinates to canvas-relative coordinates
+    const canvasX = clientX - rect.left;
+    const canvasY = clientY - rect.top;
+
+    // Project Earth center (0,0,0) to screen space
+    const centerWorld = new THREE.Vector3(0, 0, 0);
+    const centerScreen = centerWorld.clone().project(this.camera);
+
+    // Check if Earth is behind camera
+    if (centerScreen.z > 1) return false;
+
+    // Convert NDC to canvas coordinates
+    const centerX = (centerScreen.x * 0.5 + 0.5) * rect.width;
+    const centerY = (1 - (centerScreen.y * 0.5 + 0.5)) * rect.height;
+
+    // Project a point on Earth's surface to get projected radius
+    const EARTH_RADIUS = 1; // EARTH_RADIUS_UNITS
+    const surfacePoint = new THREE.Vector3(EARTH_RADIUS, 0, 0);
+    const surfaceScreen = surfacePoint.clone().project(this.camera);
+
+    const surfaceX = (surfaceScreen.x * 0.5 + 0.5) * rect.width;
+    const surfaceY = (1 - (surfaceScreen.y * 0.5 + 0.5)) * rect.height;
+
+    // Calculate projected radius
+    const projectedRadius = Math.sqrt(
+      Math.pow(surfaceX - centerX, 2) + Math.pow(surfaceY - centerY, 2)
+    );
+
+    // Check if mouse is within projected circle
+    const mouseDistance = Math.sqrt(
+      Math.pow(canvasX - centerX, 2) + Math.pow(canvasY - centerY, 2)
+    );
+
+    return mouseDistance <= projectedRadius;
   }
 
   // ========================================================================

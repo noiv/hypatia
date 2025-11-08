@@ -14,7 +14,10 @@ export const BootstrapModal: m.Component<BootstrapModalAttrs> = {
 
     return m('div.bootstrap-modal', [
       m('div.bootstrap-content', [
-        m('h1', 'Hypatia'),
+        m('img.bootstrap-brand', {
+          src: '/hypatia-brand-white.svg',
+          alt: 'Hypatia'
+        }),
         m('p.welcome', 'Weather Visualization'),
 
         error ? [

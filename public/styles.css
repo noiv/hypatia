@@ -11,6 +11,20 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: #000;
   color: #fff;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Helper Classes */
+.no-events {
+  pointer-events: none;
+}
+
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 #app {
@@ -19,28 +33,20 @@ html, body {
 }
 
 .app-container {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
-  position: relative;
-  overflow: hidden;
+  z-index: 10;
   opacity: 0;
   animation: fadeIn 0.8s ease-in forwards;
-  pointer-events: none;
 }
 
 @keyframes fadeIn {
   to {
     opacity: 1;
   }
-}
-
-.canvas-container {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 1;
 }
 
 .scene-canvas {
@@ -54,16 +60,6 @@ html, body {
   z-index: 0;
 }
 
-.ui-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 10;
-  pointer-events: none;
-}
-
 /* Header */
 .header {
   position: absolute;
@@ -72,37 +68,25 @@ html, body {
   pointer-events: auto;
 }
 
-.header h1 {
-  font-size: 24px;
-  font-weight: 300;
-  margin: 0 0 8px 0;
-}
-
-.header h1 a {
-  color: white;
+.brand-link {
+  display: inline-block;
   text-decoration: none;
   cursor: pointer;
+  transition: opacity 0.2s ease;
 }
 
-.header h1 a:hover {
+.brand-link:hover {
   opacity: 0.8;
 }
 
-.header .time-display {
-  font-size: 14px;
-  opacity: 0.7;
-  margin: 0 0 4px 0;
+.brand-logo {
+  height: 40px;
+  width: auto;
+  display: block;
 }
 
-.header .time-utc {
-  font-size: 12px;
-  opacity: 0.5;
-  margin: 0;
-  font-family: 'Courier New', monospace;
-}
-
-/* Controls */
-.controls {
+/* Layers Panel */
+.layers {
   position: absolute;
   top: 100px;
   left: 20px;
@@ -157,22 +141,7 @@ html, body {
   cursor: not-allowed;
 }
 
-/* Blend control */
-.blend-control {
-  margin-top: 8px;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 6px;
-}
-
-.blend-label {
-  display: block;
-  font-size: 11px;
-  margin-bottom: 4px;
-  opacity: 0.7;
-}
-
+/* Blend slider in layer group */
 .blend-slider {
   width: 100%;
   height: 4px;
@@ -182,6 +151,7 @@ html, body {
   outline: none;
   border-radius: 2px;
   cursor: pointer;
+  margin: 8px 0;
 }
 
 .blend-slider::-webkit-slider-thumb {
@@ -203,29 +173,16 @@ html, body {
   border: none;
 }
 
-/* Time slider */
-.time-slider-container {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  pointer-events: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding-bottom: 40px;
-}
-
-/* Time display overlay - top right corner */
-.time-display-overlay {
+/* Time Circle Panel - top right */
+.time-circle {
   position: fixed;
   top: 20px;
   right: 20px;
-  pointer-events: none;
   z-index: 20;
+  pointer-events: auto;
 }
 
-.time-display-circle {
+.time-circle-display {
   background: rgba(0, 0, 0, 0.85);
   border-radius: 50%;
   width: 140px;
@@ -236,8 +193,66 @@ html, body {
   justify-content: center;
   border: 1px solid rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
+.time-circle-display:hover {
+  background: rgba(0, 0, 0, 0.95);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Time Bar Panel - bottom center */
+.time-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 40px;
+}
+
+/* Fullscreen Panel - top right, below time circle */
+.fullscreen {
+  position: fixed;
+  top: 170px;
+  right: 20px;
+  pointer-events: auto;
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+}
+
+.fullscreen-btn {
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  padding: 0;
+  transition: all 0.2s ease;
+}
+
+.fullscreen-btn:hover {
+  background: rgba(0, 0, 0, 0.95);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.fullscreen-icon {
+  width: 24px;
+  height: 24px;
+  display: block;
+  filter: invert(1);
+}
+
+/* Time display elements */
 .time-year {
   font-size: 14px;
   opacity: 0.6;
@@ -256,8 +271,8 @@ html, body {
   font-family: 'Courier New', monospace;
 }
 
-/* Timeline wrapper */
-.time-slider-wrapper {
+/* Time bar wrapper */
+.time-bar-wrapper {
   position: relative;
   width: 90%;
   max-width: 1200px;
@@ -273,7 +288,6 @@ html, body {
   left: 40px;
   right: 40px;
   height: 40px;
-  pointer-events: none;
 }
 
 .time-tick {
@@ -372,9 +386,9 @@ html, body {
   padding: 40px;
 }
 
-.bootstrap-content h1 {
-  font-size: 48px;
-  font-weight: 300;
+.bootstrap-brand {
+  height: 80px;
+  width: auto;
   margin-bottom: 16px;
 }
 

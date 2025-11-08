@@ -16,7 +16,7 @@ export const PerformancePanel: m.Component<PerformancePanelAttrs> = {
   view(vnode) {
     const { onElementCreated } = vnode.attrs;
 
-    return m('.performance',
+    return m('.performance.panel',
       m('.info', {
         oncreate: (vn: m.VnodeDOM) => {
           onElementCreated(vn.dom as HTMLElement);
