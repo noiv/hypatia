@@ -26,11 +26,11 @@ import { AppLogicService } from './services/AppLogicService';
 import { AppBootstrapService } from './services/AppBootstrapService';
 import { LayerStateService } from './services/LayerStateService';
 import { detectLocale, formatLocaleInfo } from './services/LocaleService';
+import { ViewportControlsService } from './services/ViewportControlsService';
 
 // Utils
 import { sanitizeUrl } from './utils/sanitizeUrl';
 import { clampTimeToDataRange } from './utils/timeUtils';
-import { WheelGestureDetector } from './utils/wheelGestureDetector';
 import { parseUrlState } from './utils/urlState';
 
 import type { LayerId } from './visualization/ILayer';
@@ -42,7 +42,7 @@ interface AppComponent extends m.Component {
   stateService?: AppStateService;
   sceneService?: SceneLifecycleService;
   logicService?: AppLogicService;
-  wheelGestureDetector?: WheelGestureDetector;
+  viewportControls?: ViewportControlsService;
 
   // Flags
   isBootstrapping: boolean;
@@ -64,7 +64,6 @@ interface AppComponent extends m.Component {
   handleTextToggle(): Promise<void>;
   handleFullscreenToggle(): void;
   handleTextSizeChange(action: 'increase' | 'decrease' | 'reset'): void;
-  handleWheel(e: WheelEvent): void;
 
   // Helpers
   getLayerStates(): Map<LayerId, any>;
@@ -130,20 +129,21 @@ export const App: AppComponent = {
     const scene = this.sceneService!.getScene();
     if (!scene) return;
 
-    // Initialize wheel gesture detector
-    this.wheelGestureDetector = new WheelGestureDetector({
-      timeoutMs: 100,
-      onReset: () => scene.toggleControls(true)
+    // Initialize viewport controls service
+    this.viewportControls = scene.createViewportControls({
+      onTimeChange: (newTime) => this.handleTimeChange(newTime),
+      onCameraChange: () => this.logicService!.updateUrl(),
+      getCurrentTime: () => this.stateService!.getCurrentTime()
     });
 
     // Register event handlers
     this.eventManager!.register(window, 'keydown', this.keyboardShortcuts!.handleKeydown as EventListener);
-    this.eventManager!.register(canvas, 'mousedown', (e) => scene.onMouseDown(e as MouseEvent));
-    this.eventManager!.register(canvas, 'click', (e) => scene.onClick(e as MouseEvent));
+    this.eventManager!.register(canvas, 'mousedown', (e) => this.viewportControls!.handleMouseDown(e as MouseEvent));
+    this.eventManager!.register(canvas, 'click', (e) => this.viewportControls!.handleClick(e as MouseEvent));
     this.eventManager!.register(
       canvas,
       'wheel',
-      (e) => this.handleWheel(e as WheelEvent),
+      (e) => this.viewportControls!.handleWheel(e as WheelEvent),
       { passive: false }
     );
 
@@ -210,11 +210,6 @@ export const App: AppComponent = {
       },
       state.preloadedImages || undefined
     );
-
-    // Setup camera change handler for URL updates
-    scene.onCameraChange(() => {
-      this.logicService!.updateUrl();
-    });
 
     this.stateService!.setScene(scene);
   },
@@ -317,51 +312,6 @@ export const App: AppComponent = {
     }
   },
 
-  handleWheel(e: WheelEvent) {
-    if (!this.wheelGestureDetector) return;
-
-    const scene = this.sceneService!.getScene();
-    if (!scene) return;
-
-    // Detect gesture direction
-    const gestureMode = this.wheelGestureDetector.detect(e);
-
-    // Handle horizontal scroll (time change)
-    if (gestureMode === 'horizontal') {
-      e.preventDefault();
-
-      // Disable OrbitControls during horizontal gesture
-      scene.toggleControls(false);
-
-      // Time change: 1 minute per pixel of scroll
-      const minutesPerPixel = 1;
-      const minutes = e.deltaX * minutesPerPixel;
-      const hoursDelta = minutes / 60;
-
-      const currentTime = this.stateService!.getCurrentTime();
-      const newTime = new Date(currentTime.getTime() + hoursDelta * 3600000);
-      const clampedTime = clampTimeToDataRange(newTime);
-
-      this.stateService!.setCurrentTime(clampedTime);
-      scene.updateTime(clampedTime);
-      this.logicService!.updateUrl();
-      m.redraw();
-    }
-    // Handle vertical scroll (zoom) - only when over Earth
-    else if (gestureMode === 'vertical') {
-      const isOverEarth = scene.checkMouseOverEarth(e.clientX, e.clientY);
-      if (!isOverEarth) {
-        e.preventDefault();
-        scene.toggleControls(false);
-        // Re-enable on next gesture reset
-      }
-      // If over Earth, ensure controls are enabled for zoom
-      else {
-        scene.toggleControls(true);
-      }
-    }
-  },
-
   getLayerStates(): Map<LayerId, any> {
     const scene = this.sceneService!.getScene();
     if (!scene) return new Map();
@@ -391,7 +341,7 @@ export const App: AppComponent = {
 
   onremove() {
     this.eventManager?.dispose();
-    this.wheelGestureDetector?.dispose();
+    this.viewportControls?.dispose();
     this.sceneService?.dispose();
   },
 

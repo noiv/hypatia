@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { DataService } from '../services/DataService';
+import { ViewportControlsService, type ViewportControlsCallbacks } from '../services/ViewportControlsService';
 import type { LayerRenderState } from '../config/types';
 import type { ILayer, LayerId } from './ILayer';
 import type { AnimationState } from './AnimationState';
@@ -15,12 +15,11 @@ export class Scene {
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
   private renderer: THREE.WebGLRenderer;
-  private controls: OrbitControls;
+  private viewportControls?: ViewportControlsService;
   private layers: Map<LayerId, ILayer> = new Map();
   private preloadedImages?: Map<string, HTMLImageElement> | undefined;
   private currentTime: Date;
   private animationId: number | null = null;
-  private onCameraChangeCallback: (() => void) | null = null;
   private raycaster: THREE.Raycaster;
   private lastFrameTime: number = performance.now();
   private stats: any;
@@ -75,16 +74,6 @@ export class Scene {
     // high-res performance render measurements
     this.perform = perform;
 
-    // Controls - smooth with damping for "mass" feeling
-    this.controls = new OrbitControls(this.camera, canvas);
-    this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.05;
-    this.controls.rotateSpeed = 0.5; // Base rotation speed (adjusted dynamically)
-    this.controls.zoomSpeed = 0.8;
-    this.controls.minDistance = 1.157; // 1M meters above surface
-    this.controls.maxDistance = 10;
-    this.controls.target.set(0, 0, 0); // Always look at scene origin
-
     // Ambient light (dim) so dark side isn't completely black
     const ambient = new THREE.AmbientLight(0x404040, 0.4);
     this.scene.add(ambient);
@@ -93,7 +82,7 @@ export class Scene {
     this.addAxesHelpers();
 
     // Note: Mouse/click/wheel event listeners are managed by App component
-    // OrbitControls manages its own wheel listener for zoom
+    // ViewportControlsService handles all input and camera controls
 
     // Initialize current time
     this.currentTime = new Date();
@@ -105,6 +94,19 @@ export class Scene {
     this.animate();
   }
 
+  /**
+   * Create viewport controls service (called after Scene construction)
+   */
+  createViewportControls(callbacks: ViewportControlsCallbacks): ViewportControlsService {
+    const canvas = this.renderer.domElement;
+    this.viewportControls = new ViewportControlsService(
+      this.camera,
+      canvas,
+      this,
+      callbacks
+    );
+    return this.viewportControls;
+  }
 
   private addAxesHelpers() {
     // North Pole axis (red line from center to top)
@@ -194,11 +196,12 @@ export class Scene {
     const deltaTime = (currentTime - this.lastFrameTime) / 1000;
     this.lastFrameTime = currentTime;
 
-    // Update controls
+    // Update viewport controls
     const distance = this.camera.position.length();
-    const altitude = distance - 1.0;
-    this.controls.rotateSpeed = 1.0 * altitude;
-    this.controls.update();
+    if (this.viewportControls) {
+      this.viewportControls.updateRotateSpeed(distance);
+      this.viewportControls.update();
+    }
 
     // Build animation state once
     const animState: AnimationState = {
@@ -281,11 +284,12 @@ export class Scene {
    * Get camera state (position and distance)
    */
   getCameraState(): { x: number; y: number; z: number; distance: number } {
+    const target = new THREE.Vector3(0, 0, 0); // Camera always looks at origin
     return {
       x: this.camera.position.x,
       y: this.camera.position.y,
       z: this.camera.position.z,
-      distance: this.camera.position.distanceTo(this.controls.target)
+      distance: this.camera.position.distanceTo(target)
     };
   }
 
@@ -305,22 +309,6 @@ export class Scene {
     );
 
     this.camera.lookAt(0, 0, 0);
-  }
-
-  /**
-   * Register callback for camera changes
-   */
-  onCameraChange(callback: () => void) {
-    this.onCameraChangeCallback = callback;
-    this.controls.addEventListener('change', callback);
-  }
-
-
-  /**
-   * Toggle orbit controls
-   */
-  toggleControls(enabled: boolean) {
-    this.controls.enabled = enabled;
   }
 
   /**
@@ -491,18 +479,18 @@ export class Scene {
       cancelAnimationFrame(this.animationId);
     }
 
-    if (this.onCameraChangeCallback) {
-      this.controls.removeEventListener('change', this.onCameraChangeCallback);
-    }
-
     // Dispose all layers
     this.layers.forEach(layer => {
       layer.dispose();
     });
     this.layers.clear();
 
+    // Dispose viewport controls (which disposes OrbitControls)
+    if (this.viewportControls) {
+      this.viewportControls.dispose();
+    }
+
     // Dispose THREE.js resources
-    this.controls.dispose();
     this.renderer.dispose();
   }
 }
