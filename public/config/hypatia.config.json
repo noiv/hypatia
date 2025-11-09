@@ -43,6 +43,12 @@
     "cacheStrategy": "progressive",
     "preloadCritical": true
   },
+  "bootstrap": {
+    "autoContinue": true
+  },
+  "dataCache": {
+    "maxConcurrentDownloads": 4
+  },
   "features": {
     "enableGeolocation": false
   },

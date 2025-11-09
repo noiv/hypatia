@@ -48,6 +48,12 @@ export interface HypatiaConfig {
     cacheStrategy: string;
     preloadCritical: boolean;
   };
+  bootstrap: {
+    autoContinue: boolean;
+  };
+  dataCache: {
+    maxConcurrentDownloads: number;
+  };
   features: {
     enableGeolocation: boolean;
   };
