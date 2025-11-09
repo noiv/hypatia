@@ -7,13 +7,14 @@
 import type { Scene } from '../visualization/scene';
 import type { ECMWFRun } from '../services/ECMWFService';
 import type { UserLocation } from '../services/GeolocationService';
-import type { BootstrapStatus } from '../services/AppBootstrapService';
-import type { LoadProgress } from '../services/ResourceManager';
+import type { BootstrapStatus, BootstrapProgress } from '../services/AppBootstrapService';
 import type { LayerState } from './LayerState';
 
 export interface AppState {
   // Time
   currentTime: Date;
+  sliderStartTime: Date;  // Fixed slider edge (calculated once at init from maxRangeDays)
+  sliderEndTime: Date;    // Fixed slider edge (calculated once at init from maxRangeDays)
 
   // Scene
   scene: Scene | null;
@@ -23,7 +24,7 @@ export interface AppState {
 
   // Bootstrap
   bootstrapStatus: BootstrapStatus;
-  bootstrapProgress: LoadProgress | null;
+  bootstrapProgress: BootstrapProgress | null;
   bootstrapError: string | null;
 
   // Preloaded resources

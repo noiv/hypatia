@@ -1,16 +1,18 @@
 import m from 'mithril';
-import type { LoadProgress } from '../services/ResourceManager';
+import type { BootstrapProgress, BootstrapStatus } from '../services/AppBootstrapService';
 import { getCapabilityHelpUrls } from '../utils/capabilityCheck';
 
 interface BootstrapModalAttrs {
-  progress: LoadProgress | null;
+  progress: BootstrapProgress | null;
   error: string | null;
+  status?: BootstrapStatus;
   onRetry?: () => void;
+  onContinue?: () => void;
 }
 
 export const BootstrapModal: m.Component<BootstrapModalAttrs> = {
   view(vnode) {
-    const { progress, error, onRetry } = vnode.attrs;
+    const { progress, error, status, onRetry, onContinue } = vnode.attrs;
 
     return m('div.bootstrap-modal', [
       m('div.bootstrap-content', [
@@ -48,16 +50,21 @@ export const BootstrapModal: m.Component<BootstrapModalAttrs> = {
           onRetry && !error.includes('WebGL') && !error.includes('WebGPU') && m('button.retry-btn', {
             onclick: onRetry
           }, 'Retry')
-        ] : progress ? [
-          // Loading state
+        ] : progress || status === 'waiting' ? [
+          // Loading or Waiting state
           m('div.progress-container', [
             m('div.progress-bar', [
               m('div.progress-fill', {
-                style: `width: ${progress.percentage}%`
+                style: status === 'waiting' ? 'width: 100%' : `width: ${progress?.percentage || 0}%`
               })
             ]),
-            m('p.progress-text', `${Math.round(progress.percentage)}%`),
-            m('p.progress-file', progress.currentFile ? progress.currentFile.split('/').pop() : 'Loading...')
+            m('p.progress-text', status === 'waiting' ? 'Ready' : `${Math.round(progress?.percentage || 0)}%`),
+            progress?.currentFile && status !== 'waiting' ?
+              m('p.progress-file', progress.currentFile) : null,
+            m('button.time-edge-button', {
+              onclick: onContinue,
+              style: `margin-top: 20px; visibility: ${status === 'waiting' ? 'visible' : 'hidden'}`
+            }, 'Continue')
           ])
         ] : [
           // Initial state

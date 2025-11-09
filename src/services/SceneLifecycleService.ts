@@ -44,11 +44,9 @@ export class SceneLifecycleService {
 
   /**
    * Load layers from URL keys
+   * Progress is tracked via LayerCacheControl events
    */
-  async loadLayersFromUrl(
-    layerUrlKeys: string[],
-    onProgress?: (layerUrlKey: string) => void
-  ): Promise<void> {
+  async loadLayersFromUrl(layerUrlKeys: string[]): Promise<void> {
     if (!this.scene) {
       console.error('Scene not initialized');
       return;
@@ -63,11 +61,9 @@ export class SceneLifecycleService {
         // Convert URL key to layer ID (temp -> temp2m, etc.)
         const layerId = configLoader.urlKeyToLayerId(urlKey) as LayerId;
 
-        // Create and show layer
+        // Create and show layer (data loading fires LayerCacheControl events)
         await this.scene.createLayer(layerId);
         this.scene.setLayerVisible(layerId, true);
-
-        onProgress?.(urlKey);
       } catch (error) {
         console.error(`Bootstrap.error: ${urlKey}`, error);
       }

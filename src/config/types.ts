@@ -45,7 +45,6 @@ export interface HypatiaConfig {
   };
   performance: {
     workerCount: number;
-    cacheStrategy: string;
     preloadCritical: boolean;
   };
   bootstrap: {
@@ -53,9 +52,13 @@ export interface HypatiaConfig {
   };
   dataCache: {
     maxConcurrentDownloads: number;
+    cacheStrategy: 'future-first' | 'spiral-out';
   };
   features: {
     enableGeolocation: boolean;
+  };
+  ui: {
+    backgroundColor: string;
   };
   build: {
     version: string;

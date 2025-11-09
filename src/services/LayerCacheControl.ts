@@ -9,6 +9,8 @@
 import type { LayerId } from '../visualization/ILayer';
 import type { TimeStep } from '../config/types';
 import { PriorityQueue, type Priority } from '../utils/PriorityQueue';
+import { getCacheStrategy } from './CacheStrategy';
+import { configLoader } from '../config';
 /**
  * Simple EventEmitter for browser
  */
@@ -74,6 +76,8 @@ export interface TimestampEvent {
 export interface TimestampLoadedEvent extends TimestampEvent {
   data: Uint16Array | { u: Uint16Array; v: Uint16Array };
 }
+
+export type FileLoadUpdateEvent = TimestampLoadedEvent;
 
 export interface TimestampFailedEvent extends TimestampEvent {
   error: Error;
@@ -144,9 +148,10 @@ export class LayerCacheControl extends EventEmitter {
       throw new Error(`Layer ${layerId} not registered`);
     }
 
-    const currentIndex = this.timeToIndex(currentTime, timeSteps);
+    const fractionalIndex = this.timeToIndex(currentTime, timeSteps);
+    const currentIndex = Math.floor(fractionalIndex);
 
-    console.log(`LayerCacheControl: Initializing ${layerId} at index ${currentIndex}`);
+    console.log(`LayerCacheControl: Initializing ${layerId} at index ${currentIndex} (${fractionalIndex})`);
 
     // 1. Load ±1 immediately (critical priority)
     const adjacentIndices = [
@@ -191,7 +196,8 @@ export class LayerCacheControl extends EventEmitter {
     const timeSteps = this.timeSteps.get(layerId);
     if (!timeSteps) return;
 
-    const currentIndex = this.timeToIndex(currentTime, timeSteps);
+    const fractionalIndex = this.timeToIndex(currentTime, timeSteps);
+    const currentIndex = Math.floor(fractionalIndex);
 
     // Promote ±1 adjacent to high priority
     const adjacentIndices = [
@@ -275,7 +281,7 @@ export class LayerCacheControl extends EventEmitter {
 
       // Mark as loaded
       this.setState(layerId, index, { status: 'loaded', data });
-      this.emit('timestampLoaded', { layerId, index, timeStep, data });
+      this.emit('fileLoadUpdate', { layerId, index, timeStep, data });
 
       console.log(`LayerCacheControl: Loaded ${layerId}[${index}] (${priority})`);
     } catch (error) {
@@ -295,10 +301,22 @@ export class LayerCacheControl extends EventEmitter {
   private async fetchBinaryFile(path: string): Promise<Uint16Array> {
     const response = await fetch(path);
     if (!response.ok) {
-      throw new Error(`Failed to load ${path}: ${response.statusText}`);
+      throw new Error(`HTTP ${response.status}: ${path}`);
+    }
+
+    // Check content type to ensure we got binary data, not HTML error page
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('text/html')) {
+      throw new Error(`Got HTML instead of binary data: ${path}`);
     }
 
     const buffer = await response.arrayBuffer();
+
+    // Validate byte length is even (required for Uint16Array)
+    if (buffer.byteLength % 2 !== 0) {
+      throw new Error(`Invalid byte length (${buffer.byteLength}): ${path}`);
+    }
+
     return new Uint16Array(buffer);
   }
 
@@ -374,12 +392,25 @@ export class LayerCacheControl extends EventEmitter {
     const start = Math.max(0, currentIndex - halfWindow);
     const end = Math.min(totalTimesteps - 1, currentIndex + halfWindow);
 
-    const indices: number[] = [];
+    // Get all indices in window
+    const windowIndices: number[] = [];
     for (let i = start; i <= end; i++) {
-      indices.push(i);
+      windowIndices.push(i);
     }
 
-    return indices;
+    // Filter out current ± 1 (already loaded as priority)
+    const adjacentSet = new Set([currentIndex - 1, currentIndex, currentIndex + 1]);
+
+    // Apply cache strategy to determine load order
+    const config = configLoader.getHypatiaConfig();
+    const strategy = getCacheStrategy(config.dataCache.cacheStrategy);
+
+    // Strategy expects indices relative to current, so we need to map our window indices
+    // Get order for the remaining indices
+    const orderedIndices = strategy.getLoadOrder(currentIndex, totalTimesteps);
+
+    // Filter to only include indices within our window
+    return orderedIndices.filter(i => i >= start && i <= end && !adjacentSet.has(i));
   }
 
   /**

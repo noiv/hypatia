@@ -16,7 +16,7 @@
     "defaultZoom": 2,
     "maxZoom": 8,
     "minZoom": 1,
-    "defaultAltitude": 19113000,
+    "defaultAltitude": 20000000,
     "defaultLayers": ["earth", "sun", "graticule"]
   },
   "camera": {
@@ -40,17 +40,20 @@
   },
   "performance": {
     "workerCount": 4,
-    "cacheStrategy": "progressive",
     "preloadCritical": true
   },
   "bootstrap": {
-    "autoContinue": true
+    "autoContinue": false
   },
   "dataCache": {
-    "maxConcurrentDownloads": 4
+    "maxConcurrentDownloads": 4,
+    "cacheStrategy": "future-first"
   },
   "features": {
     "enableGeolocation": false
+  },
+  "ui": {
+    "backgroundColor": "#161616"
   },
   "build": {
     "version": "0.0.4-dev",

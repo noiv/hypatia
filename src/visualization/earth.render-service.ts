@@ -3,6 +3,7 @@ import { EARTH_RADIUS_UNITS } from '../utils/constants';
 import { EARTH_CONFIG } from '../config';
 import type { ILayer, LayerId } from './ILayer';
 import type { AnimationState } from './AnimationState';
+import { getLayerCacheControl } from '../services/LayerCacheControl';
 
 /**
  * Earth - Earth mesh with basemap textures and day/night lighting
@@ -124,8 +125,30 @@ class Earth {
       } else {
         // Fallback to loader if no preloaded images provided
         const loader = new THREE.TextureLoader();
-        texA = loader.load(`${basemapA.path}/${face}.png`);
-        texB = loader.load(`${basemapB.path}/${face}.png`);
+
+        const cacheControl = getLayerCacheControl();
+
+        texA = loader.load(
+          `${basemapA.path}/${face}.png`,
+          () => {
+            // Emit fileLoadUpdate event when basemap loads
+            cacheControl.emit('fileLoadUpdate', {
+              layerId: 'earth',
+              fileName: `${basemapA.name}/${face}.png`
+            });
+          }
+        );
+
+        texB = loader.load(
+          `${basemapB.path}/${face}.png`,
+          () => {
+            // Emit fileLoadUpdate event when basemap loads
+            cacheControl.emit('fileLoadUpdate', {
+              layerId: 'earth',
+              fileName: `${basemapB.name}/${face}.png`
+            });
+          }
+        );
       }
 
       this.textures.push(texA, texB);

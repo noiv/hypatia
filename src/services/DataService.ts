@@ -242,7 +242,11 @@ export class DataService {
           configLoader.getDataBaseUrl(),
           'temp2m'
         );
-        timeSteps = dataServiceInstance.generateTimeSteps();
+
+        // Generate timesteps from maxRangeDays config, not dataset range
+        const hypatiaConfig = configLoader.getHypatiaConfig();
+        const maxRangeDays = hypatiaConfig.data.maxRangeDays;
+        timeSteps = dataServiceInstance.generateTimeSteps(currentTime, maxRangeDays);
 
         // Create empty texture
         texture = dataServiceInstance.createEmptyTexture(timeSteps.length);
@@ -252,7 +256,7 @@ export class DataService {
         cacheControl.registerLayer(layerId, timeSteps);
 
         // Listen to cache events and update texture
-        cacheControl.on('timestampLoaded', async (event: any) => {
+        cacheControl.on('fileLoadUpdate', async (event: any) => {
           if (event.layerId === layerId && event.data) {
             await dataServiceInstance.loadTimestampIntoTexture(
               texture,
@@ -287,7 +291,9 @@ export class DataService {
           configLoader.getDataBaseUrl(),
           'tprate'
         );
-        timeSteps = dataServiceInstance.generateTimeSteps();
+
+        // Generate timesteps from maxRangeDays config, not dataset range
+        timeSteps = dataServiceInstance.generateTimeSteps(currentTime, maxRangeDays);
 
         // Create empty texture
         texture = dataServiceInstance.createEmptyTexture(timeSteps.length);
@@ -297,7 +303,7 @@ export class DataService {
         cacheControl.registerLayer(layerId, timeSteps);
 
         // Listen to cache events and update texture
-        cacheControl.on('timestampLoaded', async (event: any) => {
+        cacheControl.on('fileLoadUpdate', async (event: any) => {
           if (event.layerId === layerId && event.data) {
             await dataServiceInstance.loadTimestampIntoTexture(
               texture,

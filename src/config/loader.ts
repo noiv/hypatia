@@ -44,6 +44,15 @@ class ConfigLoader {
     // Log build version info
     console.log(`%cBuild: v${config.build.version} (${config.build.hash}) - ${config.build.timestamp}`, 'font-weight: 800; color: darkorange');
 
+    // Log data window configuration
+    const maxRangeDays = config.data.maxRangeDays;
+    const currentTime = new Date();
+    const halfWindow = Math.floor(maxRangeDays / 2);
+    const startDate = new Date(currentTime);
+    startDate.setDate(startDate.getDate() - halfWindow);
+    const startDateStr = startDate.toISOString().substring(0, 10);
+    console.log(`Data window: ${startDateStr} + ${maxRangeDays} days`);
+
     return config;
   }
 

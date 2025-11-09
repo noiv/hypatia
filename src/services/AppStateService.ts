@@ -7,8 +7,7 @@
 
 import type { AppState } from '../state/AppState';
 import type { Scene } from '../visualization/scene';
-import type { BootstrapStatus } from './AppBootstrapService';
-import type { LoadProgress } from './ResourceManager';
+import type { BootstrapStatus, BootstrapProgress } from './AppBootstrapService';
 import type { ECMWFRun } from './ECMWFService';
 import type { UserLocation } from './GeolocationService';
 
@@ -16,8 +15,11 @@ export class AppStateService {
   private state: AppState;
 
   constructor(initialState: Partial<AppState>) {
+    const now = new Date();
     this.state = {
-      currentTime: new Date(),
+      currentTime: now,
+      sliderStartTime: now,  // Will be calculated properly in oninit
+      sliderEndTime: now,    // Will be calculated properly in oninit
       isFullscreen: false,
       blend: 0.0,
       textEnabled: false,
@@ -109,11 +111,11 @@ export class AppStateService {
     this.state.bootstrapStatus = status;
   }
 
-  getBootstrapProgress(): LoadProgress | null {
+  getBootstrapProgress(): BootstrapProgress | null {
     return this.state.bootstrapProgress;
   }
 
-  setBootstrapProgress(progress: LoadProgress | null): void {
+  setBootstrapProgress(progress: BootstrapProgress | null): void {
     this.state.bootstrapProgress = progress;
   }
 

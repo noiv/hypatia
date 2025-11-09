@@ -91,14 +91,12 @@ export class ViewportControlsService {
     const hypatiaConfig = configLoader.getHypatiaConfig();
     this.config = hypatiaConfig.camera;
 
-    // Initialize from camera position
+    // Initialize from current camera position (which may have been set from URL)
     this.updateSphericalFromCamera();
 
-    // Set initial distance
-    this.distance = this.config.defaultDistance;
+    // Keep distance from camera (don't override with default)
+    // This preserves URL camera state if it was set via setCameraState
     this.targetDistance = this.distance;
-
-    this.updateCameraFromSpherical();
   }
 
   /**
@@ -121,9 +119,9 @@ export class ViewportControlsService {
     this.camera.position.z = sinPhiRadius * Math.cos(this.theta);
     this.camera.lookAt(0, 0, 0);
 
-    if (this.callbacks.onCameraChange) {
-      this.callbacks.onCameraChange();
-    }
+    // Note: onCameraChange callback intentionally NOT called here
+    // This method is called every frame in update() loop
+    // Callback should only be triggered by user interactions, not animation loop
   }
 
   /**
@@ -156,14 +154,23 @@ export class ViewportControlsService {
 
     // Stop completely when velocity is very small (prevent tiny drifts)
     const minVel = this.config.minVelocity;
+    const wasMoving = Math.abs(this.thetaVelocity) >= minVel || Math.abs(this.phiVelocity) >= minVel;
+
     if (Math.abs(this.thetaVelocity) < minVel) this.thetaVelocity = 0;
     if (Math.abs(this.phiVelocity) < minVel) this.phiVelocity = 0;
+
+    const nowStopped = this.thetaVelocity === 0 && this.phiVelocity === 0;
 
     // Apply zoom damping (keep smooth zoom separate from rotation physics)
     const dampingFactor = this.config.dampingFactor;
     this.distance += (this.targetDistance - this.distance) * dampingFactor;
 
     this.updateCameraFromSpherical();
+
+    // Trigger camera change callback when movement stops
+    if (wasMoving && nowStopped && this.callbacks.onCameraChange) {
+      this.callbacks.onCameraChange();
+    }
   }
 
   /**
@@ -229,6 +236,11 @@ export class ViewportControlsService {
         this.config.minDistance,
         this.config.maxDistance
       );
+
+      // Trigger camera change callback after zoom
+      if (this.callbacks.onCameraChange) {
+        this.callbacks.onCameraChange();
+      }
     }
   }
 
@@ -303,6 +315,11 @@ export class ViewportControlsService {
     if (e.button === 0) {
       this.isDragging = false;
       // Velocity continues based on last movement (momentum)
+
+      // Trigger camera change callback after user interaction ends
+      if (this.callbacks.onCameraChange) {
+        this.callbacks.onCameraChange();
+      }
     }
   }
 
@@ -462,6 +479,11 @@ export class ViewportControlsService {
       this.lastTouchDistance = 0;
       this.lastTouchX = 0;
       this.lastTouchY = 0;
+
+      // Trigger camera change callback after touch interaction ends
+      if (this.callbacks.onCameraChange) {
+        this.callbacks.onCameraChange();
+      }
     }
 
     // Double-tap detection (only for single finger)
@@ -594,6 +616,11 @@ export class ViewportControlsService {
         this.phiVelocity = 0;
         // Sync zoom target
         this.targetDistance = this.distance;
+
+        // Trigger camera change callback after animation completes
+        if (this.callbacks.onCameraChange) {
+          this.callbacks.onCameraChange();
+        }
       })
       .onStop(() => {
         this.activeTween = null;

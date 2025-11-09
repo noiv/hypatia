@@ -42,7 +42,41 @@ const LAYER_DISPLAY_NAMES: Record<LayerId, string> = {
   text: 'Text'
 };
 
+// Event handlers stored per component instance
+const eventHandlers = new WeakMap<any, () => void>();
+
 export const LayersPanel: m.Component<LayersPanelAttrs> = {
+  oninit(vnode) {
+    // Subscribe to cache control events to trigger redraws
+    try {
+      const cacheControl = getLayerCacheControl();
+      const handleCacheEvent = () => m.redraw();
+
+      // Store handler for cleanup
+      eventHandlers.set(vnode.state, handleCacheEvent);
+
+      // Single event listener - fileLoadUpdate fires after each file loads
+      cacheControl.on('fileLoadUpdate', handleCacheEvent);
+    } catch (e) {
+      // Cache control not initialized yet
+    }
+  },
+
+  onremove(vnode) {
+    // Cleanup event listener
+    try {
+      const cacheControl = getLayerCacheControl();
+      const handleCacheEvent = eventHandlers.get(vnode.state);
+
+      if (handleCacheEvent) {
+        cacheControl.removeListener('fileLoadUpdate', handleCacheEvent);
+        eventHandlers.delete(vnode.state);
+      }
+    } catch (e) {
+      // Cache control not initialized
+    }
+  },
+
   view(vnode) {
     const {
       layerStates,

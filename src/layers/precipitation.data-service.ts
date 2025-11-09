@@ -23,31 +23,28 @@ export class PrecipitationDataService {
   }
 
   /**
-   * Generate list of time steps from compact manifest format
-   * Parses range "20251030_00z-20251107_18z" with step "6h"
+   * Generate list of time steps from maxRangeDays config (not dataset range)
+   * Creates timesteps centered at currentTime ± (maxRangeDays/2)
    */
-  generateTimeSteps(): TimeStep[] {
+  generateTimeSteps(currentTime: Date, maxRangeDays: number): TimeStep[] {
     const steps: TimeStep[] = [];
-
-    // Parse range: "20251030_00z-20251107_18z"
-    const rangeParts = this.datasetInfo.range.split('-');
-    if (rangeParts.length !== 2) {
-      throw new Error(`Invalid range format: ${this.datasetInfo.range}`);
-    }
-    const startStr = rangeParts[0];
-    const endStr = rangeParts[1];
-    if (!startStr || !endStr) {
-      throw new Error(`Invalid range format: ${this.datasetInfo.range}`);
-    }
-    const startDate = this.parseTimestamp(startStr);
-    const endDate = this.parseTimestamp(endStr);
 
     // Parse step (e.g., "6h" -> 6)
     const stepHours = parseInt(this.datasetInfo.step);
 
-    // Generate timesteps
+    // Calculate first day: currentTime - floor(maxRangeDays / 2) days
+    const daysBack = Math.floor(maxRangeDays / 2);
+    const startDate = new Date(currentTime);
+    startDate.setUTCDate(startDate.getUTCDate() - daysBack);
+    startDate.setUTCHours(0, 0, 0, 0); // Start at 00z
+
+    // Calculate end time: first day + maxRangeDays
+    const endDate = new Date(startDate);
+    endDate.setUTCDate(endDate.getUTCDate() + maxRangeDays);
+
+    // Generate timesteps (exactly maxRangeDays * 4 = 60 for 15 days)
     const current = new Date(startDate);
-    while (current <= endDate) {
+    while (current < endDate) {
       const year = current.getUTCFullYear();
       const month = String(current.getUTCMonth() + 1).padStart(2, '0');
       const day = String(current.getUTCDate()).padStart(2, '0');
@@ -67,7 +64,7 @@ export class PrecipitationDataService {
       current.setUTCHours(current.getUTCHours() + stepHours);
     }
 
-    console.log(`${this.paramName}: ${steps.length} timesteps (${this.datasetInfo.range})`);
+    console.log(`${this.paramName}: ${steps.length} timesteps (maxRangeDays=${maxRangeDays})`);
 
     return steps;
   }

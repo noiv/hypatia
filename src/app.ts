@@ -79,13 +79,18 @@ export const App: AppComponent = {
     const localeInfo = detectLocale();
     console.log(formatLocaleInfo(localeInfo));
 
+    // Load hypatia config first (needed for defaultAltitude, defaultLayers)
+    await configLoader.loadHypatiaConfig();
+
     // Sanitize URL and get corrected state (with locale for default camera position)
     const bootstrapState = { localeInfo } as any;
     const sanitizedState = sanitizeUrl(bootstrapState);
 
-    // Initialize services
+    // Initialize services (slider range will be calculated after config loads)
     this.stateService = new AppStateService({
       currentTime: sanitizedState.time,
+      sliderStartTime: sanitizedState.time,  // Temporary, will be set in bootstrap
+      sliderEndTime: sanitizedState.time,    // Temporary, will be set in bootstrap
       blend: 0.0,
       textEnabled: sanitizedState.layers.includes('text')
     });
@@ -183,6 +188,25 @@ export const App: AppComponent = {
     if (result.bootstrapStatus === 'ready') {
       // Get layer state (already initialized in bootstrap)
       this.stateService!.setLayerState(LayerStateService.getInstance());
+
+      // Calculate fixed slider range from maxRangeDays (now that config is loaded)
+      // Must match the data generation logic: first day 00z, last day 18z
+      const hypatiaConfig = configLoader.getHypatiaConfig();
+      const maxRangeDays = hypatiaConfig.data.maxRangeDays;
+      const daysBack = Math.floor(maxRangeDays / 2);
+      const currentTime = this.stateService!.getCurrentTime();
+
+      // First timestamp: currentTime - daysBack at 00z
+      const sliderStartTime = new Date(currentTime);
+      sliderStartTime.setUTCDate(sliderStartTime.getUTCDate() - daysBack);
+      sliderStartTime.setUTCHours(0, 0, 0, 0);
+
+      // Last timestamp: (currentTime - daysBack + maxRangeDays) - 6 hours = last day at 18z
+      const sliderEndTime = new Date(sliderStartTime);
+      sliderEndTime.setUTCDate(sliderEndTime.getUTCDate() + maxRangeDays);
+      sliderEndTime.setUTCHours(sliderEndTime.getUTCHours() - 6); // Back to 18z of previous day
+
+      this.stateService!.update({ sliderStartTime, sliderEndTime });
     }
 
     // Log loaded with memory
@@ -229,10 +253,8 @@ export const App: AppComponent = {
       return;
     }
 
-    await this.sceneService!.loadLayersFromUrl(
-      urlState.layers,
-      () => m.redraw()
-    );
+    // Load layers (progress tracked via LayerCacheControl events)
+    await this.sceneService!.loadLayersFromUrl(urlState.layers);
 
     // After all layers loaded, update sun direction based on which layers are visible
     const scene = this.sceneService!.getScene();
@@ -372,21 +394,23 @@ export const App: AppComponent = {
 
     const state = this.stateService.get();
 
-    // Show bootstrap modal during loading or error
+    // Show bootstrap modal during loading, waiting, or error
     if (state.bootstrapStatus !== 'ready') {
       return m(BootstrapModal as any, {
         progress: state.bootstrapProgress,
         error: state.bootstrapError,
+        status: state.bootstrapStatus,
         onRetry: state.bootstrapStatus === 'error' ? () => {
           this.stateService!.setBootstrapStatus('loading');
           this.stateService!.setBootstrapError(null);
           this.stateService!.setBootstrapProgress(null);
           this.runBootstrap();
+        } : undefined,
+        onContinue: state.bootstrapStatus === 'waiting' ? () => {
+          this.stateService!.setBootstrapStatus('ready');
         } : undefined
       });
     }
-
-    const { startTime, endTime } = this.getDataRange();
 
     // Show main app when ready
     return m('div.app-container.ready.no-events', [
@@ -417,8 +441,8 @@ export const App: AppComponent = {
 
       m(TimeBarPanel, {
         currentTime: state.currentTime,
-        startTime,
-        endTime,
+        startTime: state.sliderStartTime,
+        endTime: state.sliderEndTime,
         onTimeChange: (time) => this.handleTimeChange(time)
       }),
 

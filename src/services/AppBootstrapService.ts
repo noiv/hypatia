@@ -6,7 +6,6 @@
 
 import { getCurrentTime } from './TimeService';
 import { getLatestRun, type ECMWFRun } from './ECMWFService';
-import { preloadImages, type LoadProgress } from './ResourceManager';
 import { getUserLocation, type UserLocation } from './GeolocationService';
 import { detectLocale, type LocaleInfo } from './LocaleService';
 import { LayerStateService } from './LayerStateService';
@@ -15,13 +14,23 @@ import { configLoader } from '../config';
 import { checkBrowserCapabilities, getCapabilityHelpUrls } from '../utils/capabilityCheck';
 import { preloadFont } from 'troika-three-text';
 import { TEXT_CONFIG } from '../config';
-import { initializeLayerCacheControl } from './LayerCacheControl';
+import { initializeLayerCacheControl, getLayerCacheControl } from './LayerCacheControl';
+import type { FileLoadUpdateEvent } from './LayerCacheControl';
+import type { LayerId } from '../visualization/ILayer';
+import { parseUrlState } from '../utils/urlState';
 
-export type BootstrapStatus = 'loading' | 'ready' | 'error';
+export type BootstrapStatus = 'loading' | 'waiting' | 'ready' | 'error';
+
+export interface BootstrapProgress {
+  loaded: number;
+  total: number;
+  percentage: number;
+  currentFile: string;
+}
 
 export interface BootstrapState {
   bootstrapStatus: BootstrapStatus;
-  bootstrapProgress: LoadProgress | null;
+  bootstrapProgress: BootstrapProgress | null;
   bootstrapError: string | null;
   currentTime: Date | null;
   latestRun: ECMWFRun | null;
@@ -139,35 +148,9 @@ export class AppBootstrapService {
       }
     },
 
-    IMAGES: {
-      start: 35,
-      end: 90,
-      label: 'Loading resources...',
-      async run(state, _app, onProgress) {
-        const progressUpdater = (progress: LoadProgress) => {
-          const imagesStart = this.start;
-          const imagesRange = this.end - imagesStart;
-          const percentage = imagesStart + (progress.loaded / progress.total) * imagesRange;
-
-          state.bootstrapProgress = {
-            loaded: progress.loaded,
-            total: progress.total,
-            percentage,
-            currentFile: progress.currentFile || ''
-          };
-
-          if (onProgress) {
-            onProgress({ percentage, label: progress.currentFile || '' });
-          }
-        };
-
-        state.preloadedImages = await preloadImages('critical', progressUpdater);
-      }
-    },
-
     GEOLOCATION: {
-      start: 90,
-      end: 90,
+      start: 35,
+      end: 35,
       label: 'Getting location...',
       async run(state) {
         // Optional - fire and forget
@@ -185,8 +168,8 @@ export class AppBootstrapService {
     },
 
     LAYERS: {
-      start: 90,
-      end: 93,
+      start: 35,
+      end: 40,
       label: 'Initializing layers...',
       async run() {
         const layerState = LayerStateService.getInstance();
@@ -195,8 +178,8 @@ export class AppBootstrapService {
     },
 
     SCENE: {
-      start: 93,
-      end: 95,
+      start: 40,
+      end: 45,
       label: 'Initializing scene...',
       async run(_state, app) {
         await app.initializeScene();
@@ -204,17 +187,182 @@ export class AppBootstrapService {
     },
 
     LOAD_LAYERS: {
-      start: 95,
-      end: 97,
-      label: 'Loading enabled layers...',
-      async run(_state, app) {
-        await app.loadEnabledLayers();
+      start: 45,
+      end: 95,
+      label: 'Initializing scene...',
+      async run(state, app, onProgress) {
+        // Setup event-based progress tracking
+        const cacheControl = getLayerCacheControl();
+        const LOAD_LAYERS_START = 45;
+        const LOAD_LAYERS_RANGE = 50; // 45-95%
+
+        // Track which adjacent timestamps are loaded per layer
+        const layerProgress = new Map<LayerId, Set<string>>();
+
+        // Get layers from URL - only track data layers that will actually be loaded
+        const urlState = parseUrlState();
+        if (!urlState) {
+          // No layers to load
+          return;
+        }
+
+        // Map URL keys to layer IDs and filter to only data layers
+        const allDataLayers: LayerId[] = ['temp2m', 'precipitation', 'wind10m', 'pressure_msl'];
+        const dataLayers: LayerId[] = [];
+
+        for (const urlKey of urlState.layers) {
+          const layerId = configLoader.urlKeyToLayerId(urlKey) as LayerId;
+          if (allDataLayers.includes(layerId)) {
+            dataLayers.push(layerId);
+          }
+        }
+
+        // Each data layer needs 2 critical adjacent timesteps for bootstrap
+        const CRITICAL_FILES_PER_LAYER = 2;
+        let totalCriticalFiles = dataLayers.length * CRITICAL_FILES_PER_LAYER;
+
+        // Check if earth layer is in URL
+        const hasEarth = urlState.layers.includes('earth');
+        const EARTH_BASEMAP_FILES = 12; // 6 faces × 2 resolutions
+        if (hasEarth) {
+          totalCriticalFiles += EARTH_BASEMAP_FILES;
+        }
+
+        // If no critical files, skip to ready
+        if (totalCriticalFiles === 0) {
+          state.bootstrapStatus = 'waiting';
+          if (onProgress) {
+            onProgress({
+              percentage: LOAD_LAYERS_START + LOAD_LAYERS_RANGE,
+              label: 'Ready'
+            });
+          }
+          await app.loadEnabledLayers();
+          return;
+        }
+
+        // Calculate which timestamps are adjacent to current time
+        const currentTime = state.currentTime!;
+        const currentTimeMs = currentTime.getTime();
+        const adjacentTimestamps = new Map<LayerId, Set<string>>();
+
+        // 6 hours in milliseconds (timestep interval)
+        const TIMESTEP_MS = 6 * 60 * 60 * 1000;
+
+        for (const layerId of dataLayers) {
+          layerProgress.set(layerId, new Set());
+
+          // Get dataset info to calculate timesteps
+          const datasetKey = layerId === 'temp2m' ? 'temp2m' :
+                             layerId === 'precipitation' ? 'tprate' :
+                             layerId === 'wind10m' ? 'wind10m_u' :
+                             'prmsl';
+
+          const datasetInfo = configLoader.getDatasetInfo(datasetKey);
+          if (!datasetInfo) continue;
+
+          // Find the 2 adjacent timestamps (before and at/after currentTime)
+          // Round currentTime down to nearest 6-hour boundary
+          const currentHour = currentTime.getUTCHours();
+          const nearestCycle = Math.floor(currentHour / 6) * 6;
+
+          const timestampBefore = new Date(currentTime);
+          timestampBefore.setUTCHours(nearestCycle, 0, 0, 0);
+
+          const timestampAfter = new Date(timestampBefore);
+          timestampAfter.setTime(timestampAfter.getTime() + TIMESTEP_MS);
+
+          // If currentTime is exactly on a cycle, use current and next
+          const isExactCycle = currentTimeMs === timestampBefore.getTime();
+          const adjacent1 = isExactCycle ? timestampBefore : new Date(timestampBefore.getTime() - TIMESTEP_MS);
+          const adjacent2 = timestampBefore;
+
+          // Format as "YYYYMMDD_HHz" to match timeStep format
+          const formatTimestamp = (date: Date) => {
+            const yyyy = date.getUTCFullYear();
+            const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+            const dd = String(date.getUTCDate()).padStart(2, '0');
+            const hh = String(date.getUTCHours()).padStart(2, '0');
+            return `${yyyy}${mm}${dd}_${hh}z`;
+          };
+
+          const adjacent = new Set<string>([
+            formatTimestamp(adjacent1),
+            formatTimestamp(adjacent2)
+          ]);
+          adjacentTimestamps.set(layerId, adjacent);
+        }
+
+        let totalCriticalLoaded = 0;
+        let bootstrapReady = false;
+
+        // Listen to cache events
+        const fileLoadUpdateHandler = (event: FileLoadUpdateEvent) => {
+          const { layerId, timeStep } = event;
+
+          // Only track data layers during bootstrap
+          if (!dataLayers.includes(layerId)) return;
+
+          const progress = layerProgress.get(layerId);
+          const adjacent = adjacentTimestamps.get(layerId);
+          if (!progress || !adjacent) return;
+
+          // Check if this is one of the 2 adjacent timestamps
+          const timestampKey = `${timeStep.date}_${timeStep.cycle}`;
+          if (adjacent.has(timestampKey) && !progress.has(timestampKey)) {
+            progress.add(timestampKey);
+            totalCriticalLoaded++;
+
+            // Calculate percentage based on critical files only
+            const percentage = LOAD_LAYERS_START + (totalCriticalLoaded / totalCriticalFiles) * LOAD_LAYERS_RANGE;
+
+            // Format progress label with layer name
+            const label = `Loading ${layerId}... ${progress.size}/${CRITICAL_FILES_PER_LAYER}`;
+
+            if (onProgress) {
+              onProgress({ percentage, label });
+            }
+
+            // Check if all critical files loaded
+            if (totalCriticalLoaded === totalCriticalFiles && !bootstrapReady) {
+              bootstrapReady = true;
+              state.bootstrapStatus = 'waiting';
+              if (onProgress) {
+                onProgress({
+                  percentage: LOAD_LAYERS_START + LOAD_LAYERS_RANGE,
+                  label: 'Ready'
+                });
+              }
+            }
+          }
+        };
+
+        cacheControl.on('fileLoadUpdate', fileLoadUpdateHandler);
+
+        try {
+          // Load enabled layers (this triggers the events and continues downloading in background)
+          await app.loadEnabledLayers();
+
+          // If not already marked as waiting, do so now
+          if (!bootstrapReady) {
+            state.bootstrapStatus = 'waiting';
+            if (onProgress) {
+              onProgress({
+                percentage: LOAD_LAYERS_START + LOAD_LAYERS_RANGE,
+                label: 'Ready'
+              });
+            }
+          }
+        } finally {
+          // Cleanup event listener
+          cacheControl.removeListener('fileLoadUpdate', fileLoadUpdateHandler);
+        }
       }
     },
 
     ACTIVATE: {
-      start: 97,
-      end: 99,
+      start: 95,
+      end: 98,
       label: 'Activating...',
       async run(_state, app) {
         app.activate();
@@ -222,7 +370,7 @@ export class AppBootstrapService {
     },
 
     READY: {
-      start: 99,
+      start: 98,
       end: 100,
       label: 'Ready',
       async run() {
@@ -310,8 +458,17 @@ export class AppBootstrapService {
       }
     }
 
-    state.bootstrapStatus = 'ready';
-    console.log('Bootstrap.done');
+    // Check autoContinue setting
+    const hypatiaConfig = configLoader.getHypatiaConfig();
+    const autoContinue = hypatiaConfig.bootstrap.autoContinue;
+
+    if (autoContinue) {
+      state.bootstrapStatus = 'ready';
+      console.log('Bootstrap.done (auto-continue)');
+    } else {
+      state.bootstrapStatus = 'waiting';
+      console.log('Bootstrap.done (waiting for user)');
+    }
 
     return state;
   }

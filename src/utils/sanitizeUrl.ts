@@ -31,14 +31,10 @@ function distanceToAltitude(distance: number): number {
 }
 
 /**
- * Get default time (current model run analysis time)
+ * Get default time (current browser time snapped to nearest valid cycle)
+ * Note: Does NOT clamp to any range - app only cares about maxRangeDays window
  */
 function getDefaultTime(): Date {
-  const range = configLoader.getDatasetRange('temp2m');
-  if (!range) {
-    return new Date();
-  }
-
   // Find the most recent model run (00z, 06z, 12z, or 18z)
   const now = new Date();
   const currentHourUTC = now.getUTCHours();
@@ -54,13 +50,6 @@ function getDefaultTime(): Date {
     latestRunDate.setUTCHours(6);
   } else {
     latestRunDate.setUTCHours(0);
-  }
-
-  // Clamp to available data range
-  if (latestRunDate < range.startTime) {
-    return range.startTime;
-  } else if (latestRunDate > range.endTime) {
-    return range.endTime;
   }
 
   return latestRunDate;
@@ -93,21 +82,18 @@ function getDefaultCameraPosition(bootstrapState: BootstrapState | null): { lat:
  */
 export function sanitizeUrl(bootstrapState: BootstrapState | null = null, forceBootstrapCamera: boolean = false): AppUrlState {
   const partial = parsePartialUrlState();
+  const changes: string[] = [];
 
-  // Get defaults (with fallback if config not loaded yet)
-  let defaultAltitude = 19113000;
-  let defaultLayers = ['earth', 'sun', 'graticule'];
-
-  try {
-    const hypatiaConfig = configLoader.getHypatiaConfig();
-    defaultAltitude = hypatiaConfig.visualization.defaultAltitude || defaultAltitude;
-    defaultLayers = hypatiaConfig.visualization.defaultLayers || defaultLayers;
-  } catch (e) {
-    // Config not loaded yet, use hardcoded defaults
-  }
+  // Get defaults from config
+  const hypatiaConfig = configLoader.getHypatiaConfig();
+  const defaultAltitude = hypatiaConfig.visualization.defaultAltitude;
+  const defaultLayers = hypatiaConfig.visualization.defaultLayers;
 
   // Fill in time
   const time = partial.time || getDefaultTime();
+  if (!partial.time) {
+    changes.push(`dt: (empty) → ${time.toISOString()}`);
+  }
 
   // Fill in camera position
   let camera: { x: number; y: number; z: number; distance: number };
@@ -125,13 +111,22 @@ export function sanitizeUrl(bootstrapState: BootstrapState | null = null, forceB
       z: position.z,
       distance
     };
+    const altitude = distanceToAltitude(distance);
+    changes.push(`camera: (empty) → lat=${lat.toFixed(2)}, lon=${lon.toFixed(2)}, alt=${altitude.toFixed(0)}m`);
   } else {
-    // TypeScript: partial.camera is guaranteed to exist here (else we'd be in the if block)
     camera = partial.camera!;
   }
 
   // Fill in layers
   const layers = partial.layers || defaultLayers;
+  if (!partial.layers) {
+    changes.push(`layers: (empty) → [${layers.join(', ')}]`);
+  }
+
+  // Log changes if any
+  if (changes.length > 0) {
+    console.log('sanitizeUrl filled missing params:', changes.join(' | '));
+  }
 
   const completeState: AppUrlState = {
     time,
@@ -173,29 +168,8 @@ export function validateUrlState(state: AppUrlState): AppUrlState {
     needsUpdate = true;
   }
 
-  // Validate time against data range
-  const dataRange = configLoader.getDatasetRange('temp2m');
-  if (dataRange) {
-    const SIGNIFICANT_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-    if (state.time < dataRange.startTime) {
-      const timeDiff = dataRange.startTime.getTime() - state.time.getTime();
-      if (timeDiff > SIGNIFICANT_THRESHOLD_MS) {
-        validatedState.time = getDefaultTime();
-      } else {
-        validatedState.time = dataRange.startTime;
-      }
-      needsUpdate = true;
-    } else if (state.time > dataRange.endTime) {
-      const timeDiff = state.time.getTime() - dataRange.endTime.getTime();
-      if (timeDiff > SIGNIFICANT_THRESHOLD_MS) {
-        validatedState.time = getDefaultTime();
-      } else {
-        validatedState.time = dataRange.endTime;
-      }
-      needsUpdate = true;
-    }
-  }
+  // Note: NO time validation - app only cares about maxRangeDays window
+  // If data doesn't exist for the requested time, it will show as missing
 
   // Validate camera position
   const posVec = new THREE.Vector3(
