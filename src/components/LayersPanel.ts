@@ -7,7 +7,9 @@
 
 import m from 'mithril';
 import { BlendSlider } from './BlendSlider';
+import { ProgressCanvas } from './ProgressCanvas';
 import type { LayerId } from '../visualization/ILayer';
+import { getLayerCacheControl } from '../services/LayerCacheControl';
 
 export interface LayerState {
   created: boolean;
@@ -56,11 +58,42 @@ export const LayersPanel: m.Component<LayersPanelAttrs> = {
       const isActive = state?.created && state?.visible;
       const isLoading = state?.loading;
 
-      return m('button.btn', {
+      // Check if this is a weather layer that uses progressive loading
+      const weatherLayers: LayerId[] = ['temp2m', 'precipitation'];
+      const hasProgressCanvas = weatherLayers.includes(layerId);
+
+      const button = m('button.btn', {
         class: isActive ? 'active' : '',
         disabled: isLoading,
         onclick: () => onLayerToggle(layerId)
       }, LAYER_DISPLAY_NAMES[layerId] + (isLoading ? '...' : ''));
+
+      if (hasProgressCanvas && isActive) {
+        try {
+          const cacheControl = getLayerCacheControl();
+          const totalTimestamps = cacheControl.getTimestepCount(layerId);
+          const loadedIndices = cacheControl.getLoadedIndices(layerId);
+          const loadingIndex = cacheControl.getLoadingIndex(layerId);
+          const failedIndices = cacheControl.getFailedIndices(layerId);
+
+          return m('div.layer-button-wrapper', [
+            button,
+            m(ProgressCanvas, {
+              layerId,
+              totalTimestamps,
+              loadedIndices,
+              loadingIndex,
+              failedIndices,
+              layerColor: '#ff6b35' // Will use proper color from config later
+            })
+          ]);
+        } catch (e) {
+          // Cache control not initialized yet
+          return button;
+        }
+      }
+
+      return button;
     };
 
     return m('div.layers.panel', [

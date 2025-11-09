@@ -32,6 +32,7 @@ import { ViewportControlsService } from './services/ViewportControlsService';
 import { sanitizeUrl } from './utils/sanitizeUrl';
 import { clampTimeToDataRange } from './utils/timeUtils';
 import { parseUrlState } from './utils/urlState';
+import { getLayerCacheControl } from './services/LayerCacheControl';
 
 import type { LayerId } from './visualization/ILayer';
 
@@ -250,6 +251,18 @@ export const App: AppComponent = {
     const clamped = clampTimeToDataRange(newTime);
     this.stateService!.setCurrentTime(clamped);
     this.sceneService!.getScene()?.updateTime(clamped);
+
+    // Prioritize timestamps for progressive loading
+    try {
+      const cacheControl = getLayerCacheControl();
+      const weatherLayers: LayerId[] = ['temp2m', 'precipitation'];
+      for (const layerId of weatherLayers) {
+        cacheControl.prioritizeTimestamps(layerId, clamped);
+      }
+    } catch (e) {
+      // Cache control not initialized yet
+    }
+
     this.logicService!.updateUrl();
     m.redraw();
   },

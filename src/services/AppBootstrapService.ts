@@ -15,6 +15,7 @@ import { configLoader } from '../config';
 import { checkBrowserCapabilities, getCapabilityHelpUrls } from '../utils/capabilityCheck';
 import { preloadFont } from 'troika-three-text';
 import { TEXT_CONFIG } from '../config';
+import { initializeLayerCacheControl } from './LayerCacheControl';
 
 export type BootstrapStatus = 'loading' | 'ready' | 'error';
 
@@ -91,6 +92,13 @@ export class AppBootstrapService {
       async run() {
         await configLoader.loadAll();
         await LayerStateService.initialize();
+
+        // Initialize Layer Cache Control for progressive loading
+        const hypatiaConfig = configLoader.getHypatiaConfig();
+        initializeLayerCacheControl({
+          maxRangeDays: hypatiaConfig.data.maxRangeDays,
+          maxConcurrentDownloads: hypatiaConfig.dataCache.maxConcurrentDownloads
+        });
       }
     },
 

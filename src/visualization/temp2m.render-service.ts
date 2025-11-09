@@ -52,8 +52,8 @@ export class Temp2mRenderService extends TimeSeriesLayer {
   /**
    * Factory method to create Temp2mRenderService with data loading
    */
-  static async create(layerId: LayerId, dataService: DataService): Promise<Temp2mRenderService> {
-    const layerData = await dataService.loadLayer('temp2m');
+  static async create(layerId: LayerId, dataService: DataService, currentTime: Date): Promise<Temp2mRenderService> {
+    const layerData = await dataService.loadLayerProgressive('temp2m', currentTime);
     return new Temp2mRenderService(layerId, layerData.texture, layerData.timeSteps, layerData.timeSteps.length);
   }
 

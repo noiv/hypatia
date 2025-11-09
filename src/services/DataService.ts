@@ -18,6 +18,7 @@ import { Temp2mDataService } from '../layers/temp2m.data-service';
 import { PrecipitationDataService } from '../layers/precipitation.data-service';
 import type { LayerId } from '../visualization/ILayer';
 import { configLoader } from '../config';
+import { getLayerCacheControl } from './LayerCacheControl';
 
 // Re-export LayerId for convenience
 export type { LayerId } from '../visualization/ILayer';
@@ -206,6 +207,133 @@ export class DataService {
     for (const layerId of this.cache.keys()) {
       this.unloadLayer(layerId);
     }
+  }
+
+  /**
+   * Load layer with progressive loading (new method)
+   * Creates empty texture, loads adjacent timestamps, queues rest
+   */
+  async loadLayerProgressive(
+    layerId: LayerId,
+    currentTime: Date,
+    onProgress?: (progress: LoadProgress) => void
+  ): Promise<LayerData> {
+    // Return from cache if already loaded
+    const cached = this.cache.get(layerId);
+    if (cached) {
+      return cached;
+    }
+
+    const cacheControl = getLayerCacheControl();
+    let texture: THREE.Data3DTexture;
+    let timeSteps: TimeStep[];
+    let sizeBytes: number;
+    let dataServiceInstance: Temp2mDataService | PrecipitationDataService;
+
+    switch (layerId) {
+      case 'temp2m': {
+        const datasetInfo = configLoader.getDatasetInfo('temp2m');
+        if (!datasetInfo) {
+          throw new Error('temp2m dataset not found in manifest');
+        }
+
+        dataServiceInstance = new Temp2mDataService(
+          datasetInfo,
+          configLoader.getDataBaseUrl(),
+          'temp2m'
+        );
+        timeSteps = dataServiceInstance.generateTimeSteps();
+
+        // Create empty texture
+        texture = dataServiceInstance.createEmptyTexture(timeSteps.length);
+        sizeBytes = this.estimateTextureSize(texture);
+
+        // Register with cache control
+        cacheControl.registerLayer(layerId, timeSteps);
+
+        // Listen to cache events and update texture
+        cacheControl.on('timestampLoaded', async (event: any) => {
+          if (event.layerId === layerId && event.data) {
+            await dataServiceInstance.loadTimestampIntoTexture(
+              texture,
+              event.timeStep,
+              event.index
+            );
+          }
+        });
+
+        // Start progressive loading (loads ±1, queues rest)
+        const progressWrapper = onProgress ? (loaded: number, total: number) => {
+          onProgress({
+            loaded,
+            total,
+            percentage: (loaded / total) * 100,
+            currentItem: `Loading ${layerId} (${loaded}/${total})`
+          });
+        } : undefined;
+
+        await cacheControl.initializeLayer(layerId, currentTime, progressWrapper);
+        break;
+      }
+
+      case 'precipitation': {
+        const datasetInfo = configLoader.getDatasetInfo('tprate');
+        if (!datasetInfo) {
+          throw new Error('tprate dataset not found in manifest');
+        }
+
+        dataServiceInstance = new PrecipitationDataService(
+          datasetInfo,
+          configLoader.getDataBaseUrl(),
+          'tprate'
+        );
+        timeSteps = dataServiceInstance.generateTimeSteps();
+
+        // Create empty texture
+        texture = dataServiceInstance.createEmptyTexture(timeSteps.length);
+        sizeBytes = this.estimateTextureSize(texture);
+
+        // Register with cache control
+        cacheControl.registerLayer(layerId, timeSteps);
+
+        // Listen to cache events and update texture
+        cacheControl.on('timestampLoaded', async (event: any) => {
+          if (event.layerId === layerId && event.data) {
+            await dataServiceInstance.loadTimestampIntoTexture(
+              texture,
+              event.timeStep,
+              event.index
+            );
+          }
+        });
+
+        // Start progressive loading
+        const progressWrapper = onProgress ? (loaded: number, total: number) => {
+          onProgress({
+            loaded,
+            total,
+            percentage: (loaded / total) * 100,
+            currentItem: `Loading ${layerId} (${loaded}/${total})`
+          });
+        } : undefined;
+
+        await cacheControl.initializeLayer(layerId, currentTime, progressWrapper);
+        break;
+      }
+
+      default:
+        throw new Error(`Progressive loading not supported for ${layerId}`);
+    }
+
+    const layerData: LayerData = {
+      layerId,
+      texture,
+      timeSteps,
+      sizeBytes
+    };
+
+    this.cache.set(layerId, layerData);
+    return layerData;
   }
 
   /**

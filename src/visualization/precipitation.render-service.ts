@@ -48,8 +48,8 @@ export class PrecipitationRenderService extends TimeSeriesLayer {
   /**
    * Factory method to create PrecipitationRenderService with data loading
    */
-  static async create(layerId: LayerId, dataService: DataService): Promise<PrecipitationRenderService> {
-    const layerData = await dataService.loadLayer('precipitation');
+  static async create(layerId: LayerId, dataService: DataService, currentTime: Date): Promise<PrecipitationRenderService> {
+    const layerData = await dataService.loadLayerProgressive('precipitation', currentTime);
     return new PrecipitationRenderService(layerId, layerData.texture, layerData.timeSteps, layerData.timeSteps.length);
   }
 

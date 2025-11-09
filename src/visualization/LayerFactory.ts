@@ -44,10 +44,10 @@ export class LayerFactory {
         return GraticuleRenderService.create(layerId);
 
       case 'temp2m':
-        return Temp2mRenderService.create(layerId, dataService);
+        return Temp2mRenderService.create(layerId, dataService, currentTime);
 
       case 'precipitation':
-        return PrecipitationRenderService.create(layerId, dataService);
+        return PrecipitationRenderService.create(layerId, dataService, currentTime);
 
       case 'wind10m':
         // Renderer guaranteed to exist (WebGL2 checked during bootstrap)
