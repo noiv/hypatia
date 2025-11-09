@@ -1,0 +1,22 @@
+{
+  "updateOrder": 1,
+  "geometry": {
+    "segments": 16
+  },
+  "visual": {
+    "dayNightFactor": 0.3,
+    "dayNightSharpness": 8.0
+  },
+  "basemaps": {
+    "sets": [
+      {
+        "name": "rtopo2",
+        "path": "/images/basemaps/rtopo2"
+      },
+      {
+        "name": "marble",
+        "path": "/images/basemaps/marble"
+      }
+    ]
+  }
+}

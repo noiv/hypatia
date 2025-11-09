@@ -9,8 +9,8 @@ import type { ILayer, LayerId } from './ILayer';
 import type { AnimationState } from './AnimationState';
 import { latLonToCartesian } from '../utils/coordinates';
 import type { TextLabel } from './text.render-service';
-import { TEXT_CONFIG } from '../config/text.config';
-import { GRATICULE_CONFIG } from '../config/graticule.config';
+import { TEXT_CONFIG } from '../config';
+import { GRATICULE_CONFIG } from '../config';
 
 interface GraticuleConfig {
   color?: number;

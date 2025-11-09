@@ -1,5 +1,5 @@
 import type { DatasetInfo } from '../config';
-import { PRESSURE_CONFIG } from '../config/pressure.config';
+import { PRESSURE_CONFIG } from '../config';
 
 export interface TimeStep {
   date: string;    // YYYYMMDD

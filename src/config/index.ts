@@ -4,7 +4,40 @@
  * Central export point for all configuration-related functionality
  */
 
+import earthData from './earth.config.json';
+import temp2mData from './temp2m.config.json';
+import atmosphereData from './atmosphere.config.json';
+import graticuleData from './graticule.config.json';
+import precipitationData from './precipitation.config.json';
+import pressureData from './pressure.config.json';
+import textData from './text.config.json';
+import wind10mData from './wind10m.config.json';
+
+import type {
+  EarthConfig,
+  Temp2mConfig,
+  AtmosphereConfig,
+  GraticuleConfig,
+  PrecipitationConfig,
+  PressureConfig,
+  TextConfig,
+  Wind10mConfig
+} from './types';
+
+// Export typed configuration constants
+export const EARTH_CONFIG: EarthConfig = earthData;
+export const TEMP2M_CONFIG: Temp2mConfig = temp2mData as Temp2mConfig;
+export const ATMOSPHERE_CONFIG: AtmosphereConfig = atmosphereData as AtmosphereConfig;
+export const GRATICULE_CONFIG: GraticuleConfig = graticuleData;
+export const PRECIPITATION_CONFIG: PrecipitationConfig = precipitationData as PrecipitationConfig;
+export const PRESSURE_CONFIG: PressureConfig = pressureData;
+export const TEXT_CONFIG: TextConfig = textData;
+export const WIND10M_CONFIG: Wind10mConfig = wind10mData;
+
+// Export config loader
 export { configLoader } from './loader';
+
+// Export types
 export type {
   HypatiaConfig,
   ParamsConfig,
@@ -15,5 +48,13 @@ export type {
   LayerGroup,
   ParamInfo,
   DataManifest,
-  DatasetInfo
+  DatasetInfo,
+  EarthConfig,
+  Temp2mConfig,
+  AtmosphereConfig,
+  GraticuleConfig,
+  PrecipitationConfig,
+  PressureConfig,
+  TextConfig,
+  Wind10mConfig
 } from './types';

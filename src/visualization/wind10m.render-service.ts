@@ -16,7 +16,7 @@ import { EARTH_RADIUS_UNITS } from '../utils/constants';
 import { generateFibonacciSphere } from '../utils/sphereSeeds';
 import { Wind10mDataService, TimeStep } from '../layers/wind10m.data-service';
 import { configLoader } from '../config';
-import { WIND10M_CONFIG } from '../config/wind10m.config';
+import { WIND10M_CONFIG } from '../config';
 
 export class Wind10mRenderService implements ILayer {
   private layerId: LayerId;

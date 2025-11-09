@@ -1,0 +1,14 @@
+{
+  "updateOrder": 3,
+  "visual": {
+    "color": 4473924,
+    "opacity": 0.3,
+    "radius": 1.01
+  },
+  "lod": [
+    { "maxDistance": 1.5, "latStep": 10, "lonStep": 10 },
+    { "maxDistance": 3.0, "latStep": 15, "lonStep": 15 },
+    { "maxDistance": 6.0, "latStep": 30, "lonStep": 30 },
+    { "maxDistance": null, "latStep": 45, "lonStep": 45 }
+  ]
+}

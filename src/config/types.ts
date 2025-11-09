@@ -51,6 +51,11 @@ export interface HypatiaConfig {
   features: {
     enableGeolocation: boolean;
   };
+  build: {
+    version: string;
+    hash: string;
+    timestamp: string;
+  };
 }
 
 export interface ParamInfo {
@@ -208,3 +213,189 @@ export type LayerRenderState =
 
 // Import THREE types (assuming THREE is available)
 import type * as THREE from 'three';
+
+// ============================================================================
+// Layer Config Types
+// ============================================================================
+
+export interface EarthConfig {
+  updateOrder: number;
+  geometry: {
+    segments: number;
+  };
+  visual: {
+    dayNightFactor: number;
+    dayNightSharpness: number;
+  };
+  basemaps: {
+    sets: Array<{
+      name: string;
+      path: string;
+    }>;
+  };
+}
+
+export interface Temp2mConfig {
+  updateOrder: number;
+  tempRange: {
+    min: number;
+    max: number;
+  };
+  palette: Array<{
+    temp: number;
+    color: [number, number, number];
+    hex: string;
+  }>;
+  visual: {
+    opacity: number;
+    altitudeKm: number;
+    dayNightFactor: number;
+    dayNightSharpness: number;
+  };
+  depth: {
+    polygonOffset: boolean;
+    polygonOffsetFactor: number;
+    polygonOffsetUnits: number;
+  };
+  geometry: {
+    widthSegments: number;
+    heightSegments: number;
+  };
+}
+
+export interface AtmosphereConfig {
+  updateOrder: number;
+  geometry: {
+    widthSegments: number;
+    heightSegments: number;
+  };
+  physical: {
+    planetRadius: number;
+    atmosphereRadius: number;
+    rayleighCoefficient: [number, number, number];
+    rayleighScaleHeight: number;
+    mieCoefficient: number;
+    mieScaleHeight: number;
+    mieDirection: number;
+    sunIntensity: number;
+  };
+  visual: {
+    altitudeKm: number;
+    exposure: number;
+  };
+  quality: {
+    primarySamples: number;
+    secondarySamples: number;
+  };
+}
+
+export interface GraticuleConfig {
+  updateOrder: number;
+  visual: {
+    color: number;
+    opacity: number;
+    radius: number;
+  };
+  lod: Array<{
+    maxDistance: number | null;
+    latStep: number;
+    lonStep: number;
+  }>;
+}
+
+export interface PrecipitationConfig {
+  updateOrder: number;
+  geometry: {
+    widthSegments: number;
+    heightSegments: number;
+  };
+  visual: {
+    altitudeKm: number;
+    opacity: number;
+    dayNightFactor: number;
+  };
+  depth: {
+    polygonOffset: boolean;
+    polygonOffsetFactor: number;
+    polygonOffsetUnits: number;
+  };
+  palette: Array<{
+    threshold: number | null;
+    color: [number, number, number];
+    alpha: number;
+  }>;
+  discardThreshold: number;
+}
+
+export interface PressureConfig {
+  updateOrder: number;
+  grid: {
+    width: number;
+    height: number;
+    resolution: number;
+  };
+  isobars: {
+    levels: number[];
+    spacing: number;
+    minValue: number;
+    maxValue: number;
+  };
+  visual: {
+    color: number;
+    opacity: number;
+    linewidth: number;
+    depthTest: boolean;
+    transparent: boolean;
+  };
+  earth: {
+    radius: number;
+  };
+}
+
+export interface TextConfig {
+  updateOrder: number;
+  font: {
+    url: string;
+    fallback: string;
+  };
+  size: {
+    default: number;
+    min: number;
+    max: number;
+    step: number;
+  };
+  color: {
+    default: number;
+    graticule: number;
+    pressure: number;
+  };
+  outline: {
+    enabled: boolean;
+    width: number;
+    color: number;
+    opacity: number;
+  };
+  hotkeys: {
+    increase: string[];
+    decrease: string[];
+    reset: string[];
+  };
+  performance: {
+    characters: string;
+    updateOnlyWhenChanged: boolean;
+    frustumCulling: boolean;
+    cullDotThreshold: number;
+  };
+  billboard: {
+    enabled: boolean;
+    sizeAttenuation: boolean;
+  };
+  positioning: {
+    graticuleRadiusMultiplier: number;
+    pressureRadiusMultiplier: number;
+  };
+}
+
+export interface Wind10mConfig {
+  updateOrder: number;
+}
