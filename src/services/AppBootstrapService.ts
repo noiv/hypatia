@@ -14,7 +14,7 @@ import { UrlLayerSyncService } from './UrlLayerSyncService';
 import { configLoader } from '../config';
 import { checkBrowserCapabilities, getCapabilityHelpUrls } from '../utils/capabilityCheck';
 import { preloadFont } from 'troika-three-text';
-import { TEXT_CONFIG } from '../config/text.config';
+import { TEXT_CONFIG } from '../config';
 
 export type BootstrapStatus = 'loading' | 'ready' | 'error';
 

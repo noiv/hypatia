@@ -1,0 +1,25 @@
+{
+  "updateOrder": 2,
+  "geometry": {
+    "widthSegments": 64,
+    "heightSegments": 32
+  },
+  "physical": {
+    "planetRadius": 6371000,
+    "atmosphereRadius": 6471000,
+    "rayleighCoefficient": [0.0000055, 0.000013, 0.0000224],
+    "rayleighScaleHeight": 8000,
+    "mieCoefficient": 0.000021,
+    "mieScaleHeight": 1200,
+    "mieDirection": 0.758,
+    "sunIntensity": 22.0
+  },
+  "visual": {
+    "altitudeKm": 0,
+    "exposure": 1.0
+  },
+  "quality": {
+    "primarySamples": 16,
+    "secondarySamples": 8
+  }
+}

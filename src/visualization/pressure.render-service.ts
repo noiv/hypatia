@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { TimeSeriesLayer } from './render-service.base';
 import { PressureDataService, type TimeStep } from '../layers/pressure.data-service';
 import { configLoader } from '../config';
-import { PRESSURE_CONFIG } from '../config/pressure.config';
+import { PRESSURE_CONFIG } from '../config';
 import ContourWorker from '../workers/contourWorker?worker';
 import type { LayerId } from './ILayer';
 

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { EARTH_RADIUS_UNITS } from '../utils/constants';
-import { TEMP2M_CONFIG } from '../config/temp2m.config';
+import { TEMP2M_CONFIG } from '../config';
 import { TimeSeriesLayer } from './render-service.base';
 import type { TimeStep } from '../layers/temp2m.data-service';
 import type { DataService } from '../services/DataService';

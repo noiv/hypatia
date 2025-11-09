@@ -1,0 +1,27 @@
+{
+  "updateOrder": 7,
+  "grid": {
+    "width": 181,
+    "height": 91,
+    "resolution": 2
+  },
+  "isobars": {
+    "levels": [
+      960, 964, 968, 972, 976, 980, 984, 988, 992, 996,
+      1000, 1004, 1008, 1012, 1016, 1020, 1024, 1028, 1032, 1036, 1040
+    ],
+    "spacing": 4,
+    "minValue": 960,
+    "maxValue": 1040
+  },
+  "visual": {
+    "color": 16777215,
+    "opacity": 0.85,
+    "linewidth": 2,
+    "depthTest": true,
+    "transparent": true
+  },
+  "earth": {
+    "radius": 1.0
+  }
+}

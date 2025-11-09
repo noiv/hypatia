@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { EARTH_RADIUS_UNITS } from '../utils/constants';
-import { ATMOSPHERE_CONFIG } from '../config/atmosphere.config';
+import { ATMOSPHERE_CONFIG } from '../config';
 import { calculateSunPosition } from '../utils/time';
 import type { ILayer, LayerId } from './ILayer';
 import type { AnimationState } from './AnimationState';
