@@ -5,10 +5,10 @@
 import { configLoader } from '../config';
 
 /**
- * Clamp time to available data range for a dataset
- * Returns the clamped time, or the original time if no range is available
+ * Clamp time to available data range (maxRangeDays window)
+ * Returns the clamped time
  */
-export function clampTimeToDataRange(time: Date, dataset: string = 'temp2m'): Date {
+export function clampTimeToDataRange(time: Date): Date {
   // Clamp to maxRangeDays window, not dataset range
   // Must match slider range calculation
   const hypatiaConfig = configLoader.getHypatiaConfig();

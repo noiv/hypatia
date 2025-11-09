@@ -28,114 +28,6 @@ export class DataService {
   private loadingProgress: Map<LayerId, LoadProgress> = new Map();
 
   /**
-   * Load layer data (with caching)
-   */
-  async loadLayer(
-    layerId: LayerId,
-    onProgress?: (progress: LoadProgress) => void
-  ): Promise<LayerData> {
-    // Return from cache if already loaded
-    const cached = this.cache.get(layerId);
-    if (cached) {
-      return cached;
-    }
-
-    // Initialize progress tracking
-    this.loadingProgress.set(layerId, {
-      loaded: 0,
-      total: 100,
-      percentage: 0,
-      currentItem: `Loading ${layerId}...`
-    });
-
-    // Route to appropriate service based on layer ID
-    let texture: THREE.Data3DTexture;
-    let timeSteps: TimeStep[];
-    let sizeBytes: number;
-
-    const progressCallback = (loaded: number, total: number) => {
-      const progress: LoadProgress = {
-        loaded,
-        total,
-        percentage: (loaded / total) * 100,
-        currentItem: `Loading ${layerId} (${loaded}/${total})`
-      };
-      this.loadingProgress.set(layerId, progress);
-      if (onProgress) {
-        onProgress(progress);
-      }
-    };
-
-    switch (layerId) {
-      case 'temp2m': {
-        const datasetInfo = configLoader.getDatasetInfo('temp2m');
-        if (!datasetInfo) {
-          throw new Error('temp2m dataset not found in manifest');
-        }
-
-        const service = new Temp2mDataService(
-          datasetInfo,
-          configLoader.getDataBaseUrl(),
-          'temp2m'
-        );
-        timeSteps = service.generateTimeSteps();
-        texture = await service.loadTexture(timeSteps, progressCallback);
-        sizeBytes = this.estimateTextureSize(texture);
-        break;
-      }
-
-      case 'precipitation': {
-        const datasetInfo = configLoader.getDatasetInfo('tprate');
-        if (!datasetInfo) {
-          throw new Error('tprate dataset not found in manifest');
-        }
-
-        const service = new PrecipitationDataService(
-          datasetInfo,
-          configLoader.getDataBaseUrl(),
-          'tprate'
-        );
-        timeSteps = service.generateTimeSteps();
-        texture = await service.loadTexture(timeSteps, progressCallback);
-        sizeBytes = this.estimateTextureSize(texture);
-        break;
-      }
-
-      case 'wind10m': {
-        const uDatasetInfo = configLoader.getDatasetInfo('wind10m_u');
-        const vDatasetInfo = configLoader.getDatasetInfo('wind10m_v');
-        if (!uDatasetInfo || !vDatasetInfo) {
-          throw new Error('wind10m_u or wind10m_v dataset not found in manifest');
-        }
-
-        // Note: Wind layer has its own loading mechanism in WindLayerGPUCompute
-        // Wind uses separate TimeStep type with uFilePath/vFilePath
-        throw new Error(`Layer ${layerId} does not use DataService for texture loading yet`);
-      }
-
-      case 'earth':
-      case 'sun':
-        // These layers handle their own data loading
-        throw new Error(`Layer ${layerId} does not use DataService for data loading`);
-
-      default:
-        throw new Error(`Unknown layer: ${layerId}`);
-    }
-
-    const layerData: LayerData = {
-      layerId,
-      texture,
-      timeSteps,
-      sizeBytes
-    };
-
-    this.cache.set(layerId, layerData);
-    this.loadingProgress.delete(layerId);
-
-    return layerData;
-  }
-
-  /**
    * Get layer data if already loaded (no loading)
    */
   getLayer(layerId: LayerId): LayerData | undefined {
@@ -257,7 +149,9 @@ export class DataService {
 
         // Listen to cache events and update texture
         cacheControl.on('fileLoadUpdate', async (event: any) => {
+          console.log(`[DataService] fileLoadUpdate event for ${event.layerId}[${event.index}], hasData: ${!!event.data}`);
           if (event.layerId === layerId && event.data) {
+            console.log(`[DataService] Loading ${layerId}[${event.index}] into texture`);
             await dataServiceInstance.loadTimestampIntoTexture(
               texture,
               event.timeStep,
@@ -293,6 +187,8 @@ export class DataService {
         );
 
         // Generate timesteps from maxRangeDays config, not dataset range
+        const hypatiaConfig = configLoader.getHypatiaConfig();
+        const maxRangeDays = hypatiaConfig.data.maxRangeDays;
         timeSteps = dataServiceInstance.generateTimeSteps(currentTime, maxRangeDays);
 
         // Create empty texture
@@ -304,7 +200,9 @@ export class DataService {
 
         // Listen to cache events and update texture
         cacheControl.on('fileLoadUpdate', async (event: any) => {
+          console.log(`[DataService] fileLoadUpdate event for ${event.layerId}[${event.index}], hasData: ${!!event.data}`);
           if (event.layerId === layerId && event.data) {
+            console.log(`[DataService] Loading ${layerId}[${event.index}] into texture`);
             await dataServiceInstance.loadTimestampIntoTexture(
               texture,
               event.timeStep,

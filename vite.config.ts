@@ -26,8 +26,34 @@ function watchPublicConfig() {
   };
 }
 
+// Plugin to set appropriate cache headers for static assets
+function cacheHeaders() {
+  return {
+    name: 'cache-headers',
+    configureServer(server: any) {
+      server.middlewares.use((req: any, res: any, next: any) => {
+        // NO CACHE for JS, CSS, HTML (always get latest during development)
+        if (req.url?.match(/\.(js|css|html)$/)) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
+        }
+        // Cache basemap images for 1 year (immutable static assets)
+        else if (req.url?.startsWith('/images/basemaps/')) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+        // Cache data files for 1 hour (updated periodically)
+        else if (req.url?.startsWith('/data/')) {
+          res.setHeader('Cache-Control', 'public, max-age=3600');
+        }
+        next();
+      });
+    }
+  };
+}
+
 export default defineConfig({
-  plugins: [watchPublicConfig()],
+  plugins: [watchPublicConfig(), cacheHeaders()],
   server: {
     host: true,
     port: 8080,

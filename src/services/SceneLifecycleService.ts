@@ -1,13 +1,11 @@
 /**
  * Scene Lifecycle Service
  *
- * Manages Scene initialization, layer loading, and disposal.
+ * Manages Scene initialization and disposal.
  * Separates scene management logic from app component.
  */
 
 import { Scene } from '../visualization/scene';
-import { configLoader } from '../config';
-import type { LayerId } from '../visualization/ILayer';
 
 export class SceneLifecycleService {
   private scene: Scene | null = null;
@@ -42,33 +40,6 @@ export class SceneLifecycleService {
     return scene;
   }
 
-  /**
-   * Load layers from URL keys
-   * Progress is tracked via LayerCacheControl events
-   */
-  async loadLayersFromUrl(layerUrlKeys: string[]): Promise<void> {
-    if (!this.scene) {
-      console.error('Scene not initialized');
-      return;
-    }
-
-    if (layerUrlKeys.length > 0) {
-      console.log(`Bootstrap.loading: ${layerUrlKeys.join(', ')}`);
-    }
-
-    for (const urlKey of layerUrlKeys) {
-      try {
-        // Convert URL key to layer ID (temp -> temp2m, etc.)
-        const layerId = configLoader.urlKeyToLayerId(urlKey) as LayerId;
-
-        // Create and show layer (data loading fires LayerCacheControl events)
-        await this.scene.createLayer(layerId);
-        this.scene.setLayerVisible(layerId, true);
-      } catch (error) {
-        console.error(`Bootstrap.error: ${urlKey}`, error);
-      }
-    }
-  }
 
   /**
    * Get the scene instance

@@ -70,30 +70,6 @@ export class Temp2mDataService {
   }
 
   /**
-   * Parse timestamp like "20251030_00z" into Date
-   */
-  private parseTimestamp(timestamp: string): Date {
-    const parts = timestamp.split('_');
-    if (parts.length !== 2) {
-      throw new Error(`Invalid timestamp format: ${timestamp}`);
-    }
-
-    const dateStr = parts[0];
-    const cycleStr = parts[1];
-
-    if (!dateStr || !cycleStr) {
-      throw new Error(`Invalid timestamp format: ${timestamp}`);
-    }
-
-    const year = parseInt(dateStr.slice(0, 4));
-    const month = parseInt(dateStr.slice(4, 6)) - 1;
-    const day = parseInt(dateStr.slice(6, 8));
-    const hour = parseInt(cycleStr.slice(0, 2));
-
-    return new Date(Date.UTC(year, month, day, hour, 0, 0, 0));
-  }
-
-  /**
    * Load a single binary file as Uint16Array (fp16)
    * Note: Data files are stored as fp16, we keep them as-is for GPU
    * Note: Data files already include wrapping column (1441 columns)
@@ -256,7 +232,8 @@ export class Temp2mDataService {
       // Mark texture for update on next render
       texture.needsUpdate = true;
 
-      console.log(`Temp2m: Loaded timestamp ${index} (${step.date}_${step.cycle})`);
+      // Suppress verbose logging (LayerCacheControl already logs critical loads)
+      // console.log(`Temp2m: Loaded timestamp ${index} (${step.date}_${step.cycle})`);
     } catch (error) {
       console.warn(`Temp2m: Failed to load ${step.filePath}:`, error);
       throw error;

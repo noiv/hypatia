@@ -283,7 +283,10 @@ export class LayerCacheControl extends EventEmitter {
       this.setState(layerId, index, { status: 'loaded', data });
       this.emit('fileLoadUpdate', { layerId, index, timeStep, data });
 
-      console.log(`LayerCacheControl: Loaded ${layerId}[${index}] (${priority})`);
+      // Only log critical loads during bootstrap
+      if (priority === 'critical') {
+        console.log(`LayerCacheControl: Loaded ${layerId}[${index}] (${priority})`);
+      }
     } catch (error) {
       const err = error as Error;
       this.setState(layerId, index, { status: 'failed', error: err });

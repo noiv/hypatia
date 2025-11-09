@@ -57,7 +57,6 @@ interface AppComponent extends m.Component {
   // Bootstrap
   runBootstrap(): Promise<void>;
   initializeScene(): Promise<void>;
-  loadEnabledLayers(): Promise<void>;
 
   // Handlers
   handleTimeChange(newTime: Date): void;
@@ -245,29 +244,6 @@ export const App: AppComponent = {
     this.stateService!.setScene(scene);
   },
 
-  async loadEnabledLayers() {
-    // Get layers from URL
-    const urlState = parseUrlState();
-    if (!urlState) {
-      // No URL state - no layers to load
-      return;
-    }
-
-    // Load layers (progress tracked via LayerCacheControl events)
-    await this.sceneService!.loadLayersFromUrl(urlState.layers);
-
-    // After all layers loaded, update sun direction based on which layers are visible
-    const scene = this.sceneService!.getScene();
-    const state = this.stateService!.get();
-    if (scene) {
-      scene.updateTime(state.currentTime);
-    }
-
-    // Apply text enabled state (text layer must be created first)
-    if (state.textEnabled && scene) {
-      scene.setTextEnabled(true);
-    }
-  },
 
   handleTimeChange(newTime: Date) {
     const clamped = clampTimeToDataRange(newTime);

@@ -9,13 +9,11 @@ import { getLatestRun, type ECMWFRun } from './ECMWFService';
 import { getUserLocation, type UserLocation } from './GeolocationService';
 import { detectLocale, type LocaleInfo } from './LocaleService';
 import { LayerStateService } from './LayerStateService';
-import { UrlLayerSyncService } from './UrlLayerSyncService';
 import { configLoader } from '../config';
 import { checkBrowserCapabilities, getCapabilityHelpUrls } from '../utils/capabilityCheck';
 import { preloadFont } from 'troika-three-text';
 import { TEXT_CONFIG } from '../config';
 import { initializeLayerCacheControl, getLayerCacheControl } from './LayerCacheControl';
-import type { FileLoadUpdateEvent } from './LayerCacheControl';
 import type { LayerId } from '../visualization/ILayer';
 import { parseUrlState } from '../utils/urlState';
 
@@ -48,8 +46,10 @@ export type BootstrapProgressCallback = (progress: BootstrapStepProgress) => voi
 
 export interface AppInstance {
   initializeScene: () => Promise<void>;
-  loadEnabledLayers: () => Promise<void>;
   activate: () => void;
+  sceneService?: {
+    getScene: () => { createLayer: (layerId: LayerId) => Promise<boolean>; setLayerVisible: (layerId: LayerId, visible: boolean) => void; } | null;
+  };
 }
 
 interface StepResult {
@@ -167,19 +167,9 @@ export class AppBootstrapService {
       }
     },
 
-    LAYERS: {
+    SCENE: {
       start: 35,
       end: 40,
-      label: 'Initializing layers...',
-      async run() {
-        const layerState = LayerStateService.getInstance();
-        await UrlLayerSyncService.initializeLayersFromUrl(layerState);
-      }
-    },
-
-    SCENE: {
-      start: 40,
-      end: 45,
       label: 'Initializing scene...',
       async run(_state, app) {
         await app.initializeScene();
@@ -187,176 +177,176 @@ export class AppBootstrapService {
     },
 
     LOAD_LAYERS: {
-      start: 45,
+      start: 40,
       end: 95,
-      label: 'Initializing scene...',
-      async run(state, app, onProgress) {
-        // Setup event-based progress tracking
-        const cacheControl = getLayerCacheControl();
-        const LOAD_LAYERS_START = 45;
-        const LOAD_LAYERS_RANGE = 50; // 45-95%
+      label: 'Loading layers...',
+      async run(_state, app, onProgress) {
+        const LOAD_LAYERS_START = 40;
+        const LOAD_LAYERS_RANGE = 55; // 40-95%
 
-        // Track which adjacent timestamps are loaded per layer
-        const layerProgress = new Map<LayerId, Set<string>>();
-
-        // Get layers from URL - only track data layers that will actually be loaded
-        const urlState = parseUrlState();
-        if (!urlState) {
-          // No layers to load
-          return;
-        }
-
-        // Map URL keys to layer IDs and filter to only data layers
-        const allDataLayers: LayerId[] = ['temp2m', 'precipitation', 'wind10m', 'pressure_msl'];
-        const dataLayers: LayerId[] = [];
-
-        for (const urlKey of urlState.layers) {
-          const layerId = configLoader.urlKeyToLayerId(urlKey) as LayerId;
-          if (allDataLayers.includes(layerId)) {
-            dataLayers.push(layerId);
-          }
-        }
-
-        // Each data layer needs 2 critical adjacent timesteps for bootstrap
-        const CRITICAL_FILES_PER_LAYER = 2;
-        let totalCriticalFiles = dataLayers.length * CRITICAL_FILES_PER_LAYER;
-
-        // Check if earth layer is in URL
-        const hasEarth = urlState.layers.includes('earth');
-        const EARTH_BASEMAP_FILES = 12; // 6 faces × 2 resolutions
-        if (hasEarth) {
-          totalCriticalFiles += EARTH_BASEMAP_FILES;
-        }
-
-        // If no critical files, skip to ready
-        if (totalCriticalFiles === 0) {
-          state.bootstrapStatus = 'waiting';
-          if (onProgress) {
-            onProgress({
-              percentage: LOAD_LAYERS_START + LOAD_LAYERS_RANGE,
-              label: 'Ready'
-            });
-          }
-          await app.loadEnabledLayers();
-          return;
-        }
-
-        // Calculate which timestamps are adjacent to current time
-        const currentTime = state.currentTime!;
-        const currentTimeMs = currentTime.getTime();
-        const adjacentTimestamps = new Map<LayerId, Set<string>>();
-
-        // 6 hours in milliseconds (timestep interval)
-        const TIMESTEP_MS = 6 * 60 * 60 * 1000;
-
-        for (const layerId of dataLayers) {
-          layerProgress.set(layerId, new Set());
-
-          // Get dataset info to calculate timesteps
-          const datasetKey = layerId === 'temp2m' ? 'temp2m' :
-                             layerId === 'precipitation' ? 'tprate' :
-                             layerId === 'wind10m' ? 'wind10m_u' :
-                             'prmsl';
-
-          const datasetInfo = configLoader.getDatasetInfo(datasetKey);
-          if (!datasetInfo) continue;
-
-          // Find the 2 adjacent timestamps (before and at/after currentTime)
-          // Round currentTime down to nearest 6-hour boundary
-          const currentHour = currentTime.getUTCHours();
-          const nearestCycle = Math.floor(currentHour / 6) * 6;
-
-          const timestampBefore = new Date(currentTime);
-          timestampBefore.setUTCHours(nearestCycle, 0, 0, 0);
-
-          const timestampAfter = new Date(timestampBefore);
-          timestampAfter.setTime(timestampAfter.getTime() + TIMESTEP_MS);
-
-          // If currentTime is exactly on a cycle, use current and next
-          const isExactCycle = currentTimeMs === timestampBefore.getTime();
-          const adjacent1 = isExactCycle ? timestampBefore : new Date(timestampBefore.getTime() - TIMESTEP_MS);
-          const adjacent2 = timestampBefore;
-
-          // Format as "YYYYMMDD_HHz" to match timeStep format
-          const formatTimestamp = (date: Date) => {
-            const yyyy = date.getUTCFullYear();
-            const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
-            const dd = String(date.getUTCDate()).padStart(2, '0');
-            const hh = String(date.getUTCHours()).padStart(2, '0');
-            return `${yyyy}${mm}${dd}_${hh}z`;
-          };
-
-          const adjacent = new Set<string>([
-            formatTimestamp(adjacent1),
-            formatTimestamp(adjacent2)
-          ]);
-          adjacentTimestamps.set(layerId, adjacent);
-        }
-
-        let totalCriticalLoaded = 0;
-        let bootstrapReady = false;
-
-        // Listen to cache events
-        const fileLoadUpdateHandler = (event: FileLoadUpdateEvent) => {
-          const { layerId, timeStep } = event;
-
-          // Only track data layers during bootstrap
-          if (!dataLayers.includes(layerId)) return;
-
-          const progress = layerProgress.get(layerId);
-          const adjacent = adjacentTimestamps.get(layerId);
-          if (!progress || !adjacent) return;
-
-          // Check if this is one of the 2 adjacent timestamps
-          const timestampKey = `${timeStep.date}_${timeStep.cycle}`;
-          if (adjacent.has(timestampKey) && !progress.has(timestampKey)) {
-            progress.add(timestampKey);
-            totalCriticalLoaded++;
-
-            // Calculate percentage based on critical files only
-            const percentage = LOAD_LAYERS_START + (totalCriticalLoaded / totalCriticalFiles) * LOAD_LAYERS_RANGE;
-
-            // Format progress label with layer name
-            const label = `Loading ${layerId}... ${progress.size}/${CRITICAL_FILES_PER_LAYER}`;
-
-            if (onProgress) {
-              onProgress({ percentage, label });
-            }
-
-            // Check if all critical files loaded
-            if (totalCriticalLoaded === totalCriticalFiles && !bootstrapReady) {
-              bootstrapReady = true;
-              state.bootstrapStatus = 'waiting';
-              if (onProgress) {
-                onProgress({
-                  percentage: LOAD_LAYERS_START + LOAD_LAYERS_RANGE,
-                  label: 'Ready'
-                });
-              }
-            }
-          }
+        // Track progress messages for debugging
+        (window as any).__progressMessages = [];
+        const captureProgress = (msg: BootstrapStepProgress) => {
+          (window as any).__progressMessages.push({ ...msg, timestamp: Date.now() });
+          if (onProgress) onProgress(msg);
         };
 
-        cacheControl.on('fileLoadUpdate', fileLoadUpdateHandler);
-
-        try {
-          // Load enabled layers (this triggers the events and continues downloading in background)
-          await app.loadEnabledLayers();
-
-          // If not already marked as waiting, do so now
-          if (!bootstrapReady) {
-            state.bootstrapStatus = 'waiting';
-            if (onProgress) {
-              onProgress({
-                percentage: LOAD_LAYERS_START + LOAD_LAYERS_RANGE,
-                label: 'Ready'
-              });
-            }
-          }
-        } finally {
-          // Cleanup event listener
-          cacheControl.removeListener('fileLoadUpdate', fileLoadUpdateHandler);
+        // Get layers from URL
+        const urlState = parseUrlState();
+        console.log('[LOAD_LAYERS] URL state:', urlState);
+        if (!urlState || urlState.layers.length === 0) {
+          // No layers to load
+          console.log('[LOAD_LAYERS] No layers to load');
+          return;
         }
+
+        // Get scene instance
+        const scene = app.sceneService?.getScene();
+        if (!scene) {
+          throw new Error('Scene not initialized');
+        }
+
+        // Convert URL keys to layer IDs
+        const layersToLoad: LayerId[] = [];
+        for (const urlKey of urlState.layers) {
+          const layerId = configLoader.urlKeyToLayerId(urlKey) as LayerId;
+          layersToLoad.push(layerId);
+        }
+        console.log('[LOAD_LAYERS] Layers to load:', layersToLoad);
+
+        // Calculate per-layer progress allocation
+        const progressPerLayer = LOAD_LAYERS_RANGE / layersToLoad.length;
+        let currentLayerIndex = 0;
+
+        // Get cache control for event tracking
+        const cacheControl = getLayerCacheControl();
+
+        // Define expected file counts per layer type
+        const getExpectedFileCount = (layerId: LayerId): number => {
+          // Data layers load 2 adjacent timestamps
+          if (layerId === 'temp2m' || layerId === 'precipitation') {
+            return 2;
+          }
+          // Earth loads 12 basemap files (6 faces × 2 basemaps)
+          if (layerId === 'earth') {
+            return 12;
+          }
+          // Wind and pressure load data but don't fire granular events yet
+          if (layerId === 'wind10m' || layerId === 'pressure_msl') {
+            return -1; // Special case: await completion but no file tracking
+          }
+          // Immediate layers: sun, graticule, text
+          return 0;
+        };
+
+        // Load each layer sequentially
+        for (const layerId of layersToLoad) {
+          const expectedFiles = getExpectedFileCount(layerId);
+          const layerProgressStart = LOAD_LAYERS_START + (currentLayerIndex * progressPerLayer);
+          const layerProgressEnd = layerProgressStart + progressPerLayer;
+
+          // Skip immediate layers (no files to load)
+          if (expectedFiles === 0) {
+            captureProgress({
+              percentage: layerProgressStart,
+              label: `Loading ${layerId}...`
+            });
+            await scene.createLayer(layerId);
+            scene.setLayerVisible(layerId, true);
+            captureProgress({
+              percentage: layerProgressEnd,
+              label: `Loading ${layerId} done`
+            });
+            currentLayerIndex++;
+            continue;
+          }
+
+          // Handle wind/pressure (async but no file events)
+          if (expectedFiles === -1) {
+            captureProgress({
+              percentage: layerProgressStart,
+              label: `Loading ${layerId}...`
+            });
+            await scene.createLayer(layerId);
+            scene.setLayerVisible(layerId, true);
+            captureProgress({
+              percentage: layerProgressEnd,
+              label: `Loading ${layerId} done`
+            });
+            currentLayerIndex++;
+            continue;
+          }
+
+          // Handle event-tracked layers (temp2m, precipitation, earth)
+          let filesLoaded = 0;
+          let layerComplete = false;
+
+          // Create promise that resolves when all files loaded
+          const layerLoadPromise = new Promise<void>((resolve) => {
+            const fileLoadUpdateHandler = (event: any) => {
+              // Check if this event is for our layer
+              let isOurLayer = false;
+
+              // Data layers have { layerId, index, timeStep, data }
+              if (event.layerId === layerId && event.index !== undefined) {
+                isOurLayer = true;
+              }
+              // Earth layer has { layerId, fileName }
+              else if (event.layerId === layerId && event.fileName !== undefined) {
+                isOurLayer = true;
+              }
+
+              if (isOurLayer && !layerComplete) {
+                filesLoaded++;
+
+                // Calculate progress within this layer's range
+                const fileProgress = filesLoaded / expectedFiles;
+                const percentage = layerProgressStart + (fileProgress * progressPerLayer);
+
+                captureProgress({
+                  percentage,
+                  label: `Loading ${layerId} ${filesLoaded}/${expectedFiles}...`
+                });
+
+                // Check if layer complete
+                if (filesLoaded >= expectedFiles) {
+                  layerComplete = true;
+                  cacheControl.removeListener('fileLoadUpdate', fileLoadUpdateHandler);
+                  captureProgress({
+                    percentage: layerProgressEnd,
+                    label: `Loading ${layerId} ${expectedFiles}/${expectedFiles} done`
+                  });
+                  resolve();
+                }
+              }
+            };
+
+            cacheControl.on('fileLoadUpdate', fileLoadUpdateHandler);
+          });
+
+          // Start loading the layer
+          captureProgress({
+            percentage: layerProgressStart,
+            label: `Loading ${layerId}...`
+          });
+
+          // Trigger layer creation (this will fire events as files load)
+          const createPromise = scene.createLayer(layerId);
+
+          // Wait for both layer creation AND all files to load
+          await Promise.all([createPromise, layerLoadPromise]);
+
+          // Mark layer visible
+          scene.setLayerVisible(layerId, true);
+
+          currentLayerIndex++;
+        }
+
+        // All layers loaded
+        captureProgress({
+          percentage: LOAD_LAYERS_START + LOAD_LAYERS_RANGE,
+          label: 'All layers loaded'
+        });
       }
     },
 
