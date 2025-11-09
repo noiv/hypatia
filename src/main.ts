@@ -10,18 +10,6 @@ if ((performance as any).memory) {
   console.log('[HYPATIA_LOADING]');
 }
 
-// Log build version and commit hash
-fetch('/config/hypatia.config.json')
-  .then(res => res.json())
-  .then(config => {
-    if (config.build) {
-      console.log(`Build: v${config.build.version} (${config.build.hash}) - ${config.build.timestamp}`);
-    }
-  })
-  .catch(() => {
-    // Silently ignore if config not available
-  });
-
 // Debug hotkey 'd'
 document.addEventListener('keydown', (e) => {
   if (e.key === 'd' && !e.ctrlKey && !e.metaKey && !e.altKey) {

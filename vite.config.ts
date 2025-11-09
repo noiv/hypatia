@@ -8,7 +8,26 @@ const certFile = path.join(certsPath, 'hypatia.pem');
 const keyFile = path.join(certsPath, 'hypatia-key.pem');
 const httpsEnabled = fs.existsSync(certFile) && fs.existsSync(keyFile);
 
+// Plugin to watch public/config files and trigger reload
+function watchPublicConfig() {
+  return {
+    name: 'watch-public-config',
+    configureServer(server: any) {
+      server.watcher.add('public/config/**/*.json');
+      server.watcher.on('change', (file: string) => {
+        if (file.includes('public/config') && file.endsWith('.json')) {
+          server.ws.send({
+            type: 'full-reload',
+            path: '*'
+          });
+        }
+      });
+    }
+  };
+}
+
 export default defineConfig({
+  plugins: [watchPublicConfig()],
   server: {
     host: true,
     port: 8080,

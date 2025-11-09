@@ -40,6 +40,10 @@ class ConfigLoader {
 
     const config: HypatiaConfig = await response.json();
     this.hypatiaConfig = config;
+
+    // Log build version info
+    console.log(`%cBuild: v${config.build.version} (${config.build.hash}) - ${config.build.timestamp}`, 'font-weight: 800; color: darkorange');
+
     return config;
   }
 
