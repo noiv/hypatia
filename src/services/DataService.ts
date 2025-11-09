@@ -19,6 +19,7 @@ import { PrecipitationDataService } from '../layers/precipitation.data-service';
 import type { LayerId } from '../visualization/ILayer';
 import { configLoader } from '../config';
 import { getLayerCacheControl } from './LayerCacheControl';
+import { generateTimeSteps } from '../utils/timeUtils';
 
 // Re-export LayerId for convenience
 export type { LayerId } from '../visualization/ILayer';
@@ -129,16 +130,19 @@ export class DataService {
           throw new Error('temp2m dataset not found in manifest');
         }
 
-        dataServiceInstance = new Temp2mDataService(
-          datasetInfo,
+        dataServiceInstance = new Temp2mDataService();
+
+        // Generate timesteps using centralized timeUtils (SINGLE SOURCE OF TRUTH)
+        const hypatiaConfig = configLoader.getHypatiaConfig();
+        const maxRangeDays = hypatiaConfig.data.maxRangeDays;
+        const stepHours = parseInt(datasetInfo.step); // e.g., "6h" -> 6
+        timeSteps = generateTimeSteps(
+          currentTime,
+          maxRangeDays,
+          stepHours,
           configLoader.getDataBaseUrl(),
           'temp2m'
         );
-
-        // Generate timesteps from maxRangeDays config, not dataset range
-        const hypatiaConfig = configLoader.getHypatiaConfig();
-        const maxRangeDays = hypatiaConfig.data.maxRangeDays;
-        timeSteps = dataServiceInstance.generateTimeSteps(currentTime, maxRangeDays);
 
         // Create empty texture
         texture = dataServiceInstance.createEmptyTexture(timeSteps.length);
@@ -180,16 +184,19 @@ export class DataService {
           throw new Error('tprate dataset not found in manifest');
         }
 
-        dataServiceInstance = new PrecipitationDataService(
-          datasetInfo,
+        dataServiceInstance = new PrecipitationDataService();
+
+        // Generate timesteps using centralized timeUtils (SINGLE SOURCE OF TRUTH)
+        const hypatiaConfig = configLoader.getHypatiaConfig();
+        const maxRangeDays = hypatiaConfig.data.maxRangeDays;
+        const stepHours = parseInt(datasetInfo.step); // e.g., "6h" -> 6
+        timeSteps = generateTimeSteps(
+          currentTime,
+          maxRangeDays,
+          stepHours,
           configLoader.getDataBaseUrl(),
           'tprate'
         );
-
-        // Generate timesteps from maxRangeDays config, not dataset range
-        const hypatiaConfig = configLoader.getHypatiaConfig();
-        const maxRangeDays = hypatiaConfig.data.maxRangeDays;
-        timeSteps = dataServiceInstance.generateTimeSteps(currentTime, maxRangeDays);
 
         // Create empty texture
         texture = dataServiceInstance.createEmptyTexture(timeSteps.length);

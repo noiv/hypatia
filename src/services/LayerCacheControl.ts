@@ -11,6 +11,7 @@ import type { TimeStep } from '../config/types';
 import { PriorityQueue, type Priority } from '../utils/PriorityQueue';
 import { getCacheStrategy } from './CacheStrategy';
 import { configLoader } from '../config';
+import { timeToIndex as utilsTimeToIndex, getAdjacentIndices } from '../utils/timeUtils';
 /**
  * Simple EventEmitter for browser
  */
@@ -148,17 +149,13 @@ export class LayerCacheControl extends EventEmitter {
       throw new Error(`Layer ${layerId} not registered`);
     }
 
-    const fractionalIndex = this.timeToIndex(currentTime, timeSteps);
+    const fractionalIndex = utilsTimeToIndex(currentTime, timeSteps);
     const currentIndex = Math.floor(fractionalIndex);
 
     console.log(`LayerCacheControl: Initializing ${layerId} at index ${currentIndex} (${fractionalIndex})`);
 
-    // 1. Load ±1 immediately (critical priority)
-    const adjacentIndices = [
-      currentIndex - 1,
-      currentIndex,
-      currentIndex + 1
-    ].filter(i => i >= 0 && i < timeSteps.length);
+    // 1. Load ±1 immediately (critical priority) - use timeUtils for consistency
+    const adjacentIndices = getAdjacentIndices(currentTime, timeSteps);
 
     let loaded = 0;
     for (const index of adjacentIndices) {
@@ -196,15 +193,8 @@ export class LayerCacheControl extends EventEmitter {
     const timeSteps = this.timeSteps.get(layerId);
     if (!timeSteps) return;
 
-    const fractionalIndex = this.timeToIndex(currentTime, timeSteps);
-    const currentIndex = Math.floor(fractionalIndex);
-
-    // Promote ±1 adjacent to high priority
-    const adjacentIndices = [
-      currentIndex - 1,
-      currentIndex,
-      currentIndex + 1
-    ].filter(i => i >= 0 && i < timeSteps.length);
+    // Promote ±1 adjacent to high priority - use timeUtils for consistency
+    const adjacentIndices = getAdjacentIndices(currentTime, timeSteps);
 
     for (const index of adjacentIndices) {
       if (!this.isLoaded(layerId, index) && !this.isLoading(layerId, index)) {
@@ -416,44 +406,8 @@ export class LayerCacheControl extends EventEmitter {
     return orderedIndices.filter(i => i >= start && i <= end && !adjacentSet.has(i));
   }
 
-  /**
-   * Convert Date to fractional timestep index
-   */
-  private timeToIndex(currentTime: Date, timeSteps: TimeStep[]): number {
-    const currentMs = currentTime.getTime();
-
-    for (let i = 0; i < timeSteps.length - 1; i++) {
-      const step1 = this.parseTimeStep(timeSteps[i]!);
-      const step2 = this.parseTimeStep(timeSteps[i + 1]!);
-
-      if (currentMs >= step1.getTime() && currentMs <= step2.getTime()) {
-        // Interpolate between i and i+1
-        const total = step2.getTime() - step1.getTime();
-        const elapsed = currentMs - step1.getTime();
-        return i + (elapsed / total);
-      }
-    }
-
-    // Out of range - clamp
-    const firstStep = timeSteps[0];
-    if (firstStep && currentMs < this.parseTimeStep(firstStep).getTime()) {
-      return 0;
-    }
-
-    return timeSteps.length - 1;
-  }
-
-  /**
-   * Parse TimeStep to Date
-   */
-  private parseTimeStep(step: TimeStep): Date {
-    const year = parseInt(step.date.slice(0, 4));
-    const month = parseInt(step.date.slice(4, 6)) - 1;
-    const day = parseInt(step.date.slice(6, 8));
-    const hour = parseInt(step.cycle.slice(0, 2));
-
-    return new Date(Date.UTC(year, month, day, hour, 0, 0, 0));
-  }
+  // Removed: timeToIndex() and parseTimeStep() - now using utils/timeUtils.ts
+  // This ensures bootstrap and render use the SAME calculations
 
   /**
    * Get state for timestamp

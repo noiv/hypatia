@@ -1,11 +1,5 @@
 import * as THREE from 'three';
-import type { DatasetInfo } from '../config';
-
-export interface TimeStep {
-  date: string;    // YYYYMMDD
-  cycle: string;   // 00z, 06z, 12z, 18z
-  filePath: string;
-}
+import type { TimeStep } from '../config/types';
 
 export class Temp2mDataService {
   private static readonly WIDTH = 1441; // Includes wrapping column
@@ -14,60 +8,13 @@ export class Temp2mDataService {
   private static readonly NO_DATA_SENTINEL = 0xFFFF; // Max fp16 value, never reached by real temp data
   private readonly EXPECTED_SIZE: number;
 
-  constructor(
-    private readonly datasetInfo: DatasetInfo,
-    private readonly dataBaseUrl: string,
-    private readonly paramName: string
-  ) {
+  constructor() {
+    // Data service no longer needs constructor params - timesteps generated centrally by app
     this.EXPECTED_SIZE = Temp2mDataService.WIDTH * Temp2mDataService.HEIGHT * Temp2mDataService.BYTES_PER_FLOAT16;
   }
 
-  /**
-   * Generate list of time steps from maxRangeDays config (not dataset range)
-   * Creates timesteps centered at currentTime ± (maxRangeDays/2)
-   */
-  generateTimeSteps(currentTime: Date, maxRangeDays: number): TimeStep[] {
-    const steps: TimeStep[] = [];
-
-    // Parse step (e.g., "6h" -> 6)
-    const stepHours = parseInt(this.datasetInfo.step);
-
-    // Calculate first day: currentTime - floor(maxRangeDays / 2) days
-    const daysBack = Math.floor(maxRangeDays / 2);
-    const startDate = new Date(currentTime);
-    startDate.setUTCDate(startDate.getUTCDate() - daysBack);
-    startDate.setUTCHours(0, 0, 0, 0); // Start at 00z
-
-    // Calculate end time: first day + maxRangeDays
-    const endDate = new Date(startDate);
-    endDate.setUTCDate(endDate.getUTCDate() + maxRangeDays);
-
-    // Generate timesteps (exactly maxRangeDays * 4 = 60 for 15 days)
-    const current = new Date(startDate);
-    while (current < endDate) {
-      const year = current.getUTCFullYear();
-      const month = String(current.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(current.getUTCDate()).padStart(2, '0');
-      const hour = String(current.getUTCHours()).padStart(2, '0');
-
-      const dateStr = `${year}${month}${day}`;
-      const cycle = `${hour}z`;
-      const filePath = `${this.dataBaseUrl}/${this.paramName}/${dateStr}_${cycle}.bin`;
-
-      steps.push({
-        date: dateStr,
-        cycle,
-        filePath
-      });
-
-      // Increment by step hours
-      current.setUTCHours(current.getUTCHours() + stepHours);
-    }
-
-    console.log(`${this.paramName}: ${steps.length} timesteps (maxRangeDays=${maxRangeDays})`);
-
-    return steps;
-  }
+  // Removed: generateTimeSteps() - now using utils/timeUtils.ts
+  // App/bootstrap generates timesteps centrally and passes to all layers
 
   /**
    * Load a single binary file as Uint16Array (fp16)
@@ -135,49 +82,8 @@ export class Temp2mDataService {
     return texture;
   }
 
-  /**
-   * Calculate time index (0 to steps.length-1) from current time
-   */
-  timeToIndex(currentTime: Date, steps: TimeStep[]): number {
-    // Find the two closest time steps
-    const currentMs = currentTime.getTime();
-
-    for (let i = 0; i < steps.length - 1; i++) {
-      const stepA = steps[i];
-      const stepB = steps[i + 1];
-      if (!stepA || !stepB) continue;
-
-      const step1 = this.parseTimeStep(stepA);
-      const step2 = this.parseTimeStep(stepB);
-
-      if (currentMs >= step1.getTime() && currentMs <= step2.getTime()) {
-        // Interpolate between i and i+1
-        const total = step2.getTime() - step1.getTime();
-        const elapsed = currentMs - step1.getTime();
-        return i + (elapsed / total);
-      }
-    }
-
-    // Out of range - clamp
-    const firstStep = steps[0];
-    if (firstStep && currentMs < this.parseTimeStep(firstStep).getTime()) {
-      return -1; // Before first step
-    }
-
-    return steps.length; // After last step
-  }
-
-  /**
-   * Parse time step into Date object (in UTC)
-   */
-  private parseTimeStep(step: TimeStep): Date {
-    const year = parseInt(step.date.slice(0, 4));
-    const month = parseInt(step.date.slice(4, 6)) - 1;
-    const day = parseInt(step.date.slice(6, 8));
-    const hour = parseInt(step.cycle.slice(0, 2));
-
-    return new Date(Date.UTC(year, month, day, hour, 0, 0, 0));
-  }
+  // Removed: timeToIndex() and parseTimeStep() - now using utils/timeUtils.ts
+  // This ensures consistent calculations across bootstrap and rendering
 
   // ============================================================================
   // Progressive Loading Methods

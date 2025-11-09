@@ -7,7 +7,8 @@
  * - Cmd/Ctrl +/-/0: Text size adjustment
  */
 
-import { clampTimeToDataRange } from '../utils/timeUtils';
+import { roundToHour, roundToTenMinutes, addDays, clampTimeToDataWindow } from '../utils/timeUtils';
+import { configLoader } from '../config';
 
 export interface KeyboardShortcutHandlers {
   onTimeChange: (newTime: Date) => void;
@@ -32,7 +33,9 @@ export class KeyboardShortcutsService {
     if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
       e.preventDefault();
       const newTime = this.calculateTimeFromArrowKey(e);
-      const clampedTime = clampTimeToDataRange(newTime);
+      const currentTime = this.getCurrentTime();
+      const maxRangeDays = configLoader.getHypatiaConfig().data.maxRangeDays;
+      const clampedTime = clampTimeToDataWindow(newTime, currentTime, maxRangeDays);
       this.handlers.onTimeChange(clampedTime);
     }
 
@@ -68,78 +71,19 @@ export class KeyboardShortcutsService {
     const direction = e.code === 'ArrowLeft' ? -1 : 1;
 
     if (e.ctrlKey || e.metaKey) {
-      // Ctrl/Cmd + Arrow: Jump by 24 hours
-      return new Date(currentTime.getTime() + direction * 24 * 60 * 60 * 1000);
+      // Ctrl/Cmd + Arrow: Jump by 24 hours (UTC)
+      return addDays(currentTime, direction);
     }
 
     if (e.shiftKey) {
-      // Shift + Arrow: Jump to next full 10 minutes
-      return this.calculateTenMinuteJump(currentTime, direction);
+      // Shift + Arrow: Jump to next full 10 minutes (UTC)
+      return roundToTenMinutes(currentTime, direction as 1 | -1);
     }
 
-    // Arrow alone: Jump to next full hour
-    return this.calculateHourJump(currentTime, direction);
+    // Arrow alone: Jump to next full hour (UTC)
+    return roundToHour(currentTime, direction as 1 | -1);
   }
 
-  /**
-   * Jump to next/previous 10-minute mark
-   */
-  private calculateTenMinuteJump(time: Date, direction: number): Date {
-    const minutes = time.getMinutes();
-    const seconds = time.getSeconds();
-    const milliseconds = time.getMilliseconds();
-
-    // Calculate how many minutes to next 10-minute mark
-    const currentMinuteInCycle = minutes % 10;
-    let minutesToAdd: number;
-
-    if (direction > 0) {
-      // Forward: go to next 10-minute mark
-      minutesToAdd = currentMinuteInCycle === 0 && seconds === 0 && milliseconds === 0
-        ? 10  // Already on mark, go to next
-        : 10 - currentMinuteInCycle;
-    } else {
-      // Backward: go to previous 10-minute mark
-      minutesToAdd = currentMinuteInCycle === 0 && seconds === 0 && milliseconds === 0
-        ? -10  // Already on mark, go to previous
-        : -currentMinuteInCycle;
-    }
-
-    const newTime = new Date(time);
-    newTime.setMinutes(minutes + minutesToAdd, 0, 0);
-    return newTime;
-  }
-
-  /**
-   * Jump to next/previous full hour
-   */
-  private calculateHourJump(time: Date, direction: number): Date {
-    const minutes = time.getMinutes();
-    const seconds = time.getSeconds();
-    const milliseconds = time.getMilliseconds();
-
-    if (direction > 0) {
-      // Forward: go to next full hour
-      if (minutes === 0 && seconds === 0 && milliseconds === 0) {
-        // Already on full hour, go to next hour
-        return new Date(time.getTime() + 60 * 60 * 1000);
-      } else {
-        // Round up to next hour
-        const newTime = new Date(time);
-        newTime.setHours(time.getHours() + 1, 0, 0, 0);
-        return newTime;
-      }
-    } else {
-      // Backward: go to previous full hour
-      if (minutes === 0 && seconds === 0 && milliseconds === 0) {
-        // Already on full hour, go to previous hour
-        return new Date(time.getTime() - 60 * 60 * 1000);
-      } else {
-        // Round down to current hour
-        const newTime = new Date(time);
-        newTime.setMinutes(0, 0, 0);
-        return newTime;
-      }
-    }
-  }
+  // Removed: calculateTenMinuteJump() and calculateHourJump() - now using utils/timeUtils.ts
+  // This ensures UTC-only operations everywhere
 }

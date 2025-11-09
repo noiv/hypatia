@@ -5,10 +5,10 @@ import * as THREE from 'three';
  * Returns unit vector pointing toward sun from Earth center
  */
 export function calculateSunPosition(time: Date): THREE.Vector3 {
-  // Get day of year (1-365/366)
-  const startOfYear = new Date(time.getFullYear(), 0, 1);
+  // Get day of year (1-365/366) - UTC only
+  const startOfYear = new Date(Date.UTC(time.getUTCFullYear(), 0, 1));
   const dayOfYear = Math.floor((time.getTime() - startOfYear.getTime()) / 86400000) + 1;
-  const daysInYear = isLeapYear(time.getFullYear()) ? 366 : 365;
+  const daysInYear = isLeapYear(time.getUTCFullYear()) ? 366 : 365;
 
   // Calculate solar declination (tilt of Earth's axis)
   // -23.45° at winter solstice, +23.45° at summer solstice
