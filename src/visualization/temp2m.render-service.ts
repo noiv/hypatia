@@ -165,7 +165,8 @@ export class Temp2mRenderService extends TimeSeriesLayer {
       varying vec3 vPosition;
       varying vec3 vNormal;
 
-      const float NODATA = -9999.0;
+      const float NODATA = -9999.0; // Legacy NODATA
+      const float NO_DATA_SENTINEL = 65504.0; // 0xFFFF in fp16 - progressive loading sentinel
       const float MIN_TEMP = -30.0;
       const float MAX_TEMP = 40.0;
 
@@ -233,11 +234,12 @@ export class Temp2mRenderService extends TimeSeriesLayer {
         val1 = texture(dataTexture, vec3(vUv, z1)).r;
         val2 = texture(dataTexture, vec3(vUv, z2)).r;
 
-        // Check for no data
-        if (val1 == NODATA || val2 == NODATA) {
-          // No data - green in dev
+        // Check for no data (legacy NODATA or progressive loading sentinel)
+        if (val1 == NODATA || val2 == NODATA || val1 > 60000.0 || val2 > 60000.0) {
+          // No data loaded yet - show visual indicator in dev, transparent in prod
           #ifdef DEVELOPMENT
-            gl_FragColor = vec4(0.0, 1.0, 0.0, 0.2);
+            // Semi-transparent gray pattern to indicate unloaded data
+            gl_FragColor = vec4(0.2, 0.2, 0.2, 0.3);
           #else
             discard;
           #endif

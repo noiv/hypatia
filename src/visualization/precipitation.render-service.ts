@@ -149,6 +149,7 @@ export class PrecipitationRenderService extends TimeSeriesLayer {
       varying vec3 vNormal;
 
       const float DISCARD_THRESHOLD = ${PRECIPITATION_CONFIG.discardThreshold.toExponential()};
+      const float NO_DATA_SENTINEL = 65504.0; // 0xFFFF in fp16 - progressive loading sentinel
 
       // Legacy precipitation color palette (from hypatia.arctic.io)
       vec4 getPrateColor(float rate) {
@@ -180,6 +181,18 @@ export class PrecipitationRenderService extends TimeSeriesLayer {
 
         float rate1 = texture(dataTexture, uvw1).r;
         float rate2 = texture(dataTexture, uvw2).r;
+
+        // Check for unloaded data (progressive loading sentinel)
+        if (rate1 > 60000.0 || rate2 > 60000.0) {
+          // Data not loaded yet
+          #ifdef DEVELOPMENT
+            // Show gray pattern in dev mode
+            gl_FragColor = vec4(0.3, 0.3, 0.3, 0.3);
+          #else
+            discard;
+          #endif
+          return;
+        }
 
         // Interpolate precipitation rate
         float rate = mix(rate1, rate2, mix_factor);
