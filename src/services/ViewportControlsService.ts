@@ -12,7 +12,7 @@
 import * as THREE from 'three';
 import * as TWEEN from '@tweenjs/tween.js';
 import type { Scene } from '../visualization/scene';
-import { clampTimeToDataRange } from '../utils/timeUtils';
+import { clampTimeToDataWindow } from '../utils/timeUtils';
 import { mouseToNDC, raycastObject } from '../utils/raycasting';
 import { configLoader } from '../config/loader';
 
@@ -214,7 +214,8 @@ export class ViewportControlsService {
       if (this.callbacks.getCurrentTime && this.callbacks.onTimeChange) {
         const currentTime = this.callbacks.getCurrentTime();
         const newTime = new Date(currentTime.getTime() + hoursDelta * 3600000);
-        const clampedTime = clampTimeToDataRange(newTime);
+        const maxRangeDays = configLoader.getHypatiaConfig().data.maxRangeDays;
+        const clampedTime = clampTimeToDataWindow(newTime, currentTime, maxRangeDays);
         this.callbacks.onTimeChange(clampedTime);
       }
     }
@@ -456,7 +457,8 @@ export class ViewportControlsService {
           if (this.callbacks.getCurrentTime && this.callbacks.onTimeChange) {
             const currentTime = this.callbacks.getCurrentTime();
             const newTime = new Date(currentTime.getTime() + hoursDelta * 3600000);
-            const clampedTime = clampTimeToDataRange(newTime);
+            const maxRangeDays = configLoader.getHypatiaConfig().data.maxRangeDays;
+            const clampedTime = clampTimeToDataWindow(newTime, currentTime, maxRangeDays);
             this.callbacks.onTimeChange(clampedTime);
           }
         }

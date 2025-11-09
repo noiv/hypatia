@@ -30,7 +30,7 @@ import { ViewportControlsService } from './services/ViewportControlsService';
 
 // Utils
 import { sanitizeUrl } from './utils/sanitizeUrl';
-import { clampTimeToDataRange } from './utils/timeUtils';
+import { clampTimeToDataWindow } from './utils/timeUtils';
 import { parseUrlState } from './utils/urlState';
 import { getLayerCacheControl } from './services/LayerCacheControl';
 
@@ -246,7 +246,9 @@ export const App: AppComponent = {
 
 
   handleTimeChange(newTime: Date) {
-    const clamped = clampTimeToDataRange(newTime);
+    const currentTime = this.stateService!.getCurrentTime();
+    const maxRangeDays = configLoader.getHypatiaConfig().data.maxRangeDays;
+    const clamped = clampTimeToDataWindow(newTime, currentTime, maxRangeDays);
     this.stateService!.setCurrentTime(clamped);
     this.sceneService!.getScene()?.updateTime(clamped);
 

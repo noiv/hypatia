@@ -5,7 +5,8 @@
  */
 
 import m from 'mithril';
-import { clampTimeToDataRange } from '../utils/timeUtils';
+import { clampTimeToDataWindow } from '../utils/timeUtils';
+import { configLoader } from '../config';
 
 export interface TimeBarPanelAttrs {
   currentTime: Date;
@@ -33,7 +34,8 @@ export const TimeBarPanel: m.Component<TimeBarPanelAttrs> = {
     // Jump to current time
     const jumpToNow = () => {
       const now = new Date();
-      const clampedNow = clampTimeToDataRange(now);
+      const maxRangeDays = configLoader.getHypatiaConfig().data.maxRangeDays;
+      const clampedNow = clampTimeToDataWindow(now, currentTime, maxRangeDays);
       onTimeChange(clampedNow);
     };
 
@@ -80,7 +82,8 @@ export const TimeBarPanel: m.Component<TimeBarPanelAttrs> = {
             e.preventDefault();
             const hoursToAdd = e.deltaY > 0 ? -1 : 1;
             const newTime = new Date(currentTime.getTime() + hoursToAdd * 3600000);
-            const clampedTime = clampTimeToDataRange(newTime);
+            const maxRangeDays = configLoader.getHypatiaConfig().data.maxRangeDays;
+            const clampedTime = clampTimeToDataWindow(newTime, currentTime, maxRangeDays);
             onTimeChange(clampedTime);
           }
         }),
