@@ -28,7 +28,7 @@ export class Scene {
   private dataService: DataService;
   private textEnabled: boolean = false;
 
-  constructor(canvas: HTMLCanvasElement, preloadedImages?: Map<string, HTMLImageElement>) {
+  constructor(canvas: HTMLCanvasElement, initialTime?: Date, preloadedImages?: Map<string, HTMLImageElement>) {
     this.dataService = new DataService();
     this.preloadedImages = preloadedImages;
 
@@ -63,6 +63,9 @@ export class Scene {
     this.renderer.setSize(width, height);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
+    // Initialize TextureUpdater for optimal texture updates
+    this.dataService.setRenderer(this.renderer);
+
     // Stats.js for FPS monitoring
     // @ts-ignore - Stats is loaded via script tag
     this.stats = new Stats();
@@ -84,14 +87,24 @@ export class Scene {
     // Note: Mouse/click/wheel event listeners are managed by App component
     // ViewportControlsService handles all input and camera controls
 
-    // Initialize current time
-    this.currentTime = new Date();
+    // Initialize current time (use provided initialTime from URL, or fallback to browser time)
+    this.currentTime = initialTime || new Date();
 
     // No default layers - all layers are optional and loaded on demand
     // Layers are loaded via createLayer() method from URL state or user interaction
 
-    // Start animation loop
-    this.animate();
+    // Note: Animation loop is NOT started here - call start() after bootstrap
+  }
+
+  /**
+   * Start the animation loop
+   * Should be called after bootstrap completes and initial layers are loaded
+   */
+  start(): void {
+    if (!this.animationId) {
+      console.log('[Scene] Starting animation loop');
+      this.animate();
+    }
   }
 
   /**
@@ -495,6 +508,14 @@ export class Scene {
    */
   setPerformanceElement(element: HTMLElement): void {
     this.performanceElement = element;
+  }
+
+  /**
+   * Get the THREE.WebGLRenderer instance
+   * Used by TextureUpdater for direct GPU operations
+   */
+  getRenderer(): THREE.WebGLRenderer {
+    return this.renderer;
   }
 
   /**

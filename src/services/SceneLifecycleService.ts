@@ -22,7 +22,7 @@ export class SceneLifecycleService {
     },
     preloadedImages?: Map<string, HTMLImageElement>
   ): Promise<Scene> {
-    const scene = new Scene(canvas, preloadedImages);
+    const scene = new Scene(canvas, initialState.currentTime, preloadedImages);
 
     // Set camera position from URL if available
     if (initialState.cameraState) {

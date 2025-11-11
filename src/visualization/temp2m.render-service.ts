@@ -5,13 +5,19 @@ import { TimeSeriesLayer } from './render-service.base';
 import type { TimeStep } from '../config/types';
 import type { DataService } from '../services/DataService';
 import type { LayerId } from './ILayer';
+import { getLayerCacheControl } from '../services/LayerCacheControl';
 
 export class Temp2mRenderService extends TimeSeriesLayer {
   private mesh: THREE.Mesh;
   private material: THREE.ShaderMaterial;
+  private dataService: DataService;
+  private userRequestedVisible: boolean = true; // User's visibility preference
 
-  private constructor(layerId: LayerId, dataTexture: THREE.Data3DTexture, timeSteps: TimeStep[], timeStepCount: number) {
+  private constructor(layerId: LayerId, dataService: DataService, dataTexture: THREE.Data3DTexture, timeSteps: TimeStep[], timeStepCount: number) {
     super(layerId, timeSteps);
+
+    this.dataService = dataService;
+    console.log(`[temp2m constructor] timeStepCount: ${timeStepCount}, maxTimeIndex will be: ${timeStepCount - 1}`);
 
     // Use SphereGeometry for better vertex distribution
     // This avoids triangles spanning across the dateline
@@ -24,6 +30,9 @@ export class Temp2mRenderService extends TimeSeriesLayer {
 
     // Create shader material
     this.material = new THREE.ShaderMaterial({
+      defines: {
+        DEVELOPMENT: ''  // Define DEVELOPMENT to enable debug rendering
+      },
       uniforms: {
         dataTexture: { value: dataTexture },
         timeIndex: { value: 0.0 },
@@ -47,14 +56,40 @@ export class Temp2mRenderService extends TimeSeriesLayer {
     this.mesh = new THREE.Mesh(geometry, this.material);
     this.mesh.name = 'Temp2mRenderService';
     this.mesh.renderOrder = 1; // Render after Earth
+
+    // Initially hidden - will be shown when data is verified for current time
+    this.mesh.visible = false;
+
+    // Listen for data loading to update visibility
+    this.setupDataListeners();
+  }
+
+  /**
+   * Listen for data load events to update visibility when new data arrives
+   */
+  private setupDataListeners(): void {
+    try {
+      const cacheControl = getLayerCacheControl();
+      cacheControl.on('fileLoadUpdate', (event: any) => {
+        if (event.layerId === this.layerId) {
+          // Data loaded, re-check visibility with current time index
+          if (this.material.uniforms.timeIndex) {
+            this.setTimeIndex(this.material.uniforms.timeIndex.value);
+          }
+        }
+      });
+    } catch (e) {
+      // Cache control not ready yet
+    }
   }
 
   /**
    * Factory method to create Temp2mRenderService with data loading
    */
   static async create(layerId: LayerId, dataService: DataService, currentTime: Date): Promise<Temp2mRenderService> {
-    const layerData = await dataService.loadLayerProgressive('temp2m', currentTime);
-    return new Temp2mRenderService(layerId, layerData.texture, layerData.timeSteps, layerData.timeSteps.length);
+    // Create empty texture without loading data (data will be loaded in LOAD_LAYER_DATA step)
+    const layerData = await dataService.loadLayerProgressive('temp2m', currentTime, undefined, false);
+    return new Temp2mRenderService(layerId, dataService, layerData.texture, layerData.timeSteps, layerData.timeSteps.length);
   }
 
   // ILayer interface implementation
@@ -68,10 +103,40 @@ export class Temp2mRenderService extends TimeSeriesLayer {
 
   /**
    * Update time index for interpolation
+   * Only show layer if data is loaded for the required indices
    */
   setTimeIndex(index: number) {
     if (this.material.uniforms.timeIndex) {
       this.material.uniforms.timeIndex.value = index;
+    }
+
+    // Check if data is loaded for interpolation (floor and ceil indices)
+    const idx1 = Math.floor(index);
+    const idx2 = Math.min(idx1 + 1, this.timeSteps.length - 1);
+
+    const data1 = this.checkDataLoaded(idx1);
+    const data2 = this.checkDataLoaded(idx2);
+    const hasData = data1 && data2;
+
+    // Only visible if user wants it visible AND data is available
+    const shouldBeVisible = this.userRequestedVisible && hasData;
+
+    if (this.mesh.visible !== shouldBeVisible) {
+      console.log(`[temp2m] Visibility: ${this.mesh.visible} -> ${shouldBeVisible} | idx=${index.toFixed(2)} [${idx1}:${data1}, ${idx2}:${data2}]`);
+      this.mesh.visible = shouldBeVisible;
+    }
+  }
+
+  /**
+   * Check if data is loaded for a specific timestamp index
+   */
+  private checkDataLoaded(index: number): boolean {
+    try {
+      const cacheControl = getLayerCacheControl();
+      return cacheControl.isLoaded(this.layerId, index);
+    } catch (e) {
+      // Cache control not initialized yet
+      return false;
     }
   }
 
@@ -95,9 +160,14 @@ export class Temp2mRenderService extends TimeSeriesLayer {
 
   /**
    * Show/hide layer (ILayer interface)
+   * This is the user's preference - actual visibility depends on data availability
    */
   setVisible(visible: boolean): void {
-    this.mesh.visible = visible;
+    this.userRequestedVisible = visible;
+    // Re-evaluate visibility based on current time index
+    if (this.material.uniforms.timeIndex) {
+      this.setTimeIndex(this.material.uniforms.timeIndex.value);
+    }
   }
 
   /**
@@ -153,6 +223,7 @@ export class Temp2mRenderService extends TimeSeriesLayer {
 
   private getFragmentShader(): string {
     return `
+      // SHADER VERSION: v2 - GREEN for out of range, BLUE for no data
       uniform sampler3D dataTexture;
       uniform float timeIndex;
       uniform float maxTimeIndex;
@@ -166,7 +237,8 @@ export class Temp2mRenderService extends TimeSeriesLayer {
       varying vec3 vNormal;
 
       const float NODATA = -9999.0; // Legacy NODATA
-      const float NO_DATA_SENTINEL = 65504.0; // 0xFFFF in fp16 - progressive loading sentinel
+      const float NO_DATA_SENTINEL = 65504.0; // Max finite fp16 - progressive loading sentinel
+      const float NO_DATA_THRESHOLD = 60000.0; // Check if value exceeds reasonable temp range
       const float MIN_TEMP = -30.0;
       const float MAX_TEMP = 40.0;
 
@@ -212,9 +284,9 @@ export class Temp2mRenderService extends TimeSeriesLayer {
 
         // Check if time is out of range
         if (timeIndex < 0.0 || timeIndex > maxTimeIndex) {
-          // No data - red in dev, transparent in prod
+          // Time index out of valid range - should never happen in production
           #ifdef DEVELOPMENT
-            gl_FragColor = vec4(1.0, 0.0, 0.0, 0.2);
+            gl_FragColor = vec4(1.0, 0.0, 0.0, 0.3); // Red = error: out of range
           #else
             discard;
           #endif
@@ -234,12 +306,11 @@ export class Temp2mRenderService extends TimeSeriesLayer {
         val1 = texture(dataTexture, vec3(vUv, z1)).r;
         val2 = texture(dataTexture, vec3(vUv, z2)).r;
 
-        // Check for no data (legacy NODATA or progressive loading sentinel)
-        if (val1 == NODATA || val2 == NODATA || val1 > 60000.0 || val2 > 60000.0) {
+        // Check for no data: 0 Kelvin (impossible) or legacy NODATA
+        if (val1 == 0.0 || val2 == 0.0 || val1 == NODATA || val2 == NODATA) {
           // No data loaded yet - show visual indicator in dev, transparent in prod
           #ifdef DEVELOPMENT
-            // Semi-transparent gray pattern to indicate unloaded data
-            gl_FragColor = vec4(0.2, 0.2, 0.2, 0.3);
+            gl_FragColor = vec4(0.2, 0.2, 0.2, 0.3); // Gray = loading
           #else
             discard;
           #endif

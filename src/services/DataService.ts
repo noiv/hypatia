@@ -20,6 +20,7 @@ import type { LayerId } from '../visualization/ILayer';
 import { configLoader } from '../config';
 import { getLayerCacheControl } from './LayerCacheControl';
 import { generateTimeSteps } from '../utils/timeUtils';
+import { TextureUpdater } from './TextureUpdater';
 
 // Re-export LayerId for convenience
 export type { LayerId } from '../visualization/ILayer';
@@ -27,6 +28,15 @@ export type { LayerId } from '../visualization/ILayer';
 export class DataService {
   private cache: Map<LayerId, LayerData> = new Map();
   private loadingProgress: Map<LayerId, LoadProgress> = new Map();
+  private textureUpdater?: TextureUpdater;
+
+  /**
+   * Initialize with renderer for optimal texture updates using texSubImage3D
+   */
+  setRenderer(renderer: THREE.WebGLRenderer): void {
+    this.textureUpdater = new TextureUpdater(renderer);
+    console.log('[DataService] TextureUpdater initialized with renderer');
+  }
 
   /**
    * Get layer data if already loaded (no loading)
@@ -104,12 +114,16 @@ export class DataService {
 
   /**
    * Load layer with progressive loading (new method)
-   * Creates empty texture, loads adjacent timestamps, queues rest
+   * Creates empty texture, optionally loads adjacent timestamps, queues rest
+   *
+   * @param loadData - If false, only creates empty texture and registers layer (bootstrap phase 1)
+   *                   If true, also loads critical timestamps (bootstrap phase 2)
    */
   async loadLayerProgressive(
     layerId: LayerId,
     currentTime: Date,
-    onProgress?: (progress: LoadProgress) => void
+    onProgress?: (progress: LoadProgress) => void,
+    loadData: boolean = true
   ): Promise<LayerData> {
     // Return from cache if already loaded
     const cached = this.cache.get(layerId);
@@ -132,6 +146,11 @@ export class DataService {
 
         dataServiceInstance = new Temp2mDataService();
 
+        // Pass TextureUpdater for optimal texture updates
+        if (this.textureUpdater) {
+          dataServiceInstance.setTextureUpdater(this.textureUpdater);
+        }
+
         // Generate timesteps using centralized timeUtils (SINGLE SOURCE OF TRUTH)
         const hypatiaConfig = configLoader.getHypatiaConfig();
         const maxRangeDays = hypatiaConfig.data.maxRangeDays;
@@ -153,9 +172,11 @@ export class DataService {
 
         // Listen to cache events and update texture
         cacheControl.on('fileLoadUpdate', async (event: any) => {
-          console.log(`[DataService] fileLoadUpdate event for ${event.layerId}[${event.index}], hasData: ${!!event.data}`);
           if (event.layerId === layerId && event.data) {
-            console.log(`[DataService] Loading ${layerId}[${event.index}] into texture`);
+            // Only log critical loads during bootstrap
+            if (event.priority === 'critical') {
+              console.log(`[DataService] Loading ${layerId}[${event.index}] into texture (critical)`);
+            }
             await dataServiceInstance.loadTimestampIntoTexture(
               texture,
               event.timeStep,
@@ -164,17 +185,19 @@ export class DataService {
           }
         });
 
-        // Start progressive loading (loads ±1, queues rest)
-        const progressWrapper = onProgress ? (loaded: number, total: number) => {
-          onProgress({
-            loaded,
-            total,
-            percentage: (loaded / total) * 100,
-            currentItem: `Loading ${layerId} (${loaded}/${total})`
-          });
-        } : undefined;
+        // Optionally load data (if loadData=true)
+        if (loadData) {
+          const progressWrapper = onProgress ? (loaded: number, total: number) => {
+            onProgress({
+              loaded,
+              total,
+              percentage: (loaded / total) * 100,
+              currentItem: `Loading ${layerId} (${loaded}/${total})`
+            });
+          } : undefined;
 
-        await cacheControl.initializeLayer(layerId, currentTime, progressWrapper);
+          await cacheControl.initializeLayer(layerId, currentTime, progressWrapper);
+        }
         break;
       }
 
@@ -185,6 +208,11 @@ export class DataService {
         }
 
         dataServiceInstance = new PrecipitationDataService();
+
+        // Pass TextureUpdater for optimal texture updates
+        if (this.textureUpdater) {
+          dataServiceInstance.setTextureUpdater(this.textureUpdater);
+        }
 
         // Generate timesteps using centralized timeUtils (SINGLE SOURCE OF TRUTH)
         const hypatiaConfig = configLoader.getHypatiaConfig();
@@ -207,9 +235,11 @@ export class DataService {
 
         // Listen to cache events and update texture
         cacheControl.on('fileLoadUpdate', async (event: any) => {
-          console.log(`[DataService] fileLoadUpdate event for ${event.layerId}[${event.index}], hasData: ${!!event.data}`);
           if (event.layerId === layerId && event.data) {
-            console.log(`[DataService] Loading ${layerId}[${event.index}] into texture`);
+            // Only log critical loads during bootstrap
+            if (event.priority === 'critical') {
+              console.log(`[DataService] Loading ${layerId}[${event.index}] into texture (critical)`);
+            }
             await dataServiceInstance.loadTimestampIntoTexture(
               texture,
               event.timeStep,
@@ -218,17 +248,19 @@ export class DataService {
           }
         });
 
-        // Start progressive loading
-        const progressWrapper = onProgress ? (loaded: number, total: number) => {
-          onProgress({
-            loaded,
-            total,
-            percentage: (loaded / total) * 100,
-            currentItem: `Loading ${layerId} (${loaded}/${total})`
-          });
-        } : undefined;
+        // Optionally load data (if loadData=true)
+        if (loadData) {
+          const progressWrapper = onProgress ? (loaded: number, total: number) => {
+            onProgress({
+              loaded,
+              total,
+              percentage: (loaded / total) * 100,
+              currentItem: `Loading ${layerId} (${loaded}/${total})`
+            });
+          } : undefined;
 
-        await cacheControl.initializeLayer(layerId, currentTime, progressWrapper);
+          await cacheControl.initializeLayer(layerId, currentTime, progressWrapper);
+        }
         break;
       }
 

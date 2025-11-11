@@ -134,6 +134,9 @@ export const App: AppComponent = {
     const scene = this.sceneService!.getScene();
     if (!scene) return;
 
+    // Start animation loop now that bootstrap is complete and layers are loaded
+    scene.start();
+
     // Initialize viewport controls service
     this.viewportControls = scene.createViewportControls({
       onTimeChange: (newTime) => this.handleTimeChange(newTime),
@@ -174,11 +177,13 @@ export const App: AppComponent = {
 
     // Update state with bootstrap results
     // Extract only properties that exist in AppState
+    const urlState = parseUrlState();
     this.stateService!.update({
       bootstrapStatus: result.bootstrapStatus,
       bootstrapProgress: result.bootstrapProgress,
       bootstrapError: result.bootstrapError,
-      currentTime: result.currentTime || this.stateService!.getCurrentTime(),
+      // Preserve URL time if present, otherwise use bootstrap time
+      currentTime: urlState?.time || result.currentTime || this.stateService!.getCurrentTime(),
       latestRun: result.latestRun,
       userLocation: result.userLocation,
       preloadedImages: result.preloadedImages

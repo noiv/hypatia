@@ -19,11 +19,11 @@ export function formatDateForUrl(date: Date): string {
 
 /**
  * Parse date from URL format
- * @param dt - String like "2015-12-25:19:48"
+ * @param dt - String like "2015-12-25:19:48" (no seconds)
  * @returns Date object or null if invalid
  */
 export function parseDateFromUrl(dt: string): Date | null {
-  // Expected format: YYYY-MM-DD:HH:MM
+  // Expected format: YYYY-MM-DD:HH:MM (no seconds)
   const match = dt.match(/^(\d{4})-(\d{2})-(\d{2}):(\d{2}):(\d{2})$/);
 
   if (!match) {
@@ -37,7 +37,8 @@ export function parseDateFromUrl(dt: string): Date | null {
     parseInt(month!) - 1,
     parseInt(day!),
     parseInt(hours!),
-    parseInt(minutes!)
+    parseInt(minutes!),
+    0  // seconds always 0
   ));
 
   // Validate date

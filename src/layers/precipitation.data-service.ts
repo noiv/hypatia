@@ -1,16 +1,25 @@
 import * as THREE from 'three';
 import type { TimeStep } from '../config/types';
+import type { TextureUpdater } from '../services/TextureUpdater';
 
 export class PrecipitationDataService {
   private static readonly WIDTH = 1441; // Includes wrapping column
   private static readonly HEIGHT = 721;
   private static readonly BYTES_PER_FLOAT16 = 2; // fp16 = 2 bytes
-  private static readonly NO_DATA_SENTINEL = 0xFFFF; // Max fp16 value, never reached by precipitation data
+  private static readonly NO_DATA_SENTINEL = 0; // Max FINITE fp16 (0xFFFF is NaN!) // Max fp16 value, never reached by precipitation data
   private readonly EXPECTED_SIZE: number;
+  private textureUpdater?: TextureUpdater;
 
   constructor() {
     // Data service no longer needs constructor params - timesteps generated centrally by app
     this.EXPECTED_SIZE = PrecipitationDataService.WIDTH * PrecipitationDataService.HEIGHT * PrecipitationDataService.BYTES_PER_FLOAT16;
+  }
+
+  /**
+   * Set TextureUpdater for optimal texture updates using texSubImage3D
+   */
+  setTextureUpdater(updater: TextureUpdater): void {
+    this.textureUpdater = updater;
   }
 
   // Removed: generateTimeSteps() - now using utils/timeUtils.ts
@@ -113,7 +122,9 @@ export class PrecipitationDataService {
     texture.magFilter = THREE.LinearFilter;
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.ClampToEdgeWrapping;
-    texture.needsUpdate = true;
+
+    // Don't set needsUpdate on empty texture - TextureUpdater handles uploads
+    // texture.needsUpdate = true;
 
     return texture;
   }
@@ -130,13 +141,16 @@ export class PrecipitationDataService {
     try {
       const layerData = await this.loadBinaryFile(step.filePath);
 
-      // Update slice in existing texture
-      const offset = index * PrecipitationDataService.WIDTH * PrecipitationDataService.HEIGHT;
-      const texData = texture.image.data as unknown as Uint16Array;
-      texData.set(layerData, offset);
-
-      // Mark texture for update on next render
-      texture.needsUpdate = true;
+      if (this.textureUpdater) {
+        // Use optimized texSubImage3D update
+        this.textureUpdater.updateTextureSlice(texture, layerData, index);
+      } else {
+        // Fallback to traditional method
+        const offset = index * PrecipitationDataService.WIDTH * PrecipitationDataService.HEIGHT;
+        const texData = texture.image.data as Uint16Array;
+        texData.set(layerData, offset);
+        texture.needsUpdate = true;
+      }
 
       console.log(`Precipitation: Loaded timestamp ${index} (${step.date}_${step.cycle})`);
     } catch (error) {

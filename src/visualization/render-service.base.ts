@@ -33,6 +33,7 @@ export abstract class TimeSeriesLayer implements ILayer {
     if (!this.lastTime || state.time.getTime() !== this.lastTime.getTime()) {
       // Use centralized timeUtils for consistent calculations
       const timeIndex = timeToIndex(state.time, this.timeSteps);
+
       this.setTimeIndex(timeIndex);
       this.lastTime = state.time;
     }

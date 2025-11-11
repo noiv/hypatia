@@ -236,31 +236,35 @@ export function timeToIndex(currentTime: Date, timeSteps: TimeStep[]): number {
 /**
  * Calculate adjacent indices for progressive loading
  *
- * Returns indices [current-1, current, current+1] filtered to valid range.
+ * Returns floor and ceil indices needed for temporal interpolation.
  * Used by LayerCacheControl to determine "critical" timesteps to load first.
  *
  * @param currentTime - Time to find adjacent indices for (UTC)
  * @param timeSteps - Array of timesteps
- * @returns Array of indices (1-3 elements depending on boundaries)
+ * @returns Array of 2 indices [floor, ceil] for interpolation
  *
  * Example: timeToIndex returns 30.5 (between index 30 and 31)
- * - currentIndex = floor(30.5) = 30
- * - Returns: [29, 30, 31] (if all within bounds)
+ * - floor = 30, ceil = 31
+ * - Returns: [30, 31]
+ *
+ * Edge case: If fractionalIndex is exactly on a timestamp (e.g., 30.0)
+ * - Returns: [30, 30] (same index for both floor and ceil)
  */
 export function getAdjacentIndices(
   currentTime: Date,
   timeSteps: TimeStep[]
 ): number[] {
   const fractionalIndex = timeToIndex(currentTime, timeSteps);
-  const currentIndex = Math.floor(fractionalIndex);
+  const floorIndex = Math.floor(fractionalIndex);
+  const ceilIndex = Math.ceil(fractionalIndex);
 
-  const adjacentIndices = [
-    currentIndex - 1,
-    currentIndex,
-    currentIndex + 1
-  ].filter(i => i >= 0 && i < timeSteps.length);
+  // If exactly on a timestamp, both floor and ceil are the same
+  if (floorIndex === ceilIndex) {
+    return [floorIndex];
+  }
 
-  return adjacentIndices;
+  // Otherwise return both for interpolation
+  return [floorIndex, ceilIndex];
 }
 
 // ============================================================================

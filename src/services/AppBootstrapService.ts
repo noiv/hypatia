@@ -135,7 +135,10 @@ export class AppBootstrapService {
       end: 25,
       label: 'Fetching server time...',
       async run(state) {
-        state.currentTime = await getCurrentTime();
+        // Only fetch server time if not already set from URL
+        if (!state.currentTime) {
+          state.currentTime = await getCurrentTime();
+        }
       }
     },
 
@@ -172,17 +175,53 @@ export class AppBootstrapService {
       end: 40,
       label: 'Initializing scene...',
       async run(_state, app) {
+        // Create scene and canvas
         await app.initializeScene();
+
+        // Get URL layers
+        const urlState = parseUrlState();
+        if (!urlState || urlState.layers.length === 0) {
+          return;
+        }
+
+        // Get scene instance
+        const scene = app.sceneService?.getScene();
+        if (!scene) {
+          throw new Error('Scene not initialized');
+        }
+
+        // Create all layers with empty textures (for data layers)
+        const layersToCreate: LayerId[] = [];
+        for (const urlKey of urlState.layers) {
+          const layerId = configLoader.urlKeyToLayerId(urlKey) as LayerId;
+          layersToCreate.push(layerId);
+        }
+
+        console.log('[SCENE] Creating layers:', layersToCreate);
+        for (const layerId of layersToCreate) {
+          await scene.createLayer(layerId);
+          scene.setLayerVisible(layerId, true);
+        }
+
+        // Force one render frame to upload empty textures to GPU
+        // This ensures __webglTexture exists for texSubImage3D in LOAD_LAYER_DATA
+        const renderer = scene.getRenderer();
+        const camera = (scene as any).camera;
+        const threeScene = (scene as any).scene;
+        if (renderer && camera && threeScene) {
+          renderer.render(threeScene, camera);
+          console.log('[SCENE] Forced render to upload empty textures to GPU');
+        }
       }
     },
 
-    LOAD_LAYERS: {
+    LOAD_LAYER_DATA: {
       start: 40,
       end: 95,
-      label: 'Loading layers...',
+      label: 'Loading layer data...',
       async run(_state, app, onProgress) {
-        const LOAD_LAYERS_START = 40;
-        const LOAD_LAYERS_RANGE = 55; // 40-95%
+        const LOAD_LAYER_DATA_START = 40;
+        const LOAD_LAYER_DATA_RANGE = 55; // 40-95%
 
         // Track progress messages for debugging
         (window as any).__progressMessages = [];
@@ -193,17 +232,10 @@ export class AppBootstrapService {
 
         // Get layers from URL
         const urlState = parseUrlState();
-        console.log('[LOAD_LAYERS] URL state:', urlState);
+        console.log('[LOAD_LAYER_DATA] URL state:', urlState);
         if (!urlState || urlState.layers.length === 0) {
-          // No layers to load
-          console.log('[LOAD_LAYERS] No layers to load');
+          console.log('[LOAD_LAYER_DATA] No layer data to load');
           return;
-        }
-
-        // Get scene instance
-        const scene = app.sceneService?.getScene();
-        if (!scene) {
-          throw new Error('Scene not initialized');
         }
 
         // Convert URL keys to layer IDs
@@ -212,91 +244,41 @@ export class AppBootstrapService {
           const layerId = configLoader.urlKeyToLayerId(urlKey) as LayerId;
           layersToLoad.push(layerId);
         }
-        console.log('[LOAD_LAYERS] Layers to load:', layersToLoad);
+        console.log('[LOAD_LAYER_DATA] Layers with data to load:', layersToLoad);
+
+        // Filter to only data layers (layers were already created in SCENE step)
+        const dataLayersToLoad = layersToLoad.filter(layerId =>
+          layerId === 'temp2m' || layerId === 'precipitation'
+        );
+
+        if (dataLayersToLoad.length === 0) {
+          console.log('[LOAD_LAYER_DATA] No data layers to load');
+          return;
+        }
+
+        console.log('[LOAD_LAYER_DATA] Data layers:', dataLayersToLoad);
 
         // Calculate per-layer progress allocation
-        const progressPerLayer = LOAD_LAYERS_RANGE / layersToLoad.length;
+        const progressPerLayer = LOAD_LAYER_DATA_RANGE / dataLayersToLoad.length;
         let currentLayerIndex = 0;
 
         // Get cache control for event tracking
         const cacheControl = getLayerCacheControl();
 
-        // Define expected file counts per layer type
-        const getExpectedFileCount = (layerId: LayerId): number => {
-          // Data layers load 2 adjacent timestamps
-          if (layerId === 'temp2m' || layerId === 'precipitation') {
-            return 2;
-          }
-          // Earth loads 12 basemap files (6 faces × 2 basemaps)
-          if (layerId === 'earth') {
-            return 12;
-          }
-          // Wind and pressure load data but don't fire granular events yet
-          if (layerId === 'wind10m' || layerId === 'pressure_msl') {
-            return -1; // Special case: await completion but no file tracking
-          }
-          // Immediate layers: sun, graticule, text
-          return 0;
-        };
-
-        // Load each layer sequentially
-        for (const layerId of layersToLoad) {
-          const expectedFiles = getExpectedFileCount(layerId);
-          const layerProgressStart = LOAD_LAYERS_START + (currentLayerIndex * progressPerLayer);
+        // Load data for each layer (2 adjacent timestamps per layer)
+        for (const layerId of dataLayersToLoad) {
+          const layerProgressStart = LOAD_LAYER_DATA_START + (currentLayerIndex * progressPerLayer);
           const layerProgressEnd = layerProgressStart + progressPerLayer;
 
-          // Skip immediate layers (no files to load)
-          if (expectedFiles === 0) {
-            captureProgress({
-              percentage: layerProgressStart,
-              label: `Loading ${layerId}...`
-            });
-            await scene.createLayer(layerId);
-            scene.setLayerVisible(layerId, true);
-            captureProgress({
-              percentage: layerProgressEnd,
-              label: `Loading ${layerId} done`
-            });
-            currentLayerIndex++;
-            continue;
-          }
-
-          // Handle wind/pressure (async but no file events)
-          if (expectedFiles === -1) {
-            captureProgress({
-              percentage: layerProgressStart,
-              label: `Loading ${layerId}...`
-            });
-            await scene.createLayer(layerId);
-            scene.setLayerVisible(layerId, true);
-            captureProgress({
-              percentage: layerProgressEnd,
-              label: `Loading ${layerId} done`
-            });
-            currentLayerIndex++;
-            continue;
-          }
-
-          // Handle event-tracked layers (temp2m, precipitation, earth)
           let filesLoaded = 0;
+          const expectedFiles = 2; // Floor and ceil timestamps
           let layerComplete = false;
 
-          // Create promise that resolves when all files loaded
+          // Create promise that resolves when both timestamps loaded
           const layerLoadPromise = new Promise<void>((resolve) => {
             const fileLoadUpdateHandler = (event: any) => {
-              // Check if this event is for our layer
-              let isOurLayer = false;
-
-              // Data layers have { layerId, index, timeStep, data }
-              if (event.layerId === layerId && event.index !== undefined) {
-                isOurLayer = true;
-              }
-              // Earth layer has { layerId, fileName }
-              else if (event.layerId === layerId && event.fileName !== undefined) {
-                isOurLayer = true;
-              }
-
-              if (isOurLayer && !layerComplete) {
+              // Check if this event is for our layer and is critical priority
+              if (event.layerId === layerId && event.priority === 'critical' && !layerComplete) {
                 filesLoaded++;
 
                 // Calculate progress within this layer's range
@@ -324,28 +306,28 @@ export class AppBootstrapService {
             cacheControl.on('fileLoadUpdate', fileLoadUpdateHandler);
           });
 
-          // Start loading the layer
+          // Start loading critical timestamps
           captureProgress({
             percentage: layerProgressStart,
             label: `Loading ${layerId}...`
           });
 
-          // Trigger layer creation (this will fire events as files load)
-          const createPromise = scene.createLayer(layerId);
+          // Trigger critical timestamp loading (LayerCacheControl already initialized)
+          // The layer was already created with empty texture in SCENE step
+          // This will load floor/ceil timestamps using texSubImage3D
+          const currentTime = urlState.time || new Date();
+          await cacheControl.initializeLayer(layerId, currentTime);
 
-          // Wait for both layer creation AND all files to load
-          await Promise.all([createPromise, layerLoadPromise]);
-
-          // Mark layer visible
-          scene.setLayerVisible(layerId, true);
+          // Wait for both timestamps to load
+          await layerLoadPromise;
 
           currentLayerIndex++;
         }
 
-        // All layers loaded
+        // All layer data loaded
         captureProgress({
-          percentage: LOAD_LAYERS_START + LOAD_LAYERS_RANGE,
-          label: 'All layers loaded'
+          percentage: LOAD_LAYER_DATA_START + LOAD_LAYER_DATA_RANGE,
+          label: 'All layer data loaded'
         });
       }
     },

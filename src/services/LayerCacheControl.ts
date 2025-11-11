@@ -271,7 +271,7 @@ export class LayerCacheControl extends EventEmitter {
 
       // Mark as loaded
       this.setState(layerId, index, { status: 'loaded', data });
-      this.emit('fileLoadUpdate', { layerId, index, timeStep, data });
+      this.emit('fileLoadUpdate', { layerId, index, timeStep, data, priority });
 
       // Only log critical loads during bootstrap
       if (priority === 'critical') {
