@@ -7,7 +7,7 @@
 import { getCurrentTime } from './TimeService';
 import { getLatestRun, type ECMWFRun } from './ECMWFService';
 import { getUserLocation, type UserLocation } from './GeolocationService';
-import { detectLocale, type LocaleInfo } from './LocaleService';
+import type { LocaleInfo } from './LocaleService';
 import { LayerStateService } from './LayerStateService';
 import { configLoader } from '../config';
 import { checkBrowserCapabilities, getCapabilityHelpUrls } from '../utils/capabilityCheck';
@@ -85,17 +85,8 @@ export class AppBootstrapService {
       }
     },
 
-    LOCALE: {
-      start: 5,
-      end: 7,
-      label: 'Detecting locale...',
-      async run(state) {
-        state.localeInfo = detectLocale();
-      }
-    },
-
     CONFIG: {
-      start: 7,
+      start: 5,
       end: 10,
       label: 'Loading configurations...',
       async run() {

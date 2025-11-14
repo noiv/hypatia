@@ -15,14 +15,23 @@ export interface UserOptions {
   };
 }
 
-let cachedOptions: UserOptions | null = null;
+const defaults = {
+      timeServer: {
+        enabled: false
+      },
+      atmosphere: {
+        enabled: false
+      }
+    }
+
+let options: UserOptions | null = null;
 
 /**
  * Load user options from public/config/user.options.json
  */
 export async function getUserOptions(): Promise<UserOptions> {
-  if (cachedOptions) {
-    return cachedOptions;
+  if (options) {
+    return options;
   }
 
   try {
@@ -31,22 +40,13 @@ export async function getUserOptions(): Promise<UserOptions> {
       throw new Error(`Failed to load user options: ${response.statusText}`);
     }
 
-    cachedOptions = await response.json();
-    console.log('User options loaded:', cachedOptions);
-    return cachedOptions!;
+    options = await response.json();
+    console.log('User options loaded:', options);
+    return options ?? defaults;
+
   } catch (error) {
     console.warn('Failed to load user options, using defaults:', error);
+    return options = defaults;
 
-    // Return defaults
-    cachedOptions = {
-      timeServer: {
-        enabled: false
-      },
-      atmosphere: {
-        enabled: false
-      }
-    };
-
-    return cachedOptions;
   }
 }

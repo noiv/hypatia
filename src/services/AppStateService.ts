@@ -16,10 +16,18 @@ export class AppStateService {
 
   constructor(initialState: Partial<AppState>) {
     const now = new Date();
+
+    // localeInfo and timezone must be provided in initialState
+    if (!initialState.localeInfo || !initialState.timezone) {
+      throw new Error('AppStateService requires localeInfo and timezone in initialState');
+    }
+
     this.state = {
       currentTime: now,
       sliderStartTime: now,  // Will be calculated properly in oninit
       sliderEndTime: now,    // Will be calculated properly in oninit
+      localeInfo: initialState.localeInfo,
+      timezone: initialState.timezone,
       isFullscreen: false,
       blend: 0.0,
       textEnabled: false,

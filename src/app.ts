@@ -30,7 +30,7 @@ import { ViewportControlsService } from './services/ViewportControlsService';
 
 // Utils
 import { sanitizeUrl } from './utils/sanitizeUrl';
-import { clampTimeToDataWindow } from './utils/timeUtils';
+import { clampTimeToDataWindow, getTimezoneInfo } from './utils/timeUtils';
 import { parseUrlState } from './utils/urlState';
 import { getLayerCacheControl } from './services/LayerCacheControl';
 
@@ -91,7 +91,9 @@ export const App: AppComponent = {
       sliderStartTime: sanitizedState.time,  // Temporary, will be set in bootstrap
       sliderEndTime: sanitizedState.time,    // Temporary, will be set in bootstrap
       blend: 0.0,
-      textEnabled: sanitizedState.layers.includes('text')
+      textEnabled: sanitizedState.layers.includes('text'),
+      localeInfo,
+      timezone: getTimezoneInfo()
     });
 
     this.sceneService = new SceneLifecycleService();

@@ -378,3 +378,37 @@ export function roundToTenMinutes(time: Date, direction: 1 | -1): Date {
   result.setUTCMinutes(minutes + minutesToAdd, 0, 0);
   return result;
 }
+
+// ============================================================================
+// Timezone Utilities
+// ============================================================================
+
+/**
+ * Get timezone information (short and long format)
+ *
+ * @returns Object with short abbreviation (e.g., "PST", "GMT+1") and long name
+ *
+ * Example outputs:
+ * - US: { short: "PST", long: "Pacific Standard Time" }
+ * - Europe: { short: "GMT+1", long: "Central European Standard Time" }
+ */
+export function getTimezoneInfo(): { short: string; long: string } {
+  const date = new Date();
+
+  // Get short format (e.g., "PST" or "GMT+1")
+  const shortFormatted = date.toLocaleTimeString('en-US', {
+    timeZoneName: 'short',
+    hour: 'numeric'
+  });
+  const short = shortFormatted.split(' ').pop() || '';
+
+  // Get long format (e.g., "Pacific Standard Time")
+  const longFormatted = date.toLocaleTimeString('en-US', {
+    timeZoneName: 'long'
+  });
+  // Extract timezone name (everything after the time)
+  const longMatch = longFormatted.match(/\d{1,2}:\d{2}:\d{2}\s+[AP]M\s+(.+)/);
+  const long = longMatch ? longMatch[1] : '';
+
+  return { short, long };
+}
