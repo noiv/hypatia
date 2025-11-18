@@ -110,11 +110,12 @@ export class Scene {
   /**
    * Create viewport controls service (called after Scene construction)
    */
-  createViewportControls(callbacks: ViewportControlsCallbacks): ViewportControlsService {
+  createViewportControls(callbacks: ViewportControlsCallbacks, dateTimeService?: any): ViewportControlsService {
     this.viewportControls = new ViewportControlsService(
       this.camera,
       this,
-      callbacks
+      callbacks,
+      dateTimeService
     );
     return this.viewportControls;
   }
@@ -508,14 +509,6 @@ export class Scene {
    */
   setPerformanceElement(element: HTMLElement): void {
     this.performanceElement = element;
-  }
-
-  /**
-   * Get the THREE.WebGLRenderer instance
-   * Used by TextureUpdater for direct GPU operations
-   */
-  getRenderer(): THREE.WebGLRenderer {
-    return this.renderer;
   }
 
   /**

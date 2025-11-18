@@ -9,7 +9,7 @@ import m from 'mithril';
 import { BlendSlider } from './BlendSlider';
 import { ProgressCanvas } from './ProgressCanvas';
 import type { LayerId } from '../visualization/ILayer';
-import { getLayerCacheControl } from '../services/LayerCacheControl';
+import type { DownloadService } from '../services/DownloadService';
 
 export interface LayerState {
   created: boolean;
@@ -29,6 +29,9 @@ export interface LayersPanelAttrs {
   // Other controls
   blend: number;
   onBlendChange: (blend: number) => void;
+
+  // Services (optional for backward compatibility)
+  downloadService?: DownloadService;
 }
 
 const LAYER_DISPLAY_NAMES: Record<LayerId, string> = {
@@ -47,33 +50,29 @@ const eventHandlers = new WeakMap<any, () => void>();
 
 export const LayersPanel: m.Component<LayersPanelAttrs> = {
   oninit(vnode) {
-    // Subscribe to cache control events to trigger redraws
-    try {
-      const cacheControl = getLayerCacheControl();
-      const handleCacheEvent = () => m.redraw();
+    // Subscribe to download service events to trigger redraws
+    const downloadService = vnode.attrs.downloadService;
+    if (downloadService) {
+      const handleDownloadEvent = () => m.redraw();
 
       // Store handler for cleanup
-      eventHandlers.set(vnode.state, handleCacheEvent);
+      eventHandlers.set(vnode.state, handleDownloadEvent);
 
-      // Single event listener - fileLoadUpdate fires after each file loads
-      cacheControl.on('fileLoadUpdate', handleCacheEvent);
-    } catch (e) {
-      // Cache control not initialized yet
+      // Listen to download progress events
+      downloadService.on('progress', handleDownloadEvent);
+      downloadService.on('timestampLoaded', handleDownloadEvent);
     }
   },
 
   onremove(vnode) {
     // Cleanup event listener
-    try {
-      const cacheControl = getLayerCacheControl();
-      const handleCacheEvent = eventHandlers.get(vnode.state);
+    const downloadService = vnode.attrs.downloadService;
+    const handleDownloadEvent = eventHandlers.get(vnode.state);
 
-      if (handleCacheEvent) {
-        cacheControl.removeListener('fileLoadUpdate', handleCacheEvent);
-        eventHandlers.delete(vnode.state);
-      }
-    } catch (e) {
-      // Cache control not initialized
+    if (downloadService && handleDownloadEvent) {
+      downloadService.off('progress', handleDownloadEvent);
+      downloadService.off('timestampLoaded', handleDownloadEvent);
+      eventHandlers.delete(vnode.state);
     }
   },
 
@@ -84,7 +83,8 @@ export const LayersPanel: m.Component<LayersPanelAttrs> = {
       onLayerToggle,
       onTextToggle,
       blend,
-      onBlendChange
+      onBlendChange,
+      downloadService
     } = vnode.attrs;
 
     const renderLayerButton = (layerId: LayerId) => {
@@ -103,12 +103,11 @@ export const LayersPanel: m.Component<LayersPanelAttrs> = {
       }, LAYER_DISPLAY_NAMES[layerId] + (isLoading ? '...' : ''));
 
       if (hasProgressCanvas && isActive) {
-        try {
-          const cacheControl = getLayerCacheControl();
-          const totalTimestamps = cacheControl.getTimestepCount(layerId);
-          const loadedIndices = cacheControl.getLoadedIndices(layerId);
-          const loadingIndex = cacheControl.getLoadingIndex(layerId);
-          const failedIndices = cacheControl.getFailedIndices(layerId);
+        if (downloadService) {
+          const totalTimestamps = downloadService.getTimestepCount(layerId);
+          const loadedIndices = downloadService.getLoadedIndices(layerId);
+          const loadingIndex = downloadService.getLoadingIndex(layerId);
+          const failedIndices = downloadService.getFailedIndices(layerId);
 
           return m('div.layer-button-wrapper', [
             button,
@@ -121,8 +120,8 @@ export const LayersPanel: m.Component<LayersPanelAttrs> = {
               layerColor: '#ff6b35' // Will use proper color from config later
             })
           ]);
-        } catch (e) {
-          // Cache control not initialized yet
+        } else {
+          // DownloadService not available
           return button;
         }
       }

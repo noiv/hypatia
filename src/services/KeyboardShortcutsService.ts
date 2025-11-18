@@ -7,8 +7,8 @@
  * - Cmd/Ctrl +/-/0: Text size adjustment
  */
 
-import { roundToHour, roundToTenMinutes, addDays, clampTimeToDataWindow } from '../utils/timeUtils';
 import { configLoader } from '../config';
+import type { DateTimeService } from './DateTimeService';
 
 export interface KeyboardShortcutHandlers {
   onTimeChange: (newTime: Date) => void;
@@ -21,7 +21,8 @@ export interface KeyboardShortcutHandlers {
 export class KeyboardShortcutsService {
   constructor(
     private getCurrentTime: () => Date,
-    private handlers: KeyboardShortcutHandlers
+    private handlers: KeyboardShortcutHandlers,
+    private dateTimeService: DateTimeService
   ) {}
 
   /**
@@ -72,16 +73,16 @@ export class KeyboardShortcutsService {
 
     if (e.ctrlKey || e.metaKey) {
       // Ctrl/Cmd + Arrow: Jump by 24 hours (UTC)
-      return addDays(currentTime, direction);
+      return this.dateTimeService.addDays(currentTime, direction);
     }
 
     if (e.shiftKey) {
       // Shift + Arrow: Jump to next full 10 minutes (UTC)
-      return roundToTenMinutes(currentTime, direction as 1 | -1);
+      return this.dateTimeService.roundToTenMinutes(currentTime, direction as 1 | -1);
     }
 
     // Arrow alone: Jump to next full hour (UTC)
-    return roundToHour(currentTime, direction as 1 | -1);
+    return this.dateTimeService.roundToHour(currentTime, direction as 1 | -1);
   }
 
   // Removed: calculateTenMinuteJump() and calculateHourJump() - now using utils/timeUtils.ts

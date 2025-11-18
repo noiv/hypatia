@@ -1,11 +1,12 @@
 /**
- * Main Application Component (Refactored - New Architecture)
+ * Main Application Component (Refactored)
  *
- * Slim orchestrator that delegates to services
- * Uses new event-driven architecture with centralized service management
+ * Slim orchestrator that delegates to services and components
  */
 
 import m from 'mithril';
+
+import { configLoader } from './config';
 
 // Components
 import { TimeCirclePanel } from './components/TimeCirclePanel';
@@ -16,44 +17,32 @@ import { FullscreenPanel } from './components/FullscreenPanel';
 import { LayersPanel } from './components/LayersPanel';
 import { PerformancePanel } from './components/PerformancePanel';
 
-// New Services
-import { ConfigService } from './services/ConfigService';
-import { DateTimeService } from './services/DateTimeService';
-import { DownloadService } from './services/DownloadService';
-import { TextureService } from './services/TextureService';
-import { LayersService } from './services/LayersService';
-import { AppService } from './services/AppService';
-
-// Existing Services
+// Services
 import { EventManagerService } from './services/EventManagerService';
 import { KeyboardShortcutsService } from './services/KeyboardShortcutsService';
 import { AppStateService } from './services/AppStateService';
 import { SceneLifecycleService } from './services/SceneLifecycleService';
+import { AppLogicService } from './services/AppLogicService';
 import { AppBootstrapService } from './services/AppBootstrapService';
 import { LayerStateService } from './services/LayerStateService';
+import { detectLocale, formatLocaleInfo } from './services/LocaleService';
 import { ViewportControlsService } from './services/ViewportControlsService';
 
 // Utils
-import { detectLocale, formatLocaleInfo } from './services/LocaleService';
 import { sanitizeUrl } from './utils/sanitizeUrl';
+import { clampTimeToDataWindow, getTimezoneInfo } from './utils/timeUtils';
 import { parseUrlState } from './utils/urlState';
+import { getLayerCacheControl } from './services/LayerCacheControl';
 
 import type { LayerId } from './visualization/ILayer';
 
 interface AppComponent extends m.Component {
-  // New Services
-  configService?: ConfigService;
-  dateTimeService?: DateTimeService;
-  downloadService?: DownloadService;
-  textureService?: TextureService;
-  layersService?: LayersService;
-  appService?: AppService;
-
-  // Existing Services
+  // Services
   eventManager?: EventManagerService;
   keyboardShortcuts?: KeyboardShortcutsService;
   stateService?: AppStateService;
   sceneService?: SceneLifecycleService;
+  logicService?: AppLogicService;
   viewportControls?: ViewportControlsService;
 
   // Flags
@@ -85,59 +74,39 @@ export const App: AppComponent = {
   isBootstrapping: true,
 
   async oninit() {
-    // Detect locale
+    // Detect locale immediately (uses browser APIs, no async needed)
     const localeInfo = detectLocale();
     console.log(formatLocaleInfo(localeInfo));
 
-    // Initialize services in dependency order
-    // 1. Foundation services (no dependencies)
-    this.configService = new ConfigService(); // Auto-loads configs in constructor
-    this.dateTimeService = new DateTimeService();
+    // Load hypatia config first (needed for defaultAltitude, defaultLayers)
+    await configLoader.loadHypatiaConfig();
 
-    // Wait for configs to load
-    await new Promise(resolve => setTimeout(resolve, 100)); // Simple wait for async constructor
-
-    // 2. Download service
-    const hypatiaConfig = this.configService.getHypatiaConfig();
-    const downloadConfig = {
-      maxRangeDays: hypatiaConfig?.data?.maxRangeDays || 14,
-      maxConcurrentDownloads: hypatiaConfig?.dataCache?.maxConcurrentDownloads || 4,
-      bandwidthSampleSize: 10
-    };
-    this.downloadService = new DownloadService(
-      downloadConfig,
-      this.configService,
-      this.dateTimeService
-    );
-
-    // Sanitize URL and get corrected state
+    // Sanitize URL and get corrected state (with locale for default camera position)
     const bootstrapState = { localeInfo } as any;
     const sanitizedState = sanitizeUrl(bootstrapState);
 
-    // Initialize state service
+    // Initialize services (slider range will be calculated after config loads)
     this.stateService = new AppStateService({
       currentTime: sanitizedState.time,
-      sliderStartTime: sanitizedState.time,  // Will be set in bootstrap
-      sliderEndTime: sanitizedState.time,    // Will be set in bootstrap
+      sliderStartTime: sanitizedState.time,  // Temporary, will be set in bootstrap
+      sliderEndTime: sanitizedState.time,    // Temporary, will be set in bootstrap
       blend: 0.0,
       textEnabled: sanitizedState.layers.includes('text'),
       localeInfo,
-      timezone: {
-        short: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        long: Intl.DateTimeFormat().resolvedOptions().timeZone
-      }
+      timezone: getTimezoneInfo()
     });
 
-    // Scene service
     this.sceneService = new SceneLifecycleService();
 
-    // Event manager
+    this.logicService = new AppLogicService(
+      this.stateService,
+      this.sceneService,
+      () => this.isBootstrapping
+    );
+
     this.eventManager = new EventManagerService();
 
-    // Note: AppService and LayersService will be created after scene is initialized
-    // (they need renderer for TextureService)
-
-    // Keyboard shortcuts
+    // Setup keyboard shortcuts
     this.keyboardShortcuts = new KeyboardShortcutsService(
       () => this.stateService!.getCurrentTime(),
       {
@@ -146,8 +115,7 @@ export const App: AppComponent = {
         onTextSizeIncrease: () => this.handleTextSizeChange('increase'),
         onTextSizeDecrease: () => this.handleTextSizeChange('decrease'),
         onTextSizeReset: () => this.handleTextSizeChange('reset')
-      },
-      this.dateTimeService!
+      }
     );
 
     // Register resize handler
@@ -168,15 +136,15 @@ export const App: AppComponent = {
     const scene = this.sceneService!.getScene();
     if (!scene) return;
 
-    // Start animation loop
+    // Start animation loop now that bootstrap is complete and layers are loaded
     scene.start();
 
-    // Initialize viewport controls
+    // Initialize viewport controls service
     this.viewportControls = scene.createViewportControls({
       onTimeChange: (newTime) => this.handleTimeChange(newTime),
-      onCameraChange: () => this.appService?.updateUrl(),
+      onCameraChange: () => this.logicService!.updateUrl(),
       getCurrentTime: () => this.stateService!.getCurrentTime()
-    }, this.dateTimeService);
+    });
 
     // Register event handlers
     this.eventManager!.register(window, 'keydown', this.keyboardShortcuts!.handleKeydown as EventListener);
@@ -199,30 +167,24 @@ export const App: AppComponent = {
   },
 
   async runBootstrap() {
-    const result = await AppBootstrapService.bootstrap(
-      {
-        ...this,
-        // Pass new services to bootstrap
-        downloadService: this.downloadService,
-        layersService: this.layersService
-      } as any,
-      (progress) => {
-        this.stateService!.setBootstrapProgress({
-          loaded: 0,
-          total: 100,
-          percentage: progress.percentage,
-          currentFile: progress.label
-        });
-        m.redraw();
-      }
-    );
+    const result = await AppBootstrapService.bootstrap(this, (progress) => {
+      this.stateService!.setBootstrapProgress({
+        loaded: 0,
+        total: 100,
+        percentage: progress.percentage,
+        currentFile: progress.label
+      });
+      m.redraw();
+    });
 
     // Update state with bootstrap results
+    // Extract only properties that exist in AppState
     const urlState = parseUrlState();
     this.stateService!.update({
       bootstrapStatus: result.bootstrapStatus,
       bootstrapProgress: result.bootstrapProgress,
       bootstrapError: result.bootstrapError,
+      // Preserve URL time if present, otherwise use bootstrap time
       currentTime: urlState?.time || result.currentTime || this.stateService!.getCurrentTime(),
       latestRun: result.latestRun,
       userLocation: result.userLocation,
@@ -230,50 +192,30 @@ export const App: AppComponent = {
     });
 
     if (result.bootstrapStatus === 'ready') {
-      // Set layer state
+      // Get layer state (already initialized in bootstrap)
       this.stateService!.setLayerState(LayerStateService.getInstance());
 
-      // Calculate slider range
-      const hypatiaConfig = this.configService!.getHypatiaConfig();
+      // Calculate fixed slider range from maxRangeDays (now that config is loaded)
+      // Must match the data generation logic: first day 00z, last day 18z
+      const hypatiaConfig = configLoader.getHypatiaConfig();
       const maxRangeDays = hypatiaConfig.data.maxRangeDays;
       const daysBack = Math.floor(maxRangeDays / 2);
       const currentTime = this.stateService!.getCurrentTime();
 
+      // First timestamp: currentTime - daysBack at 00z
       const sliderStartTime = new Date(currentTime);
       sliderStartTime.setUTCDate(sliderStartTime.getUTCDate() - daysBack);
       sliderStartTime.setUTCHours(0, 0, 0, 0);
 
+      // Last timestamp: (currentTime - daysBack + maxRangeDays) - 6 hours = last day at 18z
       const sliderEndTime = new Date(sliderStartTime);
       sliderEndTime.setUTCDate(sliderEndTime.getUTCDate() + maxRangeDays);
-      sliderEndTime.setUTCHours(sliderEndTime.getUTCHours() - 6);
+      sliderEndTime.setUTCHours(sliderEndTime.getUTCHours() - 6); // Back to 18z of previous day
 
       this.stateService!.update({ sliderStartTime, sliderEndTime });
-
-      // Initialize TextureService, LayersService, and AppService after scene is ready
-      const scene = this.sceneService!.getScene();
-      if (scene) {
-        const renderer = scene.getRenderer?.();
-        if (renderer) {
-          this.textureService = new TextureService(renderer);
-          this.layersService = new LayersService(
-            this.downloadService!,
-            this.configService!,
-            this.dateTimeService!
-          );
-
-          // Now we can create AppService with all dependencies
-          this.appService = new AppService(
-            this.stateService!,
-            this.sceneService!,
-            this.layersService,
-            this.configService!,
-            () => this.isBootstrapping
-          );
-        }
-      }
     }
 
-    // Log memory usage
+    // Log loaded with memory
     if ((performance as any).memory) {
       const mem = (performance as any).memory;
       console.log(`[HYPATIA_LOADED] Mem: ${(mem.usedJSHeapSize / 1024 / 1024).toFixed(1)}MB / ${(mem.totalJSHeapSize / 1024 / 1024).toFixed(1)}MB`);
@@ -281,8 +223,9 @@ export const App: AppComponent = {
       console.log('[HYPATIA_LOADED]');
     }
 
-    // Bootstrap complete
+    // Bootstrap complete - allow URL updates now
     this.isBootstrapping = false;
+
     m.redraw();
   },
 
@@ -308,72 +251,70 @@ export const App: AppComponent = {
     this.stateService!.setScene(scene);
   },
 
+
   handleTimeChange(newTime: Date) {
     const currentTime = this.stateService!.getCurrentTime();
-    const hypatiaConfig = this.configService!.getHypatiaConfig();
-    const maxRangeDays = hypatiaConfig.data.maxRangeDays;
-
-    // Clamp time to data window
-    const clamped = this.dateTimeService!.clampToDataWindow(
-      newTime,
-      currentTime,
-      maxRangeDays
-    );
-
+    const maxRangeDays = configLoader.getHypatiaConfig().data.maxRangeDays;
+    const clamped = clampTimeToDataWindow(newTime, currentTime, maxRangeDays);
     this.stateService!.setCurrentTime(clamped);
     this.sceneService!.getScene()?.updateTime(clamped);
 
     // Prioritize timestamps for progressive loading
-    if (this.downloadService) {
+    try {
+      const cacheControl = getLayerCacheControl();
       const weatherLayers: LayerId[] = ['temp2m', 'precipitation'];
       for (const layerId of weatherLayers) {
-        this.downloadService.prioritizeTimestamps(layerId, clamped);
+        cacheControl.prioritizeTimestamps(layerId, clamped);
       }
+    } catch (e) {
+      // Cache control not initialized yet
     }
 
-    this.appService?.updateUrl();
+    this.logicService!.updateUrl();
     m.redraw();
   },
 
   async handleLayerToggle(layerId: LayerId) {
-    // Delegate to AppService which uses LayersService
-    if (this.appService) {
-      await this.appService.handleLayerToggle(layerId);
-      this.appService.updateUrl();
-    }
+    await this.logicService!.handleLayerToggle(layerId);
+    this.logicService!.updateUrl();
     m.redraw();
   },
 
   async handleTextToggle() {
+    const scene = this.sceneService!.getScene();
     const currentlyEnabled = this.stateService!.isTextEnabled();
     const newEnabled = !currentlyEnabled;
 
     this.stateService!.setTextEnabled(newEnabled);
 
-    // Use LayersService if available, otherwise fall back to direct scene manipulation
-    if (this.layersService) {
-      await this.layersService.toggle('text', newEnabled);
-    } else {
-      const scene = this.sceneService!.getScene();
-      if (scene) {
-        if (newEnabled) {
-          await scene.createLayer('text');
-          scene.setLayerVisible('text', true);
-        } else {
-          scene.setLayerVisible('text', false);
-        }
-        scene.setTextEnabled(newEnabled);
+    if (scene) {
+      if (newEnabled) {
+        // Create text layer if not exists, then enable
+        await scene.createLayer('text');
+        scene.setLayerVisible('text', true);
+      } else {
+        // Disable text layer
+        scene.setLayerVisible('text', false);
       }
+      scene.setTextEnabled(newEnabled);
     }
 
-    this.appService?.updateUrl();
+    this.logicService!.updateUrl();
     m.redraw();
   },
 
   handleFullscreenToggle() {
-    if (this.appService) {
-      this.appService.handleFullscreenToggle();
+    this.stateService!.toggleFullscreen();
+
+    if (this.stateService!.isFullscreen()) {
+      document.documentElement.requestFullscreen();
+    } else {
+      // Only exit fullscreen if document is actually in fullscreen mode
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      }
     }
+
     m.redraw();
   },
 
@@ -420,7 +361,7 @@ export const App: AppComponent = {
   },
 
   getDataRange(): { startTime: Date; endTime: Date } {
-    const range = this.configService!.getDatasetRange('temp2m');
+    const range = configLoader.getDatasetRange('temp2m');
     return range || { startTime: new Date(), endTime: new Date() };
   },
 
@@ -428,8 +369,6 @@ export const App: AppComponent = {
     this.eventManager?.dispose();
     this.viewportControls?.dispose();
     this.sceneService?.dispose();
-    this.layersService?.dispose();
-    this.downloadService?.dispose();
   },
 
   view() {
@@ -440,7 +379,7 @@ export const App: AppComponent = {
 
     const state = this.stateService.get();
 
-    // Show bootstrap modal during loading
+    // Show bootstrap modal during loading, waiting, or error
     if (state.bootstrapStatus !== 'ready') {
       return m(BootstrapModal as any, {
         progress: state.bootstrapProgress,
@@ -478,8 +417,7 @@ export const App: AppComponent = {
         onBlendChange: (newBlend) => {
           this.stateService!.setBlend(newBlend);
           this.sceneService!.getScene()?.setBasemapBlend(newBlend);
-        },
-        downloadService: this.downloadService || undefined
+        }
       }),
 
       m(TimeCirclePanel, {
@@ -490,8 +428,7 @@ export const App: AppComponent = {
         currentTime: state.currentTime,
         startTime: state.sliderStartTime,
         endTime: state.sliderEndTime,
-        onTimeChange: (time) => this.handleTimeChange(time),
-        dateTimeService: this.dateTimeService!
+        onTimeChange: (time) => this.handleTimeChange(time)
       }),
 
       m(PerformancePanel, {

@@ -1,0 +1,193 @@
+/**
+ * App Service
+ *
+ * Central application service for high-level operations.
+ * Refactored from AppLogicService to use new LayersService architecture.
+ *
+ * Responsibilities:
+ * - Layer toggle operations (delegates to LayersService)
+ * - URL state synchronization
+ * - Reference state navigation
+ * - Fullscreen management
+ */
+
+import type { AppStateService } from './AppStateService'
+import type { SceneLifecycleService } from './SceneLifecycleService'
+import type { LayersService } from './LayersService'
+import type { ConfigService } from './ConfigService'
+import { debouncedUpdateUrlState } from '../utils/urlState'
+import type { LayerId } from '../visualization/ILayer'
+
+export class AppService {
+  constructor(
+    private stateService: AppStateService,
+    private sceneService: SceneLifecycleService,
+    private layersService: LayersService,
+    private configService: ConfigService,
+    private isBootstrapping: () => boolean
+  ) {}
+
+  /**
+   * Handle layer toggle (uses LayersService for clean delegation)
+   */
+  async handleLayerToggle(layerId: LayerId): Promise<void> {
+    try {
+      // Check if layer is registered
+      if (!this.layersService.hasLayer(layerId)) {
+        console.warn(`[AppService] Layer ${layerId} not registered, cannot toggle`)
+        return
+      }
+
+      // Get current visibility
+      const isVisible = this.layersService.isVisible(layerId)
+
+      // Toggle visibility using LayersService
+      const currentTime = this.stateService.getCurrentTime()
+      await this.layersService.toggle(layerId, !isVisible, {
+        currentTime,
+      })
+
+      console.log(`[AppService] Toggled ${layerId}: ${!isVisible}`)
+    } catch (error) {
+      console.error(`[AppService] Layer toggle failed:`, error)
+    }
+  }
+
+  /**
+   * Update URL with current application state
+   */
+  updateUrl(): void {
+    // Don't update URL during bootstrap - preserve URL parameters from page load
+    if (this.isBootstrapping()) {
+      return
+    }
+
+    const scene = this.sceneService.getScene()
+    const state = this.stateService.get()
+    if (!scene) return
+
+    // Get visible layers from LayersService
+    const visibleLayerIds = this.layersService.getVisibleLayerIds()
+
+    // Convert LayerIDs to URL keys (temp2m -> temp, etc.)
+    const layerConfigs = this.configService.getLayers()
+    const visibleUrlKeys = visibleLayerIds.map((layerId) => {
+      const layerConfig = layerConfigs.find(l => l.id === layerId)
+      return layerConfig?.urlKey || this.layerIdToUrlKey(layerId)
+    })
+
+    // Add 'text' to layers if enabled and not already present
+    const layers =
+      state.textEnabled && !visibleUrlKeys.includes('text')
+        ? [...visibleUrlKeys, 'text']
+        : visibleUrlKeys
+
+    debouncedUpdateUrlState(
+      {
+        time: state.currentTime,
+        camera: scene.getCameraState(),
+        layers,
+      },
+      100
+    )
+  }
+
+  /**
+   * Navigate to reference state (fixed time and position)
+   */
+  handleReferenceClick(): void {
+    const scene = this.sceneService.getScene()
+
+    // Reference state: 2x Earth radius altitude, looking at lat=0 lon=0
+    const referenceTime = new Date('2025-10-29T12:00:00Z')
+    const referenceAltitude = 12742000 // 2x Earth radius in meters
+    const referenceDistance = referenceAltitude / 6371000 + 1 // Convert to THREE.js units
+
+    const referencePosition = {
+      x: 0,
+      y: 0,
+      z: referenceDistance,
+    }
+
+    // Update state
+    this.stateService.setCurrentTime(referenceTime)
+
+    if (scene) {
+      scene.updateTime(referenceTime)
+      scene.setCameraState(referencePosition, referenceDistance)
+    }
+
+    // Update URL
+    this.updateUrl()
+  }
+
+  /**
+   * Toggle fullscreen mode
+   */
+  handleFullscreenToggle(): void {
+    this.stateService.toggleFullscreen()
+
+    if (this.stateService.isFullscreen()) {
+      document.documentElement.requestFullscreen()
+    } else {
+      // Only exit fullscreen if document is actually in fullscreen mode
+      if (document.fullscreenElement) {
+        document.exitFullscreen()
+      }
+    }
+
+    // Update URL
+    this.updateUrl()
+  }
+
+  /**
+   * Toggle fullscreen mode
+   */
+  async toggleFullscreen(): Promise<void> {
+    try {
+      if (!document.fullscreenElement) {
+        // Enter fullscreen
+        await document.documentElement.requestFullscreen()
+        console.log('[AppService] Entered fullscreen')
+      } else {
+        // Exit fullscreen
+        await document.exitFullscreen()
+        console.log('[AppService] Exited fullscreen')
+      }
+    } catch (error) {
+      console.error('[AppService] Fullscreen toggle failed:', error)
+    }
+  }
+
+  /**
+   * Check if currently in fullscreen
+   */
+  isFullscreen(): boolean {
+    return !!document.fullscreenElement
+  }
+
+  /**
+   * Get layer statistics
+   */
+  getLayerStats() {
+    return this.layersService.getStats()
+  }
+
+  /**
+   * Fallback: Convert LayerId to URL key (temp2m -> temp)
+   * TODO: This should be removed once all layers have proper config
+   */
+  private layerIdToUrlKey(layerId: LayerId): string {
+    const mapping: Record<string, string> = {
+      temp2m: 'temp',
+      wind10m: 'wind',
+      precipitation: 'precip',
+      pressure_msl: 'pressure',
+      earth: 'earth',
+      sun: 'sun',
+      graticule: 'graticule',
+      text: 'text',
+    }
+    return mapping[layerId] || layerId
+  }
+}

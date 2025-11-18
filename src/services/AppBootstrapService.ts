@@ -13,9 +13,10 @@ import { configLoader } from '../config';
 import { checkBrowserCapabilities, getCapabilityHelpUrls } from '../utils/capabilityCheck';
 import { preloadFont } from 'troika-three-text';
 import { TEXT_CONFIG } from '../config';
-import { initializeLayerCacheControl, getLayerCacheControl } from './LayerCacheControl';
 import type { LayerId } from '../visualization/ILayer';
 import { parseUrlState } from '../utils/urlState';
+import type { LayersService } from './LayersService';
+import type { DownloadService } from './DownloadService';
 
 export type BootstrapStatus = 'loading' | 'waiting' | 'ready' | 'error';
 
@@ -48,8 +49,14 @@ export interface AppInstance {
   initializeScene: () => Promise<void>;
   activate: () => void;
   sceneService?: {
-    getScene: () => { createLayer: (layerId: LayerId) => Promise<boolean>; setLayerVisible: (layerId: LayerId, visible: boolean) => void; } | null;
+    getScene: () => {
+      createLayer: (layerId: LayerId) => Promise<boolean>;
+      setLayerVisible: (layerId: LayerId, visible: boolean) => void;
+      getRenderer?: () => any;
+    } | null;
   };
+  layersService?: LayersService;
+  downloadService?: DownloadService;
 }
 
 interface StepResult {
@@ -93,12 +100,8 @@ export class AppBootstrapService {
         await configLoader.loadAll();
         await LayerStateService.initialize();
 
-        // Initialize Layer Cache Control for progressive loading
-        const hypatiaConfig = configLoader.getHypatiaConfig();
-        initializeLayerCacheControl({
-          maxRangeDays: hypatiaConfig.data.maxRangeDays,
-          maxConcurrentDownloads: hypatiaConfig.dataCache.maxConcurrentDownloads
-        });
+        // Note: LayerCacheControl initialization removed - now using DownloadService
+        // which is initialized in App.ts
       }
     },
 
@@ -196,12 +199,14 @@ export class AppBootstrapService {
 
         // Force one render frame to upload empty textures to GPU
         // This ensures __webglTexture exists for texSubImage3D in LOAD_LAYER_DATA
-        const renderer = scene.getRenderer();
-        const camera = (scene as any).camera;
-        const threeScene = (scene as any).scene;
-        if (renderer && camera && threeScene) {
-          renderer.render(threeScene, camera);
-          console.log('[SCENE] Forced render to upload empty textures to GPU');
+        if (scene.getRenderer) {
+          const renderer = scene.getRenderer();
+          const camera = (scene as any).camera;
+          const threeScene = (scene as any).scene;
+          if (renderer && camera && threeScene) {
+            renderer.render(threeScene, camera);
+            console.log('[SCENE] Forced render to upload empty textures to GPU');
+          }
         }
       }
     },
@@ -249,77 +254,62 @@ export class AppBootstrapService {
 
         console.log('[LOAD_LAYER_DATA] Data layers:', dataLayersToLoad);
 
-        // Calculate per-layer progress allocation
-        const progressPerLayer = LOAD_LAYER_DATA_RANGE / dataLayersToLoad.length;
-        let currentLayerIndex = 0;
+        // NEW APPROACH: Use DownloadService if available
+        if (app.downloadService) {
+          console.log('[LOAD_LAYER_DATA] Using DownloadService for progressive loading');
 
-        // Get cache control for event tracking
-        const cacheControl = getLayerCacheControl();
+          // Calculate per-layer progress allocation
+          const progressPerLayer = LOAD_LAYER_DATA_RANGE / dataLayersToLoad.length;
+          let currentLayerIndex = 0;
 
-        // Load data for each layer (2 adjacent timestamps per layer)
-        for (const layerId of dataLayersToLoad) {
-          const layerProgressStart = LOAD_LAYER_DATA_START + (currentLayerIndex * progressPerLayer);
-          const layerProgressEnd = layerProgressStart + progressPerLayer;
+          const currentTime = urlState.time || new Date();
 
-          let filesLoaded = 0;
-          const expectedFiles = 2; // Floor and ceil timestamps
-          let layerComplete = false;
+          // Initialize data loading for each layer
+          for (const layerId of dataLayersToLoad) {
+            const layerProgressStart = LOAD_LAYER_DATA_START + (currentLayerIndex * progressPerLayer);
 
-          // Create promise that resolves when both timestamps loaded
-          const layerLoadPromise = new Promise<void>((resolve) => {
-            const fileLoadUpdateHandler = (event: any) => {
-              // Check if this event is for our layer and is critical priority
-              if (event.layerId === layerId && event.priority === 'critical' && !layerComplete) {
-                filesLoaded++;
+            captureProgress({
+              percentage: layerProgressStart,
+              label: `Loading ${layerId}...`
+            });
 
-                // Calculate progress within this layer's range
-                const fileProgress = filesLoaded / expectedFiles;
+            // Initialize layer with progress callback
+            await app.downloadService.initializeLayer(
+              layerId,
+              currentTime,
+              (loaded, total) => {
+                const fileProgress = loaded / total;
                 const percentage = layerProgressStart + (fileProgress * progressPerLayer);
-
                 captureProgress({
                   percentage,
-                  label: `Loading ${layerId} ${filesLoaded}/${expectedFiles}...`
+                  label: `Loading ${layerId} ${loaded}/${total}...`
                 });
-
-                // Check if layer complete
-                if (filesLoaded >= expectedFiles) {
-                  layerComplete = true;
-                  cacheControl.removeListener('fileLoadUpdate', fileLoadUpdateHandler);
-                  captureProgress({
-                    percentage: layerProgressEnd,
-                    label: `Loading ${layerId} ${expectedFiles}/${expectedFiles} done`
-                  });
-                  resolve();
-                }
               }
-            };
+            );
 
-            cacheControl.on('fileLoadUpdate', fileLoadUpdateHandler);
-          });
+            currentLayerIndex++;
+          }
 
-          // Start loading critical timestamps
+          // Wait for all critical downloads to complete
           captureProgress({
-            percentage: layerProgressStart,
-            label: `Loading ${layerId}...`
+            percentage: LOAD_LAYER_DATA_START + LOAD_LAYER_DATA_RANGE - 5,
+            label: 'Waiting for critical data...'
           });
 
-          // Trigger critical timestamp loading (LayerCacheControl already initialized)
-          // The layer was already created with empty texture in SCENE step
-          // This will load floor/ceil timestamps using texSubImage3D
-          const currentTime = urlState.time || new Date();
-          await cacheControl.initializeLayer(layerId, currentTime);
+          await app.downloadService.done();
 
-          // Wait for both timestamps to load
-          await layerLoadPromise;
-
-          currentLayerIndex++;
+          captureProgress({
+            percentage: LOAD_LAYER_DATA_START + LOAD_LAYER_DATA_RANGE,
+            label: 'All layer data loaded'
+          });
+        } else {
+          // No downloadService provided - skip data loading
+          console.warn('[LOAD_LAYER_DATA] No downloadService provided, skipping data loading');
+          captureProgress({
+            percentage: LOAD_LAYER_DATA_START + LOAD_LAYER_DATA_RANGE,
+            label: 'Data loading skipped'
+          });
         }
-
-        // All layer data loaded
-        captureProgress({
-          percentage: LOAD_LAYER_DATA_START + LOAD_LAYER_DATA_RANGE,
-          label: 'All layer data loaded'
-        });
       }
     },
 

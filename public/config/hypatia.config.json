@@ -6,7 +6,7 @@
     "description": "Real-time global weather visualization"
   },
   "data": {
-    "maxRangeDays": 15,
+    "maxRangeDays": 3,
     "dataBaseUrl": "/data",
     "updateIntervalMs": 300000,
     "defaultResolution": "0p25"
