@@ -8,11 +8,10 @@
  * - layers: URL → config default (earth,sun,graticule)
  */
 
-import * as THREE from 'three';
 import { parsePartialUrlState, updateUrlState, type AppUrlState } from './urlState';
-import { configLoader } from '../config';
+import type { ConfigService } from '../services/ConfigService';
 import { EARTH_RADIUS_METERS } from './constants';
-import { latLonToCartesian, cartesianToLatLon } from './coordinates';
+import { latLonToCartesian } from './coordinates';
 import type { BootstrapState } from '../services/AppBootstrapService';
 
 /**
@@ -80,12 +79,16 @@ function getDefaultCameraPosition(bootstrapState: BootstrapState | null): { lat:
  * Sanitize and fill missing URL parameters
  * Returns complete state with all parameters filled
  */
-export function sanitizeUrl(bootstrapState: BootstrapState | null = null, forceBootstrapCamera: boolean = false): AppUrlState {
+export function sanitizeUrl(
+  configService: ConfigService,
+  bootstrapState: BootstrapState | null = null,
+  forceBootstrapCamera: boolean = false
+): AppUrlState {
   const partial = parsePartialUrlState();
   const changes: string[] = [];
 
   // Get defaults from config
-  const hypatiaConfig = configLoader.getHypatiaConfig();
+  const hypatiaConfig = configService.getHypatiaConfig();
   const defaultAltitude = hypatiaConfig.visualization.defaultAltitude;
   const defaultLayers = hypatiaConfig.visualization.defaultLayers;
 
@@ -138,69 +141,4 @@ export function sanitizeUrl(bootstrapState: BootstrapState | null = null, forceB
   updateUrlState(completeState);
 
   return completeState;
-}
-
-/**
- * Validate and clamp URL parameters to acceptable ranges
- */
-export function validateUrlState(state: AppUrlState): AppUrlState {
-  const ALTITUDE_BOUNDS = {
-    min: 1000,
-    max: EARTH_RADIUS_METERS * 10
-  };
-
-  let needsUpdate = false;
-  const validatedState = { ...state };
-
-  // Validate altitude
-  const currentAltitude = distanceToAltitude(state.camera.distance);
-  if (currentAltitude < ALTITUDE_BOUNDS.min) {
-    validatedState.camera = {
-      ...state.camera,
-      distance: altitudeToDistance(ALTITUDE_BOUNDS.min)
-    };
-    needsUpdate = true;
-  } else if (currentAltitude > ALTITUDE_BOUNDS.max) {
-    validatedState.camera = {
-      ...state.camera,
-      distance: altitudeToDistance(ALTITUDE_BOUNDS.max)
-    };
-    needsUpdate = true;
-  }
-
-  // Note: NO time validation - app only cares about maxRangeDays window
-  // If data doesn't exist for the requested time, it will show as missing
-
-  // Validate camera position
-  const posVec = new THREE.Vector3(
-    state.camera.x,
-    state.camera.y,
-    state.camera.z
-  );
-  const { lat, lon } = cartesianToLatLon(posVec);
-
-  if (isNaN(lat) || isNaN(lon)) {
-    let defaultAltitude = 19113000;
-    try {
-      const hypatiaConfig = configLoader.getHypatiaConfig();
-      defaultAltitude = hypatiaConfig.visualization.defaultAltitude || defaultAltitude;
-    } catch (e) {
-      // Config not loaded yet
-    }
-    const distance = altitudeToDistance(defaultAltitude);
-    const defaultPos = latLonToCartesian(0, 0, distance);
-    validatedState.camera = {
-      x: defaultPos.x,
-      y: defaultPos.y,
-      z: defaultPos.z,
-      distance
-    };
-    needsUpdate = true;
-  }
-
-  if (needsUpdate) {
-    updateUrlState(validatedState);
-  }
-
-  return validatedState;
 }

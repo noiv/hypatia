@@ -25,12 +25,10 @@ import { LayersService } from './services/LayersService';
 import { AppService } from './services/AppService';
 
 // Existing Services
-import { EventManagerService } from './services/EventManagerService';
-import { KeyboardShortcutsService } from './services/KeyboardShortcutsService';
+import { EventService } from './services/EventService';
 import { AppStateService } from './services/AppStateService';
-import { SceneLifecycleService } from './services/SceneLifecycleService';
+import { Scene } from './visualization/scene';
 import { AppBootstrapService } from './services/AppBootstrapService';
-import { LayerStateService } from './services/LayerStateService';
 import { ViewportControlsService } from './services/ViewportControlsService';
 
 // Utils
@@ -50,10 +48,9 @@ interface AppComponent extends m.Component {
   appService?: AppService;
 
   // Existing Services
-  eventManager?: EventManagerService;
-  keyboardShortcuts?: KeyboardShortcutsService;
+  eventService?: EventService;
   stateService?: AppStateService;
-  sceneService?: SceneLifecycleService;
+  scene?: Scene;
   viewportControls?: ViewportControlsService;
 
   // Flags
@@ -91,11 +88,15 @@ export const App: AppComponent = {
 
     // Initialize services in dependency order
     // 1. Foundation services (no dependencies)
-    this.configService = new ConfigService(); // Auto-loads configs in constructor
+    this.configService = new ConfigService();
     this.dateTimeService = new DateTimeService();
 
-    // Wait for configs to load
-    await new Promise(resolve => setTimeout(resolve, 100)); // Simple wait for async constructor
+    // Load all configs before continuing
+    await this.configService.loadAll();
+
+    // Sanitize URL and get corrected state (needs config loaded first)
+    const bootstrapState = { localeInfo } as any;
+    const sanitizedState = sanitizeUrl(this.configService, bootstrapState);
 
     // 2. Download service
     const hypatiaConfig = this.configService.getHypatiaConfig();
@@ -109,10 +110,6 @@ export const App: AppComponent = {
       this.configService,
       this.dateTimeService
     );
-
-    // Sanitize URL and get corrected state
-    const bootstrapState = { localeInfo } as any;
-    const sanitizedState = sanitizeUrl(bootstrapState);
 
     // Initialize state service
     this.stateService = new AppStateService({
@@ -129,16 +126,10 @@ export const App: AppComponent = {
     });
 
     // Scene service
-    this.sceneService = new SceneLifecycleService();
+    // Scene will be created in initializeScene()
 
-    // Event manager
-    this.eventManager = new EventManagerService();
-
-    // Note: AppService and LayersService will be created after scene is initialized
-    // (they need renderer for TextureService)
-
-    // Keyboard shortcuts
-    this.keyboardShortcuts = new KeyboardShortcutsService(
+    // Event service (handles event registration + keyboard shortcuts)
+    this.eventService = new EventService(
       () => this.stateService!.getCurrentTime(),
       {
         onTimeChange: (newTime) => this.handleTimeChange(newTime),
@@ -147,14 +138,18 @@ export const App: AppComponent = {
         onTextSizeDecrease: () => this.handleTextSizeChange('decrease'),
         onTextSizeReset: () => this.handleTextSizeChange('reset')
       },
-      this.dateTimeService!
+      this.dateTimeService!,
+      this.configService!
     );
 
+    // Note: AppService and LayersService will be created after scene is initialized
+    // (they need renderer for TextureService)
+
     // Register resize handler
-    this.eventManager.register(
+    this.eventService.register(
       window,
       'resize',
-      () => this.sceneService!.getScene()?.onWindowResize()
+      () => this.scene?.onWindowResize()
     );
 
     // Bootstrap asynchronously
@@ -165,30 +160,29 @@ export const App: AppComponent = {
     const canvas = document.querySelector('.scene-canvas') as HTMLCanvasElement;
     if (!canvas) return;
 
-    const scene = this.sceneService!.getScene();
-    if (!scene) return;
+    if (!this.scene) return;
 
     // Start animation loop
-    scene.start();
+    this.scene.start();
 
     // Initialize viewport controls
-    this.viewportControls = scene.createViewportControls({
+    this.viewportControls = this.scene.createViewportControls({
       onTimeChange: (newTime) => this.handleTimeChange(newTime),
       onCameraChange: () => this.appService?.updateUrl(),
       getCurrentTime: () => this.stateService!.getCurrentTime()
     }, this.dateTimeService);
 
     // Register event handlers
-    this.eventManager!.register(window, 'keydown', this.keyboardShortcuts!.handleKeydown as EventListener);
-    this.eventManager!.register(canvas, 'mousedown', (e) => this.viewportControls!.handleMouseDown(e as MouseEvent));
-    this.eventManager!.register(canvas, 'mousemove', (e) => this.viewportControls!.handleMouseMove(e as MouseEvent));
-    this.eventManager!.register(canvas, 'mouseup', (e) => this.viewportControls!.handleMouseUp(e as MouseEvent));
-    this.eventManager!.register(canvas, 'click', (e) => this.viewportControls!.handleClick(e as MouseEvent));
-    this.eventManager!.register(canvas, 'dblclick', (e) => this.viewportControls!.handleDoubleClick(e as MouseEvent));
-    this.eventManager!.register(canvas, 'touchstart', (e) => this.viewportControls!.handleTouchStart(e as TouchEvent));
-    this.eventManager!.register(canvas, 'touchmove', (e) => this.viewportControls!.handleTouchMove(e as TouchEvent), { passive: false });
-    this.eventManager!.register(canvas, 'touchend', (e) => this.viewportControls!.handleTouchEnd(e as TouchEvent));
-    this.eventManager!.register(
+    this.eventService!.register(window, 'keydown', this.eventService!.handleKeydown as EventListener);
+    this.eventService!.register(canvas, 'mousedown', (e) => this.viewportControls!.handleMouseDown(e as MouseEvent));
+    this.eventService!.register(canvas, 'mousemove', (e) => this.viewportControls!.handleMouseMove(e as MouseEvent));
+    this.eventService!.register(canvas, 'mouseup', (e) => this.viewportControls!.handleMouseUp(e as MouseEvent));
+    this.eventService!.register(canvas, 'click', (e) => this.viewportControls!.handleClick(e as MouseEvent));
+    this.eventService!.register(canvas, 'dblclick', (e) => this.viewportControls!.handleDoubleClick(e as MouseEvent));
+    this.eventService!.register(canvas, 'touchstart', (e) => this.viewportControls!.handleTouchStart(e as TouchEvent));
+    this.eventService!.register(canvas, 'touchmove', (e) => this.viewportControls!.handleTouchMove(e as TouchEvent), { passive: false });
+    this.eventService!.register(canvas, 'touchend', (e) => this.viewportControls!.handleTouchEnd(e as TouchEvent));
+    this.eventService!.register(
       canvas,
       'wheel',
       (e) => this.viewportControls!.handleWheel(e as WheelEvent),
@@ -201,11 +195,13 @@ export const App: AppComponent = {
   async runBootstrap() {
     const result = await AppBootstrapService.bootstrap(
       {
-        ...this,
-        // Pass new services to bootstrap
+        initializeScene: this.initializeScene.bind(this),
+        activate: this.activate.bind(this),
+        configService: this.configService,
+        getScene: () => this.scene,
         downloadService: this.downloadService,
         layersService: this.layersService
-      } as any,
+      },
       (progress) => {
         this.stateService!.setBootstrapProgress({
           loaded: 0,
@@ -230,8 +226,10 @@ export const App: AppComponent = {
     });
 
     if (result.bootstrapStatus === 'ready') {
-      // Set layer state
-      this.stateService!.setLayerState(LayerStateService.getInstance());
+      // Set layer state (now owned by LayersService)
+      if (this.layersService) {
+        this.stateService!.setLayerState(this.layersService.getLayerState());
+      }
 
       // Calculate slider range
       const hypatiaConfig = this.configService!.getHypatiaConfig();
@@ -249,27 +247,15 @@ export const App: AppComponent = {
 
       this.stateService!.update({ sliderStartTime, sliderEndTime });
 
-      // Initialize TextureService, LayersService, and AppService after scene is ready
-      const scene = this.sceneService!.getScene();
-      if (scene) {
-        const renderer = scene.getRenderer?.();
-        if (renderer) {
-          this.textureService = new TextureService(renderer);
-          this.layersService = new LayersService(
-            this.downloadService!,
-            this.configService!,
-            this.dateTimeService!
-          );
-
-          // Now we can create AppService with all dependencies
-          this.appService = new AppService(
-            this.stateService!,
-            this.sceneService!,
-            this.layersService,
-            this.configService!,
-            () => this.isBootstrapping
-          );
-        }
+      // Create AppService (TextureService and LayersService already created in initializeScene)
+      if (this.layersService) {
+        this.appService = new AppService(
+          this.stateService!,
+          () => this.scene,
+          this.layersService,
+          this.configService!,
+          () => this.isBootstrapping
+        );
       }
     }
 
@@ -295,17 +281,39 @@ export const App: AppComponent = {
     const state = this.stateService!.get();
     const urlState = parseUrlState();
 
-    const scene = await this.sceneService!.initializeScene(
-      canvas,
-      {
-        blend: state.blend,
-        currentTime: state.currentTime,
-        ...(urlState?.camera && { cameraState: urlState.camera })
-      },
-      state.preloadedImages || undefined
-    );
+    // Create scene
+    this.scene = new Scene(canvas, state.currentTime, state.preloadedImages || undefined);
 
-    this.stateService!.setScene(scene);
+    // Set camera position from URL if available
+    if (urlState?.camera) {
+      this.scene.setCameraState(urlState.camera, urlState.camera.distance);
+    }
+
+    // Set initial scene state
+    this.scene.setBasemapBlend(state.blend);
+    this.scene.updateTime(state.currentTime);
+
+    // Create TextureService and LayersService now that we have the renderer
+    const renderer = this.scene.getRenderer?.();
+    if (renderer) {
+      this.textureService = new TextureService(renderer);
+      this.layersService = new LayersService(
+        this.downloadService!,
+        this.configService!,
+        this.dateTimeService!
+      );
+
+      // Inject services into scene immediately after creation
+      // This must happen before bootstrap creates layers
+      this.scene.setServices(
+        this.downloadService!,
+        this.textureService,
+        this.dateTimeService!,
+        this.configService!
+      );
+    }
+
+    this.stateService!.setScene(this.scene);
   },
 
   handleTimeChange(newTime: Date) {
@@ -321,7 +329,7 @@ export const App: AppComponent = {
     );
 
     this.stateService!.setCurrentTime(clamped);
-    this.sceneService!.getScene()?.updateTime(clamped);
+    this.scene?.updateTime(clamped);
 
     // Prioritize timestamps for progressive loading
     if (this.downloadService) {
@@ -354,7 +362,7 @@ export const App: AppComponent = {
     if (this.layersService) {
       await this.layersService.toggle('text', newEnabled);
     } else {
-      const scene = this.sceneService!.getScene();
+      const scene = this.scene;
       if (scene) {
         if (newEnabled) {
           await scene.createLayer('text');
@@ -378,7 +386,7 @@ export const App: AppComponent = {
   },
 
   handleTextSizeChange(action: 'increase' | 'decrease' | 'reset') {
-    const scene = this.sceneService!.getScene();
+    const scene = this.scene;
     if (!scene) return;
 
     const textService = scene.getTextService();
@@ -398,7 +406,7 @@ export const App: AppComponent = {
   },
 
   getLayerStates(): Map<LayerId, any> {
-    const scene = this.sceneService!.getScene();
+    const scene = this.scene;
     if (!scene) return new Map();
 
     const states = new Map<LayerId, any>();
@@ -425,9 +433,9 @@ export const App: AppComponent = {
   },
 
   onremove() {
-    this.eventManager?.dispose();
+    this.eventService?.dispose();
     this.viewportControls?.dispose();
-    this.sceneService?.dispose();
+    this.scene?.dispose();
     this.layersService?.dispose();
     this.downloadService?.dispose();
   },
@@ -469,15 +477,15 @@ export const App: AppComponent = {
         onToggle: () => this.handleFullscreenToggle()
       }),
 
-      m(LayersPanel, {
+      m(LayersPanel as any, {
         layerStates: this.getLayerStates(),
         textEnabled: state.textEnabled,
-        onLayerToggle: (id) => this.handleLayerToggle(id),
+        onLayerToggle: (id: LayerId) => this.handleLayerToggle(id),
         onTextToggle: () => this.handleTextToggle(),
         blend: state.blend,
-        onBlendChange: (newBlend) => {
+        onBlendChange: (newBlend: number) => {
           this.stateService!.setBlend(newBlend);
-          this.sceneService!.getScene()?.setBasemapBlend(newBlend);
+          this.scene?.setBasemapBlend(newBlend);
         },
         downloadService: this.downloadService || undefined
       }),
@@ -491,7 +499,8 @@ export const App: AppComponent = {
         startTime: state.sliderStartTime,
         endTime: state.sliderEndTime,
         onTimeChange: (time) => this.handleTimeChange(time),
-        dateTimeService: this.dateTimeService!
+        dateTimeService: this.dateTimeService!,
+        configService: this.configService!
       }),
 
       m(PerformancePanel, {

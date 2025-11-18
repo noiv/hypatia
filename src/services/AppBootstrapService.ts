@@ -8,8 +8,6 @@ import { getCurrentTime } from './TimeService';
 import { getLatestRun, type ECMWFRun } from './ECMWFService';
 import { getUserLocation, type UserLocation } from './GeolocationService';
 import type { LocaleInfo } from './LocaleService';
-import { LayerStateService } from './LayerStateService';
-import { configLoader } from '../config';
 import { checkBrowserCapabilities, getCapabilityHelpUrls } from '../utils/capabilityCheck';
 import { preloadFont } from 'troika-three-text';
 import { TEXT_CONFIG } from '../config';
@@ -17,6 +15,7 @@ import type { LayerId } from '../visualization/ILayer';
 import { parseUrlState } from '../utils/urlState';
 import type { LayersService } from './LayersService';
 import type { DownloadService } from './DownloadService';
+import type { ConfigService } from './ConfigService';
 
 export type BootstrapStatus = 'loading' | 'waiting' | 'ready' | 'error';
 
@@ -48,15 +47,14 @@ export type BootstrapProgressCallback = (progress: BootstrapStepProgress) => voi
 export interface AppInstance {
   initializeScene: () => Promise<void>;
   activate: () => void;
-  sceneService?: {
-    getScene: () => {
-      createLayer: (layerId: LayerId) => Promise<boolean>;
-      setLayerVisible: (layerId: LayerId, visible: boolean) => void;
-      getRenderer?: () => any;
-    } | null;
-  };
-  layersService?: LayersService;
-  downloadService?: DownloadService;
+  configService?: ConfigService | undefined;
+  getScene: () => {
+    createLayer: (layerId: LayerId) => Promise<boolean>;
+    setLayerVisible: (layerId: LayerId, visible: boolean) => void;
+    getRenderer?: () => any;
+  } | undefined;
+  layersService?: LayersService | undefined;
+  downloadService?: DownloadService | undefined;
 }
 
 interface StepResult {
@@ -96,12 +94,15 @@ export class AppBootstrapService {
       start: 5,
       end: 10,
       label: 'Loading configurations...',
-      async run() {
-        await configLoader.loadAll();
-        await LayerStateService.initialize();
+      async run(_state, app) {
+        // Use app's ConfigService instance
+        if (!app.configService) {
+          throw new Error('ConfigService not initialized');
+        }
+        await app.configService.loadAll();
 
-        // Note: LayerCacheControl initialization removed - now using DownloadService
-        // which is initialized in App.ts
+        // Note: LayerState is now initialized in LayersService constructor
+        // No separate initialization needed here
       }
     },
 
@@ -128,10 +129,13 @@ export class AppBootstrapService {
       start: 15,
       end: 25,
       label: 'Fetching server time...',
-      async run(state) {
+      async run(state, app) {
         // Only fetch server time if not already set from URL
         if (!state.currentTime) {
-          state.currentTime = await getCurrentTime();
+          if (!app.configService) {
+            throw new Error('ConfigService not initialized');
+          }
+          state.currentTime = await getCurrentTime(app.configService);
         }
       }
     },
@@ -149,9 +153,10 @@ export class AppBootstrapService {
       start: 35,
       end: 35,
       label: 'Getting location...',
-      async run(state) {
+      async run(state, app) {
         // Optional - fire and forget
-        const hypatiaConfig = configLoader.getHypatiaConfig();
+        if (!app.configService) return;
+        const hypatiaConfig = app.configService.getHypatiaConfig();
         if (hypatiaConfig.features.enableGeolocation) {
           getUserLocation()
             .then(location => {
@@ -179,15 +184,18 @@ export class AppBootstrapService {
         }
 
         // Get scene instance
-        const scene = app.sceneService?.getScene();
+        const scene = app.getScene();
         if (!scene) {
           throw new Error('Scene not initialized');
         }
 
         // Create all layers with empty textures (for data layers)
+        if (!app.configService) {
+          throw new Error('ConfigService not initialized');
+        }
         const layersToCreate: LayerId[] = [];
         for (const urlKey of urlState.layers) {
-          const layerId = configLoader.urlKeyToLayerId(urlKey) as LayerId;
+          const layerId = app.configService.urlKeyToLayerId(urlKey) as LayerId;
           layersToCreate.push(layerId);
         }
 
@@ -235,9 +243,12 @@ export class AppBootstrapService {
         }
 
         // Convert URL keys to layer IDs
+        if (!app.configService) {
+          throw new Error('ConfigService not initialized');
+        }
         const layersToLoad: LayerId[] = [];
         for (const urlKey of urlState.layers) {
-          const layerId = configLoader.urlKeyToLayerId(urlKey) as LayerId;
+          const layerId = app.configService.urlKeyToLayerId(urlKey) as LayerId;
           layersToLoad.push(layerId);
         }
         console.log('[LOAD_LAYER_DATA] Layers with data to load:', layersToLoad);
@@ -412,7 +423,10 @@ export class AppBootstrapService {
     }
 
     // Check autoContinue setting
-    const hypatiaConfig = configLoader.getHypatiaConfig();
+    if (!app.configService) {
+      throw new Error('ConfigService not initialized');
+    }
+    const hypatiaConfig = app.configService.getHypatiaConfig();
     const autoContinue = hypatiaConfig.bootstrap.autoContinue;
 
     if (autoContinue) {

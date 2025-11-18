@@ -1,14 +1,21 @@
 /**
- * Keyboard Shortcuts Service
+ * Event Service
  *
- * Handles all keyboard shortcuts for the application:
- * - Arrow keys: Time navigation (hour/10-min/24-hour jumps)
- * - F: Toggle fullscreen
- * - Cmd/Ctrl +/-/0: Text size adjustment
+ * Centralizes all event handling for the application:
+ * - Event listener registration and cleanup (prevents memory leaks)
+ * - Keyboard shortcuts (arrow keys, fullscreen, text size)
+ * - Automatic tracking of all event listeners for cleanup
  */
 
-import { configLoader } from '../config';
+import type { ConfigService } from './ConfigService';
 import type { DateTimeService } from './DateTimeService';
+
+interface EventRegistration {
+  element: EventTarget;
+  event: string;
+  handler: EventListener;
+  options: AddEventListenerOptions | undefined;
+}
 
 export interface KeyboardShortcutHandlers {
   onTimeChange: (newTime: Date) => void;
@@ -18,16 +25,33 @@ export interface KeyboardShortcutHandlers {
   onTextSizeReset: () => void;
 }
 
-export class KeyboardShortcutsService {
+export class EventService {
+  private registrations: EventRegistration[] = [];
+
   constructor(
     private getCurrentTime: () => Date,
     private handlers: KeyboardShortcutHandlers,
-    private dateTimeService: DateTimeService
+    private dateTimeService: DateTimeService,
+    private configService: ConfigService
   ) {}
 
   /**
+   * Register an event listener
+   * Automatically tracks the registration for later cleanup
+   */
+  register(
+    element: EventTarget,
+    event: string,
+    handler: EventListener,
+    options?: AddEventListenerOptions
+  ): void {
+    element.addEventListener(event, handler, options);
+    this.registrations.push({ element, event, handler, options: options });
+  }
+
+  /**
    * Handle keyboard events
-   * Use as: this.keyboardShortcuts.handleKeydown
+   * Use as: this.eventService.handleKeydown
    */
   handleKeydown = (e: KeyboardEvent): void => {
     // Arrow keys: time navigation
@@ -35,8 +59,8 @@ export class KeyboardShortcutsService {
       e.preventDefault();
       const newTime = this.calculateTimeFromArrowKey(e);
       const currentTime = this.getCurrentTime();
-      const maxRangeDays = configLoader.getHypatiaConfig().data.maxRangeDays;
-      const clampedTime = clampTimeToDataWindow(newTime, currentTime, maxRangeDays);
+      const maxRangeDays = this.configService.getHypatiaConfig().data.maxRangeDays;
+      const clampedTime = this.dateTimeService.clampToDataWindow(newTime, currentTime, maxRangeDays);
       this.handlers.onTimeChange(clampedTime);
     }
 
@@ -85,6 +109,21 @@ export class KeyboardShortcutsService {
     return this.dateTimeService.roundToHour(currentTime, direction as 1 | -1);
   }
 
-  // Removed: calculateTenMinuteJump() and calculateHourJump() - now using utils/timeUtils.ts
-  // This ensures UTC-only operations everywhere
+  /**
+   * Remove all registered event listeners
+   * Call this in component onremove/dispose
+   */
+  dispose(): void {
+    for (const { element, event, handler } of this.registrations) {
+      element.removeEventListener(event, handler);
+    }
+    this.registrations = [];
+  }
+
+  /**
+   * Get count of registered event listeners (for debugging)
+   */
+  getRegistrationCount(): number {
+    return this.registrations.length;
+  }
 }

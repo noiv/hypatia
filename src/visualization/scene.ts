@@ -1,13 +1,16 @@
 import * as THREE from 'three';
-import { DataService } from '../services/DataService';
 import { ViewportControlsService, type ViewportControlsCallbacks, tweenGroup } from '../services/ViewportControlsService';
 import type { LayerRenderState } from '../config/types';
 import type { ILayer, LayerId } from './ILayer';
 import type { AnimationState } from './AnimationState';
-import { LayerFactory } from './LayerFactory';
 import type { EarthRenderService } from './earth.render-service';
 import type { SunRenderService } from './sun.render-service';
 import { TextRenderService } from './text.render-service';
+import { LayerFactory } from './LayerFactory';
+import type { DownloadService } from '../services/DownloadService';
+import type { TextureService } from '../services/TextureService';
+import type { DateTimeService } from '../services/DateTimeService';
+import type { ConfigService } from '../services/ConfigService';
 import * as perform from '../utils/performance';
 import { mouseToNDC, raycastObject, cartesianToLatLon } from '../utils/raycasting';
 
@@ -25,11 +28,15 @@ export class Scene {
   private stats: any;
   private perform: any;
   private performanceElement: HTMLElement | null = null;
-  private dataService: DataService;
   private textEnabled: boolean = false;
 
+  // Services (injected after construction)
+  private downloadService?: DownloadService;
+  private textureService?: TextureService;
+  private dateTimeService?: DateTimeService;
+  private configService?: ConfigService;
+
   constructor(canvas: HTMLCanvasElement, initialTime?: Date, preloadedImages?: Map<string, HTMLImageElement>) {
-    this.dataService = new DataService();
     this.preloadedImages = preloadedImages;
 
     // Scene
@@ -63,9 +70,6 @@ export class Scene {
     this.renderer.setSize(width, height);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-    // Initialize TextureUpdater for optimal texture updates
-    this.dataService.setRenderer(this.renderer);
-
     // Stats.js for FPS monitoring
     // @ts-ignore - Stats is loaded via script tag
     this.stats = new Stats();
@@ -97,6 +101,21 @@ export class Scene {
   }
 
   /**
+   * Set services for layer creation (called after Scene construction)
+   */
+  setServices(
+    downloadService: DownloadService,
+    textureService: TextureService,
+    dateTimeService: DateTimeService,
+    configService: ConfigService
+  ): void {
+    this.downloadService = downloadService;
+    this.textureService = textureService;
+    this.dateTimeService = dateTimeService;
+    this.configService = configService;
+  }
+
+  /**
    * Start the animation loop
    * Should be called after bootstrap completes and initial layers are loaded
    */
@@ -111,9 +130,13 @@ export class Scene {
    * Create viewport controls service (called after Scene construction)
    */
   createViewportControls(callbacks: ViewportControlsCallbacks, dateTimeService?: any): ViewportControlsService {
+    if (!this.configService) {
+      throw new Error('ConfigService not set. Call setServices() first.');
+    }
     this.viewportControls = new ViewportControlsService(
       this.camera,
       this,
+      this.configService,
       callbacks,
       dateTimeService
     );
@@ -409,10 +432,18 @@ export class Scene {
       return false;
     }
 
+    // Ensure services are injected before creating data layers
+    if (!this.downloadService || !this.textureService || !this.dateTimeService || !this.configService) {
+      throw new Error('Services not injected. Call setServices() before creating layers.');
+    }
+
     // Create layer using factory
     const layer = await LayerFactory.create(
       layerId,
-      this.dataService,
+      this.downloadService,
+      this.textureService,
+      this.dateTimeService,
+      this.configService,
       this.currentTime,
       this.preloadedImages,
       this.renderer

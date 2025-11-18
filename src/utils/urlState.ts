@@ -9,10 +9,56 @@
  * - layers: comma-separated list of active layers (optional)
  */
 
-import { formatDateForUrl, parseDateFromUrl } from './dateFormat';
 import { cartesianToLatLon, latLonToCartesian, formatLatLonForUrl, parseLatLonFromUrl } from './coordinates';
 import { altitudeToDistance, distanceToAltitude } from './constants';
 import * as THREE from 'three';
+
+/**
+ * Format date for URL
+ * @param date - Date object
+ * @returns String like "2015-12-25:19:48"
+ */
+function formatDateForUrl(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const hours = String(date.getUTCHours()).padStart(2, '0');
+  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+
+  return `${year}-${month}-${day}:${hours}:${minutes}`;
+}
+
+/**
+ * Parse date from URL format
+ * @param dt - String like "2015-12-25:19:48" (no seconds)
+ * @returns Date object or null if invalid
+ */
+function parseDateFromUrl(dt: string): Date | null {
+  // Expected format: YYYY-MM-DD:HH:MM (no seconds)
+  const match = dt.match(/^(\d{4})-(\d{2})-(\d{2}):(\d{2}):(\d{2})$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const [, year, month, day, hours, minutes] = match;
+
+  const date = new Date(Date.UTC(
+    parseInt(year!),
+    parseInt(month!) - 1,
+    parseInt(day!),
+    parseInt(hours!),
+    parseInt(minutes!),
+    0  // seconds always 0
+  ));
+
+  // Validate date
+  if (isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date;
+}
 
 export interface AppUrlState {
   time: Date;

@@ -12,7 +12,7 @@
  */
 
 import type { AppStateService } from './AppStateService'
-import type { SceneLifecycleService } from './SceneLifecycleService'
+import type { Scene } from '../visualization/scene'
 import type { LayersService } from './LayersService'
 import type { ConfigService } from './ConfigService'
 import { debouncedUpdateUrlState } from '../utils/urlState'
@@ -21,7 +21,7 @@ import type { LayerId } from '../visualization/ILayer'
 export class AppService {
   constructor(
     private stateService: AppStateService,
-    private sceneService: SceneLifecycleService,
+    private getScene: () => Scene | undefined,
     private layersService: LayersService,
     private configService: ConfigService,
     private isBootstrapping: () => boolean
@@ -62,7 +62,7 @@ export class AppService {
       return
     }
 
-    const scene = this.sceneService.getScene()
+    const scene = this.getScene()
     const state = this.stateService.get()
     if (!scene) return
 
@@ -96,7 +96,7 @@ export class AppService {
    * Navigate to reference state (fixed time and position)
    */
   handleReferenceClick(): void {
-    const scene = this.sceneService.getScene()
+    const scene = this.getScene()
 
     // Reference state: 2x Earth radius altitude, looking at lat=0 lon=0
     const referenceTime = new Date('2025-10-29T12:00:00Z')

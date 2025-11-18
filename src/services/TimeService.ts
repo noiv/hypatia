@@ -4,7 +4,7 @@
  * Fetches accurate current time from time server
  */
 
-import { getUserOptions } from './UserOptionsService';
+import type { ConfigService } from './ConfigService';
 
 interface TimeApiResponse {
   year: number;
@@ -21,8 +21,8 @@ interface TimeApiResponse {
 /**
  * Get current time from time server (if enabled) or local browser time
  */
-export async function getCurrentTime(): Promise<Date> {
-  const options = await getUserOptions();
+export async function getCurrentTime(configService: ConfigService): Promise<Date> {
+  const options = configService.getUserOptions();
 
   // Check if time server is enabled
   if (!options.timeServer.enabled) {

@@ -186,7 +186,7 @@ export class Temp2mLayer implements ILayer {
 
     // Check sun direction change
     if (!this.lastSunDirection || !this.lastSunDirection.equals(state.sunDirection)) {
-      this.material.uniforms.sunDirection.value.copy(state.sunDirection)
+      this.material.uniforms.sunDirection?.value.copy(state.sunDirection)
       this.lastSunDirection = state.sunDirection.clone()
     }
   }

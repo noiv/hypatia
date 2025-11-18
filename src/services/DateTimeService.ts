@@ -437,7 +437,7 @@ export class DateTimeService {
       timeZoneName: 'long',
     })
     const longMatch = longFormatted.match(/\d{1,2}:\d{2}:\d{2}\s+[AP]M\s+(.+)/)
-    const long = longMatch ? longMatch[1] : ''
+    const long = longMatch?.[1] || ''
 
     return { short, long }
   }

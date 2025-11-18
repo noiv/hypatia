@@ -6,6 +6,7 @@
  *
  * Responsibilities:
  * - Layer registration and lifecycle management
+ * - Layer state management (disabled/loading/active)
  * - Visibility and opacity control
  * - Coordinate with DownloadService for data layers
  * - Update orchestration for all layers
@@ -17,6 +18,7 @@ import type { AnimationState } from '../visualization/AnimationState'
 import type { DownloadService } from './DownloadService'
 import type { ConfigService } from './ConfigService'
 import type { DateTimeService } from './DateTimeService'
+import { LayerState } from '../state/LayerState'
 
 /**
  * Layer metadata
@@ -40,13 +42,16 @@ export interface LayerToggleOptions {
  * Layers Service
  */
 export class LayersService {
-  // Layer registry
+  // Layer registry (ILayer instances)
   private layers: Map<LayerId, LayerMetadata> = new Map()
+
+  // Layer state (config-driven disabled/loading/active status)
+  private layerState: LayerState
 
   // Services
   private downloadService: DownloadService
-  private configService: ConfigService
-  private dateTimeService: DateTimeService
+  private _configService: ConfigService
+  private _dateTimeService: DateTimeService
 
   // Event listeners cleanup
   private eventCleanup: Array<() => void> = []
@@ -57,10 +62,32 @@ export class LayersService {
     dateTimeService: DateTimeService
   ) {
     this.downloadService = downloadService
-    this.configService = configService
-    this.dateTimeService = dateTimeService
+    this._configService = configService
+    this._dateTimeService = dateTimeService
+
+    // Initialize layer state from config
+    const layerConfigs = configService.getLayers()
+    this.layerState = new LayerState(layerConfigs)
 
     console.log('[LayersService] Initialized')
+  }
+
+  /**
+   * Get the layer state instance
+   */
+  getLayerState(): LayerState {
+    return this.layerState
+  }
+
+  /**
+   * Initialize layer state from URL parameters
+   */
+  initializeFromUrl(urlKeys: string[]): void {
+    if (urlKeys.length > 0) {
+      this.layerState.enableFromUrlKeys(urlKeys)
+    } else {
+      this.layerState.enableDefaults()
+    }
   }
 
   /**
@@ -72,12 +99,15 @@ export class LayersService {
       return
     }
 
-    this.layers.set(layerId, {
+    const metadata: LayerMetadata = {
       layer,
       isDataLayer,
-      isVisible: false,
-      loadProgress: isDataLayer ? 0 : undefined,
-    })
+      isVisible: false
+    };
+    if (isDataLayer) {
+      metadata.loadProgress = 0;
+    }
+    this.layers.set(layerId, metadata);
 
     // If it's a data layer, listen to download progress
     if (isDataLayer) {

@@ -5,7 +5,7 @@
  */
 
 import m from 'mithril';
-import { configLoader } from '../config';
+import type { ConfigService } from '../services/ConfigService';
 import type { DateTimeService } from '../services/DateTimeService';
 
 export interface TimeBarPanelAttrs {
@@ -14,11 +14,12 @@ export interface TimeBarPanelAttrs {
   endTime: Date;
   onTimeChange: (time: Date) => void;
   dateTimeService: DateTimeService;
+  configService: ConfigService;
 }
 
 export const TimeBarPanel: m.Component<TimeBarPanelAttrs> = {
   view(vnode) {
-    const { currentTime, startTime, endTime, onTimeChange, dateTimeService } = vnode.attrs;
+    const { currentTime, startTime, endTime, onTimeChange, dateTimeService, configService } = vnode.attrs;
 
     // Calculate slider value (0-1 through the forecast range)
     const rangeProgress = (currentTime.getTime() - startTime.getTime()) /
@@ -35,7 +36,7 @@ export const TimeBarPanel: m.Component<TimeBarPanelAttrs> = {
     // Jump to current time
     const jumpToNow = () => {
       const now = new Date();
-      const maxRangeDays = configLoader.getHypatiaConfig().data.maxRangeDays;
+      const maxRangeDays = configService.getHypatiaConfig().data.maxRangeDays;
       const clampedNow = dateTimeService.clampToDataWindow(now, currentTime, maxRangeDays);
       onTimeChange(clampedNow);
     };
@@ -83,7 +84,7 @@ export const TimeBarPanel: m.Component<TimeBarPanelAttrs> = {
             e.preventDefault();
             const hoursToAdd = e.deltaY > 0 ? -1 : 1;
             const newTime = new Date(currentTime.getTime() + hoursToAdd * 3600000);
-            const maxRangeDays = configLoader.getHypatiaConfig().data.maxRangeDays;
+            const maxRangeDays = configService.getHypatiaConfig().data.maxRangeDays;
             const clampedTime = dateTimeService.clampToDataWindow(newTime, currentTime, maxRangeDays);
             onTimeChange(clampedTime);
           }

@@ -13,7 +13,7 @@ import * as THREE from 'three';
 import * as TWEEN from '@tweenjs/tween.js';
 import type { Scene } from '../visualization/scene';
 import { mouseToNDC, raycastObject } from '../utils/raycasting';
-import { configLoader } from '../config/loader';
+import type { ConfigService } from './ConfigService';
 import type { DateTimeService } from './DateTimeService';
 
 export type GestureDirection = 'none' | 'vertical' | 'horizontal';
@@ -33,6 +33,7 @@ export class ViewportControlsService {
   private callbacks: ViewportControlsCallbacks;
   private raycaster: THREE.Raycaster;
   private config: any;
+  private configService: ConfigService;
 
   // Spherical coordinates for camera position
   private theta: number = Math.PI / 2; // Azimuthal angle (0 to 2π)
@@ -80,16 +81,18 @@ export class ViewportControlsService {
   constructor(
     camera: THREE.PerspectiveCamera,
     scene: Scene,
+    configService: ConfigService,
     callbacks: ViewportControlsCallbacks = {},
     private dateTimeService?: DateTimeService
   ) {
     this.camera = camera;
     this.scene = scene;
+    this.configService = configService;
     this.callbacks = callbacks;
     this.raycaster = new THREE.Raycaster();
 
     // Load config
-    const hypatiaConfig = configLoader.getHypatiaConfig();
+    const hypatiaConfig = this.configService.getHypatiaConfig();
     this.config = hypatiaConfig.camera;
 
     // Initialize from current camera position (which may have been set from URL)
@@ -215,7 +218,7 @@ export class ViewportControlsService {
       if (this.callbacks.getCurrentTime && this.callbacks.onTimeChange && this.dateTimeService) {
         const currentTime = this.callbacks.getCurrentTime();
         const newTime = new Date(currentTime.getTime() + hoursDelta * 3600000);
-        const maxRangeDays = configLoader.getHypatiaConfig().data.maxRangeDays;
+        const maxRangeDays = this.configService.getHypatiaConfig().data.maxRangeDays;
         const clampedTime = this.dateTimeService.clampToDataWindow(newTime, currentTime, maxRangeDays);
         this.callbacks.onTimeChange(clampedTime);
       }
@@ -458,7 +461,7 @@ export class ViewportControlsService {
           if (this.callbacks.getCurrentTime && this.callbacks.onTimeChange && this.dateTimeService) {
             const currentTime = this.callbacks.getCurrentTime();
             const newTime = new Date(currentTime.getTime() + hoursDelta * 3600000);
-            const maxRangeDays = configLoader.getHypatiaConfig().data.maxRangeDays;
+            const maxRangeDays = this.configService.getHypatiaConfig().data.maxRangeDays;
             const clampedTime = this.dateTimeService.clampToDataWindow(newTime, currentTime, maxRangeDays);
             this.callbacks.onTimeChange(clampedTime);
           }

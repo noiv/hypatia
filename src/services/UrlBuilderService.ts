@@ -78,7 +78,7 @@ export class UrlBuilderService {
    *
    * @returns URL string or null if not implemented
    */
-  private buildEcmwfUrl(params: UrlParams): string | null {
+  private buildEcmwfUrl(_params: UrlParams): string | null {
     // TODO: Implement ECMWF API URL building
     // Will need:
     // - API endpoint configuration
@@ -98,7 +98,7 @@ export class UrlBuilderService {
    *
    * @returns URL string or null if not implemented
    */
-  private buildCopernicusUrl(params: UrlParams): string | null {
+  private buildCopernicusUrl(_params: UrlParams): string | null {
     // TODO: Implement Copernicus URL building
     // Will need:
     // - Copernicus API endpoint
