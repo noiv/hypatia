@@ -328,9 +328,11 @@ export class AppBootstrapService {
           app.stateService.setBootstrapStatus('waiting');
           console.log('Bootstrap.done (waiting for user to choose download mode)');
         } else {
-          // Set to ready (UI appears, no modal)
+          // Auto-continue: use default download mode from config
+          const defaultDownloadMode = hypatiaConfig.dataCache.downloadMode;
+          app.stateService.setDownloadMode(defaultDownloadMode);
           app.stateService.setBootstrapStatus('ready');
-          console.log('Bootstrap.done (auto-continue)');
+          console.log(`Bootstrap.done (auto-continue with ${defaultDownloadMode} mode)`);
         }
       }
     },

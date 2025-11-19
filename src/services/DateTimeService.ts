@@ -77,6 +77,19 @@ export class DateTimeService {
     return new Date(Math.max(startTime.getTime(), Math.min(endTime.getTime(), timeMs)))
   }
 
+  /**
+   * Clamp time to fixed bounds (for UI time controls)
+   *
+   * @param time - Time to clamp
+   * @param startTime - Fixed start bound
+   * @param endTime - Fixed end bound
+   * @returns Clamped time
+   */
+  clampToFixedBounds(time: Date, startTime: Date, endTime: Date): Date {
+    const timeMs = time.getTime()
+    return new Date(Math.max(startTime.getTime(), Math.min(endTime.getTime(), timeMs)))
+  }
+
   // ============================================================================
   // TimeStep Generation (UTC)
   // ============================================================================

@@ -58,10 +58,7 @@ export class EventService {
     if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
       e.preventDefault();
       const newTime = this.calculateTimeFromArrowKey(e);
-      const currentTime = this.getCurrentTime();
-      const maxRangeDays = this.configService.getHypatiaConfig().data.maxRangeDays;
-      const clampedTime = this.dateTimeService.clampToDataWindow(newTime, currentTime, maxRangeDays);
-      this.handlers.onTimeChange(clampedTime);
+      this.handlers.onTimeChange(newTime); // handleTimeChange will clamp to slider bounds
     }
 
     // F: toggle fullscreen

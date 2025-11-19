@@ -215,12 +215,10 @@ export class ViewportControlsService {
       const minutes = -e.deltaX * this.config.timeScrubMinutesPerPixel;
       const hoursDelta = minutes / 60;
 
-      if (this.callbacks.getCurrentTime && this.callbacks.onTimeChange && this.dateTimeService) {
+      if (this.callbacks.getCurrentTime && this.callbacks.onTimeChange) {
         const currentTime = this.callbacks.getCurrentTime();
         const newTime = new Date(currentTime.getTime() + hoursDelta * 3600000);
-        const maxRangeDays = this.configService.getHypatiaConfig().data.maxRangeDays;
-        const clampedTime = this.dateTimeService.clampToDataWindow(newTime, currentTime, maxRangeDays);
-        this.callbacks.onTimeChange(clampedTime);
+        this.callbacks.onTimeChange(newTime); // handleTimeChange will clamp to slider bounds
       }
     }
     // Handle vertical scroll (zoom)

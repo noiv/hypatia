@@ -43,7 +43,7 @@
     "preloadCritical": true
   },
   "bootstrap": {
-    "autoContinue": false
+    "autoContinue": true
   },
   "dataCache": {
     "maxConcurrentDownloads": 4,

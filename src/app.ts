@@ -303,15 +303,13 @@ export const App: AppComponent = {
   },
 
   handleTimeChange(newTime: Date) {
-    const currentTime = this.stateService!.getCurrentTime();
-    const hypatiaConfig = this.configService!.getHypatiaConfig();
-    const maxRangeDays = hypatiaConfig.data.maxRangeDays;
+    const state = this.stateService!.get();
 
-    // Clamp time to data window
-    const clamped = this.dateTimeService!.clampToDataWindow(
+    // Clamp time to fixed slider bounds (data window)
+    const clamped = this.dateTimeService!.clampToFixedBounds(
       newTime,
-      currentTime,
-      maxRangeDays
+      state.sliderStartTime,
+      state.sliderEndTime
     );
 
     this.stateService!.setCurrentTime(clamped);
@@ -396,9 +394,6 @@ export const App: AppComponent = {
   },
 
   getLayerStates(): Map<LayerId, any> {
-    const scene = this.scene;
-    if (!scene) return new Map();
-
     const states = new Map<LayerId, any>();
     const layerIds: LayerId[] = [
       'earth',
@@ -410,8 +405,18 @@ export const App: AppComponent = {
       'pressure_msl'
     ];
 
-    for (const id of layerIds) {
-      states.set(id, scene.getLayerState(id));
+    // Use LayersService as source of truth for layer state
+    if (this.layersService) {
+      for (const id of layerIds) {
+        const created = this.layersService.hasLayer(id);
+        const visible = created && this.layersService.isVisible(id);
+        states.set(id, { created, visible });
+      }
+    } else if (this.scene) {
+      // Fallback to scene if LayersService not available
+      for (const id of layerIds) {
+        states.set(id, this.scene.getLayerState(id));
+      }
     }
 
     return states;
