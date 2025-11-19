@@ -125,6 +125,13 @@ export const App: AppComponent = {
       }
     });
 
+    // Initialize LayersService (Scene and TextureService will be injected later)
+    this.layersService = new LayersService(
+      this.downloadService,
+      this.configService,
+      this.dateTimeService
+    );
+
     // Scene service
     // Scene will be created in initializeScene()
 
@@ -197,10 +204,11 @@ export const App: AppComponent = {
       {
         initializeScene: this.initializeScene.bind(this),
         activate: this.activate.bind(this),
-        configService: this.configService,
+        configService: this.configService!,
         getScene: () => this.scene,
-        downloadService: this.downloadService,
-        layersService: this.layersService
+        stateService: this.stateService!,
+        downloadService: this.downloadService!,
+        layersService: this.layersService!
       },
       (progress) => {
         this.stateService!.setBootstrapProgress({
@@ -272,7 +280,7 @@ export const App: AppComponent = {
     m.redraw();
   },
 
-  async initializeScene() {
+  async initializeScene(): Promise<Scene | undefined> {
     const canvas = document.querySelector('.scene-canvas') as HTMLCanvasElement;
     if (!canvas) {
       throw new Error('Canvas not found');
@@ -293,15 +301,10 @@ export const App: AppComponent = {
     this.scene.setBasemapBlend(state.blend);
     this.scene.updateTime(state.currentTime);
 
-    // Create TextureService and LayersService now that we have the renderer
+    // Create TextureService now that we have the renderer
     const renderer = this.scene.getRenderer?.();
     if (renderer) {
       this.textureService = new TextureService(renderer);
-      this.layersService = new LayersService(
-        this.downloadService!,
-        this.configService!,
-        this.dateTimeService!
-      );
 
       // Inject services into scene immediately after creation
       // This must happen before bootstrap creates layers
@@ -311,9 +314,16 @@ export const App: AppComponent = {
         this.dateTimeService!,
         this.configService!
       );
+
+      // Inject Scene and TextureService into LayersService
+      // This must happen before LayersService.createLayers() is called
+      if (this.layersService) {
+        this.layersService.setServices(this.scene, this.textureService);
+      }
     }
 
     this.stateService!.setScene(this.scene);
+    return this.scene;
   },
 
   handleTimeChange(newTime: Date) {
@@ -358,19 +368,21 @@ export const App: AppComponent = {
 
     this.stateService!.setTextEnabled(newEnabled);
 
-    // Use LayersService if available, otherwise fall back to direct scene manipulation
-    if (this.layersService) {
+    // Use LayersService to toggle text layer
+    if (this.layersService && this.stateService) {
+      const currentTime = this.stateService.getCurrentTime();
+
+      // Create text layer if it doesn't exist yet
+      if (!this.layersService.hasLayer('text')) {
+        await this.layersService.createLayers(['text'], currentTime);
+      }
+
+      // Toggle visibility
       await this.layersService.toggle('text', newEnabled);
-    } else {
-      const scene = this.scene;
-      if (scene) {
-        if (newEnabled) {
-          await scene.createLayer('text');
-          scene.setLayerVisible('text', true);
-        } else {
-          scene.setLayerVisible('text', false);
-        }
-        scene.setTextEnabled(newEnabled);
+
+      // Update Scene text enabled state
+      if (this.scene) {
+        this.scene.setTextEnabled(newEnabled);
       }
     }
 

@@ -314,6 +314,14 @@ export class ConfigService {
     return config.layers.filter((layer) => layer.ui.defaultEnabled)
   }
 
+  /**
+   * Get non-data layer IDs (layers without ECMWF parameters)
+   * These are render-only layers: earth, sun, graticule, text
+   */
+  getNonDataLayers(): string[] {
+    return ['earth', 'sun', 'graticule', 'text']
+  }
+
   // ============================================================================
   // Parameter Queries
   // ============================================================================

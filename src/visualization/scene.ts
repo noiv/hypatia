@@ -151,6 +151,34 @@ export class Scene {
   }
 
   /**
+   * Get preloaded images (for Earth layer)
+   */
+  getPreloadedImages(): Map<string, HTMLImageElement> | undefined {
+    return this.preloadedImages;
+  }
+
+  /**
+   * Render a single frame (used during bootstrap to upload empty textures to GPU)
+   */
+  renderFrame(): void {
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  /**
+   * Add a layer to the scene (used by LayersService)
+   * @param layerId - Layer identifier
+   * @param layer - ILayer instance
+   * @param sceneObject - THREE.js object to add to scene
+   */
+  addLayer(layerId: LayerId, layer: ILayer, sceneObject: THREE.Object3D): void {
+    // Store layer reference for getLayer() compatibility
+    this.layers.set(layerId, layer);
+    // Add THREE.js object to scene
+    this.scene.add(sceneObject);
+    console.log(`[Scene] Added layer ${layerId} to THREE.js scene`);
+  }
+
+  /**
    * Get layer by ID (for ViewportControlsService)
    */
   getLayer(layerId: LayerId): ILayer | undefined {
@@ -419,42 +447,8 @@ export class Scene {
   }
 
   // ========================================================================
-  // New Unified Layer API
+  // Layer Management API
   // ========================================================================
-
-  /**
-   * Create a layer (loads data if needed, creates visualization)
-   * Returns true if layer was created, false if already exists
-   */
-  async createLayer(layerId: LayerId): Promise<boolean> {
-    // Check if already created
-    if (this.layers.has(layerId)) {
-      return false;
-    }
-
-    // Ensure services are injected before creating data layers
-    if (!this.downloadService || !this.textureService || !this.dateTimeService || !this.configService) {
-      throw new Error('Services not injected. Call setServices() before creating layers.');
-    }
-
-    // Create layer using factory
-    const layer = await LayerFactory.create(
-      layerId,
-      this.downloadService,
-      this.textureService,
-      this.dateTimeService,
-      this.configService,
-      this.currentTime,
-      this.preloadedImages,
-      this.renderer
-    );
-
-    // Store and add to scene
-    this.layers.set(layerId, layer);
-    this.scene.add(layer.getSceneObject());
-
-    return true;
-  }
 
   /**
    * Toggle layer visibility (layer must be created first)

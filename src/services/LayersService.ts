@@ -18,7 +18,10 @@ import type { AnimationState } from '../visualization/AnimationState'
 import type { DownloadService } from './DownloadService'
 import type { ConfigService } from './ConfigService'
 import type { DateTimeService } from './DateTimeService'
+import type { TextureService } from './TextureService'
+import type { Scene } from '../visualization/scene'
 import { LayerState } from '../state/LayerState'
+import { LayerFactory } from '../visualization/LayerFactory'
 
 /**
  * Layer metadata
@@ -50,8 +53,10 @@ export class LayersService {
 
   // Services
   private downloadService: DownloadService
+  private textureService: TextureService | null = null
   private _configService: ConfigService
   private _dateTimeService: DateTimeService
+  private scene: Scene | null = null
 
   // Event listeners cleanup
   private eventCleanup: Array<() => void> = []
@@ -70,6 +75,15 @@ export class LayersService {
     this.layerState = new LayerState(layerConfigs)
 
     console.log('[LayersService] Initialized')
+  }
+
+  /**
+   * Inject Scene and TextureService references after initialization
+   * Must be called before createLayers()
+   */
+  setServices(scene: Scene, textureService: TextureService): void {
+    this.scene = scene
+    this.textureService = textureService
   }
 
   /**
@@ -131,6 +145,52 @@ export class LayersService {
     console.log(
       `[LayersService] Registered ${layerId} (${isDataLayer ? 'data layer' : 'render layer'})`
     )
+  }
+
+  /**
+   * Create multiple layers and register them
+   * Entry point for both bootstrap and user interactions
+   */
+  async createLayers(layerIds: LayerId[], currentTime: Date): Promise<void> {
+    if (!this.scene) {
+      throw new Error('Scene not injected. Call setServices() before createLayers()')
+    }
+    if (!this.textureService) {
+      throw new Error('TextureService not injected. Call setServices() before createLayers()')
+    }
+
+    const nonDataLayers = this._configService.getNonDataLayers()
+
+    for (const layerId of layerIds) {
+      // Skip if already created
+      if (this.layers.has(layerId)) {
+        console.log(`[LayersService] Layer ${layerId} already exists, skipping`)
+        continue
+      }
+
+      // Create layer using factory
+      const layer = await LayerFactory.create(
+        layerId,
+        this.downloadService,
+        this.textureService,
+        this._dateTimeService,
+        this._configService,
+        currentTime,
+        this.scene.getPreloadedImages?.() || undefined,
+        this.scene.getRenderer?.() || undefined
+      )
+
+      // Determine if data layer
+      const isDataLayer = !nonDataLayers.includes(layerId)
+
+      // Register with LayersService
+      this.registerLayer(layerId, layer, isDataLayer)
+
+      // Add to Scene (both ILayer and sceneObject)
+      this.scene.addLayer(layerId, layer, layer.getSceneObject())
+
+      console.log(`[LayersService] Created layer: ${layerId}`)
+    }
   }
 
   /**

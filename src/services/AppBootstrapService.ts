@@ -16,6 +16,8 @@ import { parseUrlState } from '../utils/urlState';
 import type { LayersService } from './LayersService';
 import type { DownloadService } from './DownloadService';
 import type { ConfigService } from './ConfigService';
+import type { AppStateService } from './AppStateService';
+import type { Scene } from '../visualization/scene';
 
 export type BootstrapStatus = 'loading' | 'waiting' | 'ready' | 'error';
 
@@ -45,16 +47,13 @@ export interface BootstrapStepProgress {
 export type BootstrapProgressCallback = (progress: BootstrapStepProgress) => void;
 
 export interface AppInstance {
-  initializeScene: () => Promise<void>;
+  initializeScene: () => Promise<Scene | undefined>;
   activate: () => void;
-  configService?: ConfigService | undefined;
-  getScene: () => {
-    createLayer: (layerId: LayerId) => Promise<boolean>;
-    setLayerVisible: (layerId: LayerId, visible: boolean) => void;
-    getRenderer?: () => any;
-  } | undefined;
-  layersService?: LayersService | undefined;
-  downloadService?: DownloadService | undefined;
+  configService: ConfigService;
+  getScene: () => Scene | undefined;
+  stateService: AppStateService;
+  layersService: LayersService;
+  downloadService: DownloadService;
 }
 
 interface StepResult {
@@ -95,10 +94,6 @@ export class AppBootstrapService {
       end: 10,
       label: 'Loading configurations...',
       async run(_state, app) {
-        // Use app's ConfigService instance
-        if (!app.configService) {
-          throw new Error('ConfigService not initialized');
-        }
         await app.configService.loadAll();
 
         // Note: LayerState is now initialized in LayersService constructor
@@ -132,9 +127,6 @@ export class AppBootstrapService {
       async run(state, app) {
         // Only fetch server time if not already set from URL
         if (!state.currentTime) {
-          if (!app.configService) {
-            throw new Error('ConfigService not initialized');
-          }
           state.currentTime = await getCurrentTime(app.configService);
         }
       }
@@ -155,7 +147,6 @@ export class AppBootstrapService {
       label: 'Getting location...',
       async run(state, app) {
         // Optional - fire and forget
-        if (!app.configService) return;
         const hypatiaConfig = app.configService.getHypatiaConfig();
         if (hypatiaConfig.features.enableGeolocation) {
           getUserLocation()
@@ -175,47 +166,41 @@ export class AppBootstrapService {
       label: 'Initializing scene...',
       async run(_state, app) {
         // Create scene and canvas
-        await app.initializeScene();
-
-        // Get URL layers
-        const urlState = parseUrlState();
-        if (!urlState || urlState.layers.length === 0) {
-          return;
-        }
-
-        // Get scene instance
-        const scene = app.getScene();
+        const scene = await app.initializeScene();
         if (!scene) {
           throw new Error('Scene not initialized');
         }
 
-        // Create all layers with empty textures (for data layers)
-        if (!app.configService) {
-          throw new Error('ConfigService not initialized');
-        }
-        const layersToCreate: LayerId[] = [];
-        for (const urlKey of urlState.layers) {
-          const layerId = app.configService.urlKeyToLayerId(urlKey) as LayerId;
-          layersToCreate.push(layerId);
+        // Get non-data layers (always create these)
+        const nonDataLayers = app.configService.getNonDataLayers() as LayerId[];
+
+        // Get layers from URL
+        const urlState = parseUrlState();
+        const urlLayerIds: LayerId[] = [];
+        if (urlState && urlState.layers.length > 0) {
+          for (const urlKey of urlState.layers) {
+            const layerId = app.configService.urlKeyToLayerId(urlKey) as LayerId;
+            urlLayerIds.push(layerId);
+          }
         }
 
-        console.log('[SCENE] Creating layers:', layersToCreate);
-        for (const layerId of layersToCreate) {
-          await scene.createLayer(layerId);
-          scene.setLayerVisible(layerId, true);
+        // Merge into Set to deduplicate
+        const allLayers = new Set<LayerId>([...nonDataLayers, ...urlLayerIds]);
+        console.log('[SCENE] Creating layers:', Array.from(allLayers));
+
+        // Create all layers via LayersService
+        const currentTime = app.stateService.getCurrentTime();
+        await app.layersService.createLayers(Array.from(allLayers), currentTime);
+
+        // Set visibility for URL layers only (use LayersService to keep state in sync)
+        for (const layerId of urlLayerIds) {
+          await app.layersService.toggle(layerId, true);
         }
 
         // Force one render frame to upload empty textures to GPU
         // This ensures __webglTexture exists for texSubImage3D in LOAD_LAYER_DATA
-        if (scene.getRenderer) {
-          const renderer = scene.getRenderer();
-          const camera = (scene as any).camera;
-          const threeScene = (scene as any).scene;
-          if (renderer && camera && threeScene) {
-            renderer.render(threeScene, camera);
-            console.log('[SCENE] Forced render to upload empty textures to GPU');
-          }
-        }
+        scene.renderFrame();
+        console.log('[SCENE] Forced render to upload empty textures to GPU');
       }
     },
 
@@ -243,9 +228,6 @@ export class AppBootstrapService {
         }
 
         // Convert URL keys to layer IDs
-        if (!app.configService) {
-          throw new Error('ConfigService not initialized');
-        }
         const layersToLoad: LayerId[] = [];
         for (const urlKey of urlState.layers) {
           const layerId = app.configService.urlKeyToLayerId(urlKey) as LayerId;
@@ -423,9 +405,6 @@ export class AppBootstrapService {
     }
 
     // Check autoContinue setting
-    if (!app.configService) {
-      throw new Error('ConfigService not initialized');
-    }
     const hypatiaConfig = app.configService.getHypatiaConfig();
     const autoContinue = hypatiaConfig.bootstrap.autoContinue;
 
