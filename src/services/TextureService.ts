@@ -83,7 +83,7 @@ export class TextureService {
     this.updateTextureData(texture, sliceData, sliceIndex)
 
     // Direct GPU update using texSubImage3D
-    const properties = this.renderer.properties.get(texture)
+    const properties = this.renderer.properties.get(texture) as any
     this.gl.bindTexture(this.gl.TEXTURE_3D, properties.__webglTexture)
 
     // Determine format and type from texture configuration
@@ -121,7 +121,7 @@ export class TextureService {
     sliceData: Uint16Array | Float32Array,
     sliceIndex: number
   ): void {
-    const texData = texture.image.data as Uint16Array | Float32Array
+    const texData = texture.image.data as unknown as Uint16Array | Float32Array
     const sliceSize = texture.image.width * texture.image.height
     const offset = sliceIndex * sliceSize
     texData.set(sliceData, offset)
@@ -138,7 +138,7 @@ export class TextureService {
    * @returns true if texture is on GPU
    */
   isTextureOnGPU(texture: THREE.Data3DTexture): boolean {
-    const properties = this.renderer.properties.get(texture)
+    const properties = this.renderer.properties.get(texture) as any
     return properties.__webglTexture !== undefined && properties.__webglTexture !== null
   }
 
@@ -161,7 +161,7 @@ export class TextureService {
    * @param threeFormat - THREE.js format
    * @returns WebGL format constant
    */
-  getWebGLFormat(threeFormat: THREE.PixelFormat): number {
+  getWebGLFormat(threeFormat: THREE.AnyPixelFormat): number {
     if (!this.gl) return 0
 
     switch (threeFormat) {
@@ -224,7 +224,7 @@ export class TextureService {
    * @param format - Pixel format
    * @returns Bytes per pixel
    */
-  private getBytesPerPixel(type: THREE.TextureDataType, format: THREE.PixelFormat): number {
+  private getBytesPerPixel(type: THREE.TextureDataType, format: THREE.AnyPixelFormat): number {
     // Determine bytes per component
     let bytesPerComponent = 1 // Default: UNSIGNED_BYTE
     switch (type) {

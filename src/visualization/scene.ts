@@ -6,11 +6,6 @@ import type { AnimationState } from './AnimationState';
 import type { EarthRenderService } from './earth.render-service';
 import type { SunRenderService } from './sun.render-service';
 import { TextRenderService } from './text.render-service';
-import { LayerFactory } from './LayerFactory';
-import type { DownloadService } from '../services/DownloadService';
-import type { TextureService } from '../services/TextureService';
-import type { DateTimeService } from '../services/DateTimeService';
-import type { ConfigService } from '../services/ConfigService';
 import * as perform from '../utils/performance';
 import { mouseToNDC, raycastObject, cartesianToLatLon } from '../utils/raycasting';
 
@@ -29,12 +24,6 @@ export class Scene {
   private perform: any;
   private performanceElement: HTMLElement | null = null;
   private textEnabled: boolean = false;
-
-  // Services (injected after construction)
-  private downloadService?: DownloadService;
-  private textureService?: TextureService;
-  private dateTimeService?: DateTimeService;
-  private configService?: ConfigService;
 
   constructor(canvas: HTMLCanvasElement, initialTime?: Date, preloadedImages?: Map<string, HTMLImageElement>) {
     this.preloadedImages = preloadedImages;
@@ -101,21 +90,6 @@ export class Scene {
   }
 
   /**
-   * Set services for layer creation (called after Scene construction)
-   */
-  setServices(
-    downloadService: DownloadService,
-    textureService: TextureService,
-    dateTimeService: DateTimeService,
-    configService: ConfigService
-  ): void {
-    this.downloadService = downloadService;
-    this.textureService = textureService;
-    this.dateTimeService = dateTimeService;
-    this.configService = configService;
-  }
-
-  /**
    * Start the animation loop
    * Should be called after bootstrap completes and initial layers are loaded
    */
@@ -129,14 +103,11 @@ export class Scene {
   /**
    * Create viewport controls service (called after Scene construction)
    */
-  createViewportControls(callbacks: ViewportControlsCallbacks, dateTimeService?: any): ViewportControlsService {
-    if (!this.configService) {
-      throw new Error('ConfigService not set. Call setServices() first.');
-    }
+  createViewportControls(callbacks: ViewportControlsCallbacks, configService: any, dateTimeService?: any): ViewportControlsService {
     this.viewportControls = new ViewportControlsService(
       this.camera,
       this,
-      this.configService,
+      configService,
       callbacks,
       dateTimeService
     );

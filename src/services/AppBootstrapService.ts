@@ -5,9 +5,8 @@
  */
 
 import { getCurrentTime } from './TimeService';
-import { getLatestRun, type ECMWFRun } from './ECMWFService';
-import { getUserLocation, type UserLocation } from './GeolocationService';
-import type { LocaleInfo } from './LocaleService';
+import { getLatestRun } from './ECMWFService';
+import { getUserLocation } from './GeolocationService';
 import { checkBrowserCapabilities, getCapabilityHelpUrls } from '../utils/capabilityCheck';
 import { preloadFont } from 'troika-three-text';
 import { TEXT_CONFIG } from '../config';
@@ -28,15 +27,10 @@ export interface BootstrapProgress {
   currentFile: string;
 }
 
-export interface BootstrapState {
-  bootstrapStatus: BootstrapStatus;
-  bootstrapProgress: BootstrapProgress | null;
-  bootstrapError: string | null;
-  currentTime: Date | null;
-  latestRun: ECMWFRun | null;
-  userLocation: UserLocation | null;
-  localeInfo: LocaleInfo | null;
-  preloadedImages: Map<string, HTMLImageElement> | null;
+// BootstrapState is now internal-only for tracking progress through steps
+// All actual state is mutated directly in AppStateService
+interface BootstrapState {
+  // Just used internally for progress reporting
 }
 
 export interface BootstrapStepProgress {
@@ -124,10 +118,12 @@ export class AppBootstrapService {
       start: 15,
       end: 25,
       label: 'Fetching server time...',
-      async run(state, app) {
+      async run(_state, app) {
         // Only fetch server time if not already set from URL
-        if (!state.currentTime) {
-          state.currentTime = await getCurrentTime(app.configService);
+        const currentTime = app.stateService.getCurrentTime();
+        if (!currentTime) {
+          const time = await getCurrentTime(app.configService);
+          app.stateService.setCurrentTime(time);
         }
       }
     },
@@ -136,8 +132,14 @@ export class AppBootstrapService {
       start: 25,
       end: 35,
       label: 'Checking latest forecast...',
-      async run(state) {
-        state.latestRun = await getLatestRun(state.currentTime!);
+      async run(_state, app) {
+        const currentTime = app.stateService.getCurrentTime();
+        if (currentTime) {
+          const latestRun = await getLatestRun(currentTime);
+          if (latestRun) {
+            app.stateService.setLatestRun(latestRun);
+          }
+        }
       }
     },
 
@@ -145,13 +147,15 @@ export class AppBootstrapService {
       start: 35,
       end: 35,
       label: 'Getting location...',
-      async run(state, app) {
+      async run(_state, app) {
         // Optional - fire and forget
         const hypatiaConfig = app.configService.getHypatiaConfig();
         if (hypatiaConfig.features.enableGeolocation) {
           getUserLocation()
             .then(location => {
-              state.userLocation = location;
+              if (location) {
+                app.stateService.setUserLocation(location);
+              }
             })
             .catch(() => {
               // Silently fail - geolocation is optional
@@ -336,13 +340,13 @@ export class AppBootstrapService {
   ): Promise<StepResult> {
     try {
       // Update progress to start
-      this.updateProgress(step, step.start, state, onProgress);
+      this.updateProgress(step, step.start, app, onProgress);
 
       // Run step logic
       await step.run(state, app, onProgress);
 
       // Update progress to end
-      this.updateProgress(step, step.end, state, onProgress);
+      this.updateProgress(step, step.end, app, onProgress);
 
       return { success: true };
     } catch (error) {
@@ -357,15 +361,16 @@ export class AppBootstrapService {
   private static updateProgress(
     step: BootstrapStepConfig,
     percentage: number,
-    state: BootstrapState,
+    app: AppInstance,
     onProgress?: BootstrapProgressCallback
   ): void {
-    state.bootstrapProgress = {
+    // Update AppStateService directly
+    app.stateService.setBootstrapProgress({
       loaded: 0,
       total: 100,
       percentage,
       currentFile: step.label
-    };
+    });
 
     if (onProgress) {
       onProgress({ percentage, label: step.label });
@@ -378,17 +383,11 @@ export class AppBootstrapService {
   static async bootstrap(
     app: AppInstance,
     onProgress?: BootstrapProgressCallback
-  ): Promise<BootstrapState> {
-    const state: BootstrapState = {
-      bootstrapStatus: 'loading',
-      bootstrapProgress: null,
-      bootstrapError: null,
-      currentTime: null,
-      latestRun: null,
-      userLocation: null,
-      localeInfo: null,
-      preloadedImages: null
-    };
+  ): Promise<void> {
+    const state: BootstrapState = {};
+
+    // Set initial bootstrap status
+    app.stateService.setBootstrapStatus('loading');
 
     console.log('Bootstrap.start');
 
@@ -398,9 +397,9 @@ export class AppBootstrapService {
 
       if (!success) {
         console.error(`Bootstrap failed at ${name}:`, error);
-        state.bootstrapStatus = 'error';
-        state.bootstrapError = error ?? null;
-        return state;
+        app.stateService.setBootstrapStatus('error');
+        app.stateService.setBootstrapError(error ?? null);
+        return;
       }
     }
 
@@ -409,14 +408,12 @@ export class AppBootstrapService {
     const autoContinue = hypatiaConfig.bootstrap.autoContinue;
 
     if (autoContinue) {
-      state.bootstrapStatus = 'ready';
+      app.stateService.setBootstrapStatus('ready');
       console.log('Bootstrap.done (auto-continue)');
     } else {
-      state.bootstrapStatus = 'waiting';
+      app.stateService.setBootstrapStatus('waiting');
       console.log('Bootstrap.done (waiting for user)');
     }
-
-    return state;
   }
 
   /**

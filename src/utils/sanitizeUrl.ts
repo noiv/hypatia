@@ -12,7 +12,6 @@ import { parsePartialUrlState, updateUrlState, type AppUrlState } from './urlSta
 import type { ConfigService } from '../services/ConfigService';
 import { EARTH_RADIUS_METERS } from './constants';
 import { latLonToCartesian } from './coordinates';
-import type { BootstrapState } from '../services/AppBootstrapService';
 
 /**
  * Altitude conversion helpers
@@ -58,16 +57,16 @@ function getDefaultTime(): Date {
  * Get default camera position using fallback chain:
  * URL → Locale centroid → Geolocation → (0,0)
  */
-function getDefaultCameraPosition(bootstrapState: BootstrapState | null): { lat: number; lon: number } {
+function getDefaultCameraPosition(localeInfo?: any, userLocation?: any): { lat: number; lon: number } {
   // Try locale-based centroid
-  if (bootstrapState?.localeInfo?.defaultLocation) {
-    const { lat, lon } = bootstrapState.localeInfo.defaultLocation;
+  if (localeInfo?.defaultLocation) {
+    const { lat, lon } = localeInfo.defaultLocation;
     return { lat, lon };
   }
 
   // Try geolocation
-  if (bootstrapState?.userLocation) {
-    const { latitude, longitude } = bootstrapState.userLocation;
+  if (userLocation) {
+    const { latitude, longitude } = userLocation;
     return { lat: latitude, lon: longitude };
   }
 
@@ -81,7 +80,8 @@ function getDefaultCameraPosition(bootstrapState: BootstrapState | null): { lat:
  */
 export function sanitizeUrl(
   configService: ConfigService,
-  bootstrapState: BootstrapState | null = null,
+  localeInfo?: any,
+  userLocation?: any,
   forceBootstrapCamera: boolean = false
 ): AppUrlState {
   const partial = parsePartialUrlState();
@@ -105,7 +105,7 @@ export function sanitizeUrl(
   const shouldUseBootstrapDefault = !partial.camera || forceBootstrapCamera;
 
   if (shouldUseBootstrapDefault) {
-    const { lat, lon } = getDefaultCameraPosition(bootstrapState);
+    const { lat, lon } = getDefaultCameraPosition(localeInfo, userLocation);
     const distance = partial.camera?.distance || altitudeToDistance(defaultAltitude);
     const position = latLonToCartesian(lat, lon, distance);
     camera = {

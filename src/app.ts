@@ -64,7 +64,7 @@ interface AppComponent extends m.Component {
 
   // Bootstrap
   runBootstrap(): Promise<void>;
-  initializeScene(): Promise<void>;
+  initializeScene(): Promise<Scene | undefined>;
 
   // Handlers
   handleTimeChange(newTime: Date): void;
@@ -95,8 +95,7 @@ export const App: AppComponent = {
     await this.configService.loadAll();
 
     // Sanitize URL and get corrected state (needs config loaded first)
-    const bootstrapState = { localeInfo } as any;
-    const sanitizedState = sanitizeUrl(this.configService, bootstrapState);
+    const sanitizedState = sanitizeUrl(this.configService, localeInfo);
 
     // 2. Download service
     const hypatiaConfig = this.configService.getHypatiaConfig();
@@ -177,7 +176,7 @@ export const App: AppComponent = {
       onTimeChange: (newTime) => this.handleTimeChange(newTime),
       onCameraChange: () => this.appService?.updateUrl(),
       getCurrentTime: () => this.stateService!.getCurrentTime()
-    }, this.dateTimeService);
+    }, this.configService, this.dateTimeService);
 
     // Register event handlers
     this.eventService!.register(window, 'keydown', this.eventService!.handleKeydown as EventListener);
@@ -200,7 +199,7 @@ export const App: AppComponent = {
   },
 
   async runBootstrap() {
-    const result = await AppBootstrapService.bootstrap(
+    await AppBootstrapService.bootstrap(
       {
         initializeScene: this.initializeScene.bind(this),
         activate: this.activate.bind(this),
@@ -221,19 +220,10 @@ export const App: AppComponent = {
       }
     );
 
-    // Update state with bootstrap results
-    const urlState = parseUrlState();
-    this.stateService!.update({
-      bootstrapStatus: result.bootstrapStatus,
-      bootstrapProgress: result.bootstrapProgress,
-      bootstrapError: result.bootstrapError,
-      currentTime: urlState?.time || result.currentTime || this.stateService!.getCurrentTime(),
-      latestRun: result.latestRun,
-      userLocation: result.userLocation,
-      preloadedImages: result.preloadedImages
-    });
+    // Bootstrap directly mutates stateService, no need to copy results
+    const bootstrapStatus = this.stateService!.getBootstrapStatus();
 
-    if (result.bootstrapStatus === 'ready') {
+    if (bootstrapStatus === 'ready') {
       // Set layer state (now owned by LayersService)
       if (this.layersService) {
         this.stateService!.setLayerState(this.layersService.getLayerState());
@@ -305,15 +295,6 @@ export const App: AppComponent = {
     const renderer = this.scene.getRenderer?.();
     if (renderer) {
       this.textureService = new TextureService(renderer);
-
-      // Inject services into scene immediately after creation
-      // This must happen before bootstrap creates layers
-      this.scene.setServices(
-        this.downloadService!,
-        this.textureService,
-        this.dateTimeService!,
-        this.configService!
-      );
 
       // Inject Scene and TextureService into LayersService
       // This must happen before LayersService.createLayers() is called
