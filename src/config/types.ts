@@ -50,6 +50,7 @@ export interface HypatiaConfig {
   bootstrap: {
     autoContinue: boolean;
     defaultTime: 'nearest-run' | 'current-utc'; // How to calculate default time when URL has no dt
+    stepDelayMs: number; // Delay after each bootstrap step (0 = no delay, for debugging/visibility)
   };
   dataCache: {
     maxConcurrentDownloads: number;

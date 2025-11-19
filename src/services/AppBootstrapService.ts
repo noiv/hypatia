@@ -199,9 +199,14 @@ export class AppBootstrapService {
         const currentTime = app.stateService.getCurrentTime();
         await app.layersService.createLayers(Array.from(allLayers), currentTime);
 
-        // Set visibility for URL layers only (use LayersService to keep state in sync)
+        // Set visibility for URL layers (data will be loaded in LOAD_LAYER_DATA step)
         for (const layerId of urlLayerIds) {
-          await app.layersService.toggle(layerId, true);
+          const metadata = app.layersService.getMetadata(layerId);
+          if (metadata) {
+            metadata.isVisible = true;
+            metadata.layer.setVisible(true);
+            console.log(`[LayersService] ${layerId} visibility: true`);
+          }
         }
 
         // Force one render frame to upload empty textures to GPU
@@ -382,14 +387,20 @@ export class AppBootstrapService {
     onProgress?: BootstrapProgressCallback
   ): Promise<StepResult> {
     try {
+      // Get delay config
+      const hypatiaConfig = app.configService.getHypatiaConfig();
+      const stepDelayMs = hypatiaConfig.bootstrap.stepDelayMs || 0;
+
       // Update progress to start
       this.updateProgress(step, step.start, app, onProgress);
+      if (stepDelayMs > 0) await new Promise(resolve => setTimeout(resolve, stepDelayMs));
 
       // Run step logic
       await step.run(state, app, onProgress);
 
       // Update progress to end
       this.updateProgress(step, step.end, app, onProgress);
+      if (stepDelayMs > 0) await new Promise(resolve => setTimeout(resolve, stepDelayMs));
 
       return { success: true };
     } catch (error) {
