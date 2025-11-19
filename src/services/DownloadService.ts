@@ -16,7 +16,6 @@
 import type { LayerId } from '../visualization/ILayer'
 import type { TimeStep } from '../config/types'
 import { PriorityQueue, type Priority } from '../utils/PriorityQueue'
-import { getCacheStrategy } from './CacheStrategy'
 import type { ConfigService } from './ConfigService'
 import type { DateTimeService } from './DateTimeService'
 
@@ -138,6 +137,7 @@ export class DownloadService {
   private totalDownloadTime: number = 0
 
   // Services
+  // @ts-expect-error - Reserved for future config lookups
   private configService: ConfigService
   private dateTimeService: DateTimeService
 
@@ -506,42 +506,6 @@ export class DownloadService {
     }
 
     this.isProcessing = false
-  }
-
-  /**
-   * Calculate window indices centered at current index
-   */
-  private calculateWindowIndices(
-    currentIndex: number,
-    totalTimesteps: number,
-    maxRangeDays: number
-  ): number[] {
-    // Assuming 6-hour timestep (4 steps per day)
-    const stepsPerDay = 4
-    const windowSteps = maxRangeDays * stepsPerDay
-    const halfWindow = Math.floor(windowSteps / 2)
-
-    const start = Math.max(0, currentIndex - halfWindow)
-    const end = Math.min(totalTimesteps - 1, currentIndex + halfWindow)
-
-    // Get all indices in window
-    const windowIndices: number[] = []
-    for (let i = start; i <= end; i++) {
-      windowIndices.push(i)
-    }
-
-    // Filter out current ± 1 (already loaded as priority)
-    const adjacentSet = new Set([currentIndex - 1, currentIndex, currentIndex + 1])
-
-    // Apply cache strategy to determine load order
-    const hypatiaConfig = this.configService.getHypatiaConfig()
-    const strategy = getCacheStrategy(hypatiaConfig.dataCache.cacheStrategy)
-
-    // Strategy expects indices relative to current, so we need to map our window indices
-    const orderedIndices = strategy.getLoadOrder(currentIndex, totalTimesteps)
-
-    // Filter to only include indices within our window
-    return orderedIndices.filter((i) => i >= start && i <= end && !adjacentSet.has(i))
   }
 
   /**

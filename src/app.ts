@@ -226,9 +226,7 @@ export const App: AppComponent = {
 
     if (bootstrapStatus === 'ready') {
       // Set layer state (now owned by LayersService)
-      if (this.layersService) {
-        this.stateService!.setLayerState(this.layersService.getLayerState());
-      }
+      this.stateService!.setLayerState(this.layersService!.getLayerState());
 
       // Calculate slider range
       const hypatiaConfig = this.configService!.getHypatiaConfig();
@@ -247,15 +245,13 @@ export const App: AppComponent = {
       this.stateService!.update({ sliderStartTime, sliderEndTime });
 
       // Create AppService (TextureService and LayersService already created in initializeScene)
-      if (this.layersService) {
-        this.appService = new AppService(
-          this.stateService!,
-          () => this.scene,
-          this.layersService,
-          this.configService!,
-          () => this.isBootstrapping
-        );
-      }
+      this.appService = new AppService(
+        this.stateService!,
+        () => this.scene,
+        this.layersService!,
+        this.configService!,
+        () => this.isBootstrapping
+      );
     }
 
     // Log memory usage
@@ -299,9 +295,7 @@ export const App: AppComponent = {
 
       // Inject Scene and TextureService into LayersService
       // This must happen before LayersService.createLayers() is called
-      if (this.layersService) {
-        this.layersService.setServices(this.scene, this.textureService);
-      }
+      this.layersService!.setServices(this.scene, this.textureService);
     }
 
     this.stateService!.setScene(this.scene);
@@ -324,23 +318,23 @@ export const App: AppComponent = {
     this.scene?.updateTime(clamped);
 
     // Prioritize timestamps for progressive loading
-    if (this.downloadService) {
-      const weatherLayers: LayerId[] = ['temp2m', 'precipitation'];
-      for (const layerId of weatherLayers) {
-        this.downloadService.prioritizeTimestamps(layerId, clamped);
-      }
+    const weatherLayers: LayerId[] = ['temp2m', 'precipitation'];
+    for (const layerId of weatherLayers) {
+      this.downloadService!.prioritizeTimestamps(layerId, clamped);
     }
 
-    this.appService?.updateUrl();
+    this.appService?.updateUrl(); // Optional - may not exist during bootstrap
     m.redraw();
   },
 
   async handleLayerToggle(layerId: LayerId) {
     // Delegate to AppService which uses LayersService
-    if (this.appService) {
-      await this.appService.handleLayerToggle(layerId);
-      this.appService.updateUrl();
+    if (!this.appService) {
+      console.warn('[App] handleLayerToggle called before AppService initialized');
+      return;
     }
+    await this.appService.handleLayerToggle(layerId);
+    this.appService.updateUrl();
     m.redraw();
   },
 
@@ -373,9 +367,11 @@ export const App: AppComponent = {
   },
 
   handleFullscreenToggle() {
-    if (this.appService) {
-      this.appService.handleFullscreenToggle();
+    if (!this.appService) {
+      console.warn('[App] handleFullscreenToggle called before AppService initialized');
+      return;
     }
+    this.appService.handleFullscreenToggle();
     m.redraw();
   },
 
@@ -481,6 +477,17 @@ export const App: AppComponent = {
         this.stateService!.setDownloadMode(downloadMode);
         this.stateService!.setBootstrapStatus('ready');
         console.log(`[App] User selected download mode: ${downloadMode}`);
+
+        // Create AppService now that bootstrap is complete
+        if (this.layersService && !this.appService) {
+          this.appService = new AppService(
+            this.stateService!,
+            () => this.scene,
+            this.layersService,
+            this.configService!,
+            () => this.isBootstrapping
+          );
+        }
 
         // If aggressive, trigger background downloads
         if (downloadMode === 'aggressive') {

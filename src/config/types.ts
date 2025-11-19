@@ -113,6 +113,7 @@ export interface Layer {
   };
   description: string;
   ecmwfParams: string[];
+  dataFolders: string[];
   visualization: LayerVisualization;
   ui: LayerUI;
   availability?: 'limited' | 'full';

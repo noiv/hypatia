@@ -566,3 +566,14 @@ div.performance .info {
   font-size: 13px;
   opacity: 0.7;
 }
+
+/* Re-enable pointer events on UI panels (container has pointer-events: none) */
+.header,
+.layers,
+.layer-group,
+.layer-button-wrapper,
+.time-bar,
+.time-bar-wrapper,
+.date-time {
+  pointer-events: auto;
+}

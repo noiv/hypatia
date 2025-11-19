@@ -252,18 +252,17 @@ export class AppBootstrapService {
 
         console.log('[LOAD_LAYER_DATA] Data layers:', dataLayersToLoad);
 
-        // NEW APPROACH: Use DownloadService if available
-        if (app.downloadService) {
-          console.log('[LOAD_LAYER_DATA] Using DownloadService for progressive loading');
+        // Use DownloadService for progressive loading
+        console.log('[LOAD_LAYER_DATA] Using DownloadService for progressive loading');
 
-          // Calculate per-layer progress allocation
-          const progressPerLayer = LOAD_LAYER_DATA_RANGE / dataLayersToLoad.length;
-          let currentLayerIndex = 0;
+        // Calculate per-layer progress allocation
+        const progressPerLayer = LOAD_LAYER_DATA_RANGE / dataLayersToLoad.length;
+        let currentLayerIndex = 0;
 
-          const currentTime = urlState.time || new Date();
+        const currentTime = urlState.time || new Date();
 
-          // Initialize data loading for each layer
-          for (const layerId of dataLayersToLoad) {
+        // Initialize data loading for each layer
+        for (const layerId of dataLayersToLoad) {
             const layerProgressStart = LOAD_LAYER_DATA_START + (currentLayerIndex * progressPerLayer);
 
             captureProgress({
@@ -271,9 +270,9 @@ export class AppBootstrapService {
               label: `Loading ${layerId}...`
             });
 
-            // Initialize layer with progress callback
-            // Always use 'on-demand' during bootstrap (only load 2 critical timestamps)
-            await app.downloadService.initializeLayer(
+          // Initialize layer with progress callback
+          // Always use 'on-demand' during bootstrap (only load 2 critical timestamps)
+          await app.downloadService!.initializeLayer(
               layerId,
               currentTime,
               (loaded, total) => {
@@ -287,29 +286,21 @@ export class AppBootstrapService {
               'on-demand'  // Bootstrap always uses on-demand mode
             );
 
-            currentLayerIndex++;
-          }
-
-          // Wait for all critical downloads to complete
-          captureProgress({
-            percentage: LOAD_LAYER_DATA_START + LOAD_LAYER_DATA_RANGE - 5,
-            label: 'Waiting for critical data...'
-          });
-
-          await app.downloadService.done();
-
-          captureProgress({
-            percentage: LOAD_LAYER_DATA_START + LOAD_LAYER_DATA_RANGE,
-            label: 'All layer data loaded'
-          });
-        } else {
-          // No downloadService provided - skip data loading
-          console.warn('[LOAD_LAYER_DATA] No downloadService provided, skipping data loading');
-          captureProgress({
-            percentage: LOAD_LAYER_DATA_START + LOAD_LAYER_DATA_RANGE,
-            label: 'Data loading skipped'
-          });
+          currentLayerIndex++;
         }
+
+        // Wait for all critical downloads to complete
+        captureProgress({
+          percentage: LOAD_LAYER_DATA_START + LOAD_LAYER_DATA_RANGE - 5,
+          label: 'Waiting for critical data...'
+        });
+
+        await app.downloadService!.done();
+
+        captureProgress({
+          percentage: LOAD_LAYER_DATA_START + LOAD_LAYER_DATA_RANGE,
+          label: 'All layer data loaded'
+        });
       }
     },
 

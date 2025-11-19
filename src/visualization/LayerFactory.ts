@@ -60,13 +60,17 @@ export class LayerFactory {
         return GraticuleRenderService.create(layerId);
 
       case 'temp2m': {
+        // Get data folder from config
+        const layerConfig = configService.getLayerById(layerId);
+        const dataFolder = layerConfig?.dataFolders[0] || 'temp2m';
+
         // Generate timesteps for the layer (6-hour intervals)
         const timeSteps = dateTimeService.generateTimeSteps(
           currentTime,
           maxRangeDays,
           6, // stepHours
           dataBaseUrl,
-          'temp2m'
+          dataFolder
         );
 
         // Create layer with services
@@ -85,13 +89,17 @@ export class LayerFactory {
       }
 
       case 'precipitation': {
+        // Get data folder from config
+        const layerConfig = configService.getLayerById(layerId);
+        const dataFolder = layerConfig?.dataFolders[0] || 'tprate';
+
         // Generate timesteps for the layer (6-hour intervals)
         const timeSteps = dateTimeService.generateTimeSteps(
           currentTime,
           maxRangeDays,
           6, // stepHours
           dataBaseUrl,
-          'precipitation'
+          dataFolder
         );
 
         // Create layer with services
@@ -110,13 +118,17 @@ export class LayerFactory {
       }
 
       case 'wind10m': {
-        // Generate timesteps for U and V components (6-hour intervals)
+        // Get data folders from config (U and V components)
+        const layerConfig = configService.getLayerById(layerId);
+        const dataFolderU = layerConfig?.dataFolders[0] || 'wind10m_u';
+
+        // Generate timesteps for U component (6-hour intervals)
         const timeSteps = dateTimeService.generateTimeSteps(
           currentTime,
           maxRangeDays,
           6, // stepHours
           dataBaseUrl,
-          'wind10m_u' // Wind U component
+          dataFolderU
         );
 
         // Wind layer doesn't use TextureService (uses WebGPU compute)
