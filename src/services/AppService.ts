@@ -32,10 +32,11 @@ export class AppService {
    */
   async handleLayerToggle(layerId: LayerId): Promise<void> {
     try {
-      // Check if layer is registered
+      // Check if layer is registered - if not, create it first
       if (!this.layersService.hasLayer(layerId)) {
-        console.warn(`[AppService] Layer ${layerId} not registered, cannot toggle`)
-        return
+        console.log(`[AppService] Layer ${layerId} not registered, creating it`)
+        const currentTime = this.stateService.getCurrentTime()
+        await this.layersService.createLayers([layerId], currentTime)
       }
 
       // Get current visibility
