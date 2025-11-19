@@ -24,8 +24,7 @@ export class AppStateService {
 
     this.state = {
       currentTime: now,
-      sliderStartTime: now,  // Will be calculated properly in oninit
-      sliderEndTime: now,    // Will be calculated properly in oninit
+      initialTime: now,
       localeInfo: initialState.localeInfo,
       timezone: initialState.timezone,
       isFullscreen: false,
@@ -42,6 +41,9 @@ export class AppStateService {
       layerState: null,
       ...initialState
     };
+
+    // Set initialTime to the actual currentTime (after spread)
+    this.state.initialTime = this.state.currentTime;
   }
 
   /**

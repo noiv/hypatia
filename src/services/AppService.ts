@@ -68,7 +68,6 @@ export class AppService {
 
     const scene = this.getScene()
     const state = this.stateService.get()
-    if (!scene) return
 
     // Get visible layers from LayersService
     const visibleLayerIds = this.layersService.getVisibleLayerIds()
@@ -89,7 +88,7 @@ export class AppService {
     debouncedUpdateUrlState(
       {
         time: state.currentTime,
-        camera: scene.getCameraState(),
+        camera: scene!.getCameraState(),
         layers,
       },
       100

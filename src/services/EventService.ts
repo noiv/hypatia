@@ -32,6 +32,7 @@ export class EventService {
     private getCurrentTime: () => Date,
     private handlers: KeyboardShortcutHandlers,
     private dateTimeService: DateTimeService,
+    // @ts-expect-error - Reserved for future use
     private configService: ConfigService
   ) {}
 

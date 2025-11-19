@@ -29,14 +29,19 @@ function distanceToAltitude(distance: number): number {
 }
 
 /**
- * Get default time (current browser time snapped to nearest valid cycle)
- * Note: Does NOT clamp to any range - app only cares about maxRangeDays window
+ * Get default time
+ * @param mode - 'nearest-run': snap to nearest model run (00z, 06z, 12z, 18z)
+ *               'current-utc': use exact current UTC time
  */
-function getDefaultTime(): Date {
-  // Find the most recent model run (00z, 06z, 12z, or 18z)
+function getDefaultTime(mode: 'nearest-run' | 'current-utc' = 'nearest-run'): Date {
   const now = new Date();
-  const currentHourUTC = now.getUTCHours();
 
+  if (mode === 'current-utc') {
+    return now;
+  }
+
+  // Find the most recent model run (00z, 06z, 12z, or 18z)
+  const currentHourUTC = now.getUTCHours();
   const latestRunDate = new Date(now);
   latestRunDate.setUTCMinutes(0, 0, 0);
 
@@ -91,9 +96,10 @@ export function sanitizeUrl(
   const hypatiaConfig = configService.getHypatiaConfig();
   const defaultAltitude = hypatiaConfig.visualization.defaultAltitude;
   const defaultLayers = hypatiaConfig.visualization.defaultLayers;
+  const defaultTimeMode = hypatiaConfig.bootstrap.defaultTime;
 
   // Fill in time
-  const time = partial.time || getDefaultTime();
+  const time = partial.time || getDefaultTime(defaultTimeMode);
   if (!partial.time) {
     changes.push(`dt: (empty) → ${time.toISOString()}`);
   }

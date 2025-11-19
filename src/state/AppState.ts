@@ -14,8 +14,7 @@ import type { LocaleInfo } from '../services/LocaleService';
 export interface AppState {
   // Time
   currentTime: Date;
-  sliderStartTime: Date;  // Fixed slider edge (calculated once at init from maxRangeDays)
-  sliderEndTime: Date;    // Fixed slider edge (calculated once at init from maxRangeDays)
+  initialTime: Date;  // Fixed reference time from page load (for slider bounds)
 
   // Locale
   localeInfo: LocaleInfo;

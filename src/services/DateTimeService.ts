@@ -49,6 +49,22 @@ export class DateTimeService {
   }
 
   /**
+   * Calculate slider bounds (data window adjusted for UI)
+   * Ends 6 hours earlier than data window to align with last timestep (18z)
+   */
+  calculateSliderBounds(
+    currentTime: Date,
+    maxRangeDays: number
+  ): { startTime: Date; endTime: Date } {
+    const { startTime, endTime } = this.calculateDataWindow(currentTime, maxRangeDays)
+
+    // Adjust end time to 18z of last day (last data timestep)
+    endTime.setUTCHours(endTime.getUTCHours() - 6)
+
+    return { startTime, endTime }
+  }
+
+  /**
    * Check if time is within data window
    *
    * @param time - Time to check (UTC)

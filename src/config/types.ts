@@ -49,6 +49,7 @@ export interface HypatiaConfig {
   };
   bootstrap: {
     autoContinue: boolean;
+    defaultTime: 'nearest-run' | 'current-utc'; // How to calculate default time when URL has no dt
   };
   dataCache: {
     maxConcurrentDownloads: number;

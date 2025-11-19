@@ -48,6 +48,8 @@ export interface AppInstance {
   stateService: AppStateService;
   layersService: LayersService;
   downloadService: DownloadService;
+  setAppService: (service: any) => void; // Setter for AppService
+  isBootstrapping: () => boolean; // Function that returns current bootstrap state
 }
 
 interface StepResult {
@@ -306,7 +308,7 @@ export class AppBootstrapService {
 
     ACTIVATE: {
       start: 95,
-      end: 98,
+      end: 96,
       label: 'Activating...',
       async run(_state, app) {
         // Force one final render to ensure all textures are uploaded
@@ -318,7 +320,36 @@ export class AppBootstrapService {
 
         // Activate scene and UI (starts animation loop)
         app.activate();
+      }
+    },
 
+    CREATE_APP_SERVICE: {
+      start: 96,
+      end: 98,
+      label: 'Initializing services...',
+      async run(_state, app) {
+        // Create AppService now that scene and layers are ready
+        const { AppService } = await import('../services/AppService');
+        const appService = new AppService(
+          app.stateService,
+          app.getScene,
+          app.layersService!,
+          app.configService,
+          app.isBootstrapping
+        );
+
+        // Set it on the actual app component via setter
+        app.setAppService(appService);
+
+        console.log('[CREATE_APP_SERVICE] AppService created');
+      }
+    },
+
+    FINALIZE: {
+      start: 98,
+      end: 100,
+      label: 'Ready',
+      async run(_state, app) {
         // Check autoContinue BEFORE setting status
         const hypatiaConfig = app.configService.getHypatiaConfig();
         const autoContinue = hypatiaConfig.bootstrap.autoContinue;
@@ -334,14 +365,7 @@ export class AppBootstrapService {
           app.stateService.setBootstrapStatus('ready');
           console.log(`Bootstrap.done (auto-continue with ${defaultDownloadMode} mode)`);
         }
-      }
-    },
 
-    FINALIZE: {
-      start: 98,
-      end: 100,
-      label: 'Ready',
-      async run() {
         // Brief pause for animation to complete
         await new Promise(resolve => setTimeout(resolve, 100));
       }

@@ -114,8 +114,6 @@ export const App: AppComponent = {
     // Initialize state service
     this.stateService = new AppStateService({
       currentTime: sanitizedState.time,
-      sliderStartTime: sanitizedState.time,  // Will be set in bootstrap
-      sliderEndTime: sanitizedState.time,    // Will be set in bootstrap
       blend: 0.0,
       textEnabled: sanitizedState.layers.includes('text'),
       localeInfo,
@@ -165,17 +163,13 @@ export const App: AppComponent = {
 
   activate() {
     const canvas = document.querySelector('.scene-canvas') as HTMLCanvasElement;
-    if (!canvas) return;
-
-    if (!this.scene) return;
-
     // Start animation loop
-    this.scene.start();
+    this.scene!.start();
 
     // Initialize viewport controls
-    this.viewportControls = this.scene.createViewportControls({
+    this.viewportControls = this.scene!.createViewportControls({
       onTimeChange: (newTime) => this.handleTimeChange(newTime),
-      onCameraChange: () => this.appService?.updateUrl(),
+      onCameraChange: () => this.appService!.updateUrl(),
       getCurrentTime: () => this.stateService!.getCurrentTime()
     }, this.configService, this.dateTimeService);
 
@@ -208,7 +202,9 @@ export const App: AppComponent = {
         getScene: () => this.scene,
         stateService: this.stateService!,
         downloadService: this.downloadService!,
-        layersService: this.layersService!
+        layersService: this.layersService!,
+        setAppService: (service) => { this.appService = service; },
+        isBootstrapping: () => this.isBootstrapping
       },
       (progress) => {
         this.stateService!.setBootstrapProgress({
@@ -228,30 +224,8 @@ export const App: AppComponent = {
       // Set layer state (now owned by LayersService)
       this.stateService!.setLayerState(this.layersService!.getLayerState());
 
-      // Calculate slider range
-      const hypatiaConfig = this.configService!.getHypatiaConfig();
-      const maxRangeDays = hypatiaConfig.data.maxRangeDays;
-      const daysBack = Math.floor(maxRangeDays / 2);
-      const currentTime = this.stateService!.getCurrentTime();
-
-      const sliderStartTime = new Date(currentTime);
-      sliderStartTime.setUTCDate(sliderStartTime.getUTCDate() - daysBack);
-      sliderStartTime.setUTCHours(0, 0, 0, 0);
-
-      const sliderEndTime = new Date(sliderStartTime);
-      sliderEndTime.setUTCDate(sliderEndTime.getUTCDate() + maxRangeDays);
-      sliderEndTime.setUTCHours(sliderEndTime.getUTCHours() - 6);
-
-      this.stateService!.update({ sliderStartTime, sliderEndTime });
-
-      // Create AppService (TextureService and LayersService already created in initializeScene)
-      this.appService = new AppService(
-        this.stateService!,
-        () => this.scene,
-        this.layersService!,
-        this.configService!,
-        () => this.isBootstrapping
-      );
+      // Sync URL with current state (AppService created in bootstrap)
+      this.appService!.updateUrl();
     }
 
     // Log memory usage
@@ -274,42 +248,44 @@ export const App: AppComponent = {
     }
 
     const state = this.stateService!.get();
-    const urlState = parseUrlState();
+    const urlState = parseUrlState()!; // Guaranteed to exist after sanitizeUrl
 
     // Create scene
     this.scene = new Scene(canvas, state.currentTime, state.preloadedImages || undefined);
 
-    // Set camera position from URL if available
-    if (urlState?.camera) {
-      this.scene.setCameraState(urlState.camera, urlState.camera.distance);
-    }
+    // Set camera position from URL
+    this.scene.setCameraState(urlState.camera, urlState.camera.distance);
 
     // Set initial scene state
     this.scene.setBasemapBlend(state.blend);
     this.scene.updateTime(state.currentTime);
 
     // Create TextureService now that we have the renderer
-    const renderer = this.scene.getRenderer?.();
-    if (renderer) {
-      this.textureService = new TextureService(renderer);
+    const renderer = this.scene.getRenderer()!;
+    this.textureService = new TextureService(renderer);
 
-      // Inject Scene and TextureService into LayersService
-      // This must happen before LayersService.createLayers() is called
-      this.layersService!.setServices(this.scene, this.textureService);
-    }
+    // Inject Scene and TextureService into LayersService
+    // This must happen before LayersService.createLayers() is called
+    this.layersService!.setServices(this.scene, this.textureService);
 
     this.stateService!.setScene(this.scene);
     return this.scene;
   },
 
   handleTimeChange(newTime: Date) {
+    // Get fixed slider bounds from DateTimeService (using initialTime, not currentTime)
+    const hypatiaConfig = this.configService!.getHypatiaConfig();
     const state = this.stateService!.get();
+    const { startTime, endTime } = this.dateTimeService!.calculateSliderBounds(
+      state.initialTime,
+      hypatiaConfig.data.maxRangeDays
+    );
 
-    // Clamp time to fixed slider bounds (data window)
+    // Clamp time to slider bounds
     const clamped = this.dateTimeService!.clampToFixedBounds(
       newTime,
-      state.sliderStartTime,
-      state.sliderEndTime
+      startTime,
+      endTime
     );
 
     this.stateService!.setCurrentTime(clamped);
@@ -321,7 +297,7 @@ export const App: AppComponent = {
       this.downloadService!.prioritizeTimestamps(layerId, clamped);
     }
 
-    this.appService?.updateUrl(); // Optional - may not exist during bootstrap
+    this.appService!.updateUrl();
     m.redraw();
   },
 
@@ -374,11 +350,7 @@ export const App: AppComponent = {
   },
 
   handleTextSizeChange(action: 'increase' | 'decrease' | 'reset') {
-    const scene = this.scene;
-    if (!scene) return;
-
-    const textService = scene.getTextService();
-    if (!textService) return;
+    const textService = this.scene!.getTextService()!;
 
     switch (action) {
       case 'increase':
@@ -432,16 +404,14 @@ export const App: AppComponent = {
    * Called when user chooses "Aggressive" mode
    */
   startAggressiveDownloads() {
-    if (!this.layersService || !this.downloadService) return;
-
-    const visibleLayerIds = this.layersService.getVisibleLayerIds();
+    const visibleLayerIds = this.layersService!.getVisibleLayerIds();
     console.log(`[App] Starting aggressive downloads for layers:`, visibleLayerIds);
 
     // Queue all timesteps for each visible data layer
     for (const layerId of visibleLayerIds) {
-      const metadata = this.layersService.getMetadata(layerId);
+      const metadata = this.layersService!.getMetadata(layerId);
       if (metadata?.isDataLayer) {
-        this.downloadService.downloadAllTimesteps(layerId);
+        this.downloadService!.downloadAllTimesteps(layerId);
       }
     }
   },
@@ -483,16 +453,8 @@ export const App: AppComponent = {
         this.stateService!.setBootstrapStatus('ready');
         console.log(`[App] User selected download mode: ${downloadMode}`);
 
-        // Create AppService now that bootstrap is complete
-        if (this.layersService && !this.appService) {
-          this.appService = new AppService(
-            this.stateService!,
-            () => this.scene,
-            this.layersService,
-            this.configService!,
-            () => this.isBootstrapping
-          );
-        }
+        // Sync URL with current state (AppService created in bootstrap)
+        this.appService!.updateUrl();
 
         // If aggressive, trigger background downloads
         if (downloadMode === 'aggressive') {
@@ -540,8 +502,7 @@ export const App: AppComponent = {
 
       m(TimeBarPanel, {
         currentTime: state.currentTime,
-        startTime: state.sliderStartTime,
-        endTime: state.sliderEndTime,
+        initialTime: state.initialTime,
         onTimeChange: (time) => this.handleTimeChange(time),
         dateTimeService: this.dateTimeService!,
         configService: this.configService!

@@ -10,8 +10,7 @@ import type { DateTimeService } from '../services/DateTimeService';
 
 export interface TimeBarPanelAttrs {
   currentTime: Date;
-  startTime: Date;
-  endTime: Date;
+  initialTime: Date;  // Fixed reference time for slider bounds
   onTimeChange: (time: Date) => void;
   dateTimeService: DateTimeService;
   configService: ConfigService;
@@ -19,7 +18,14 @@ export interface TimeBarPanelAttrs {
 
 export const TimeBarPanel: m.Component<TimeBarPanelAttrs> = {
   view(vnode) {
-    const { currentTime, startTime, endTime, onTimeChange, dateTimeService, configService } = vnode.attrs;
+    const { currentTime, initialTime, onTimeChange, dateTimeService, configService } = vnode.attrs;
+
+    // Calculate fixed slider bounds from initialTime (never changes during session)
+    const hypatiaConfig = configService.getHypatiaConfig();
+    const { startTime, endTime } = dateTimeService.calculateSliderBounds(
+      initialTime,
+      hypatiaConfig.data.maxRangeDays
+    );
 
     // Calculate slider value (0-1 through the forecast range)
     const rangeProgress = (currentTime.getTime() - startTime.getTime()) /
