@@ -43,11 +43,12 @@
     "preloadCritical": true
   },
   "bootstrap": {
-    "autoContinue": true
+    "autoContinue": false
   },
   "dataCache": {
     "maxConcurrentDownloads": 4,
-    "cacheStrategy": "future-first"
+    "cacheStrategy": "future-first",
+    "downloadMode": "on-demand"
   },
   "features": {
     "enableGeolocation": false

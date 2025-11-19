@@ -34,6 +34,7 @@ export interface AppState {
   bootstrapStatus: BootstrapStatus;
   bootstrapProgress: BootstrapProgress | null;
   bootstrapError: string | null;
+  downloadMode: 'aggressive' | 'on-demand';
 
   // Preloaded resources
   preloadedImages: Map<string, HTMLImageElement> | null;

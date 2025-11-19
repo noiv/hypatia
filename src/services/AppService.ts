@@ -43,11 +43,14 @@ export class AppService {
 
       // Toggle visibility using LayersService
       const currentTime = this.stateService.getCurrentTime()
+      const downloadMode = this.stateService.getDownloadMode()
+
       await this.layersService.toggle(layerId, !isVisible, {
         currentTime,
+        downloadMode,
       })
 
-      console.log(`[AppService] Toggled ${layerId}: ${!isVisible}`)
+      console.log(`[AppService] Toggled ${layerId}: ${!isVisible} (${downloadMode} mode)`)
     } catch (error) {
       console.error(`[AppService] Layer toggle failed:`, error)
     }

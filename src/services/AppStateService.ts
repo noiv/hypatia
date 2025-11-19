@@ -35,6 +35,7 @@ export class AppStateService {
       bootstrapStatus: 'loading',
       bootstrapProgress: null,
       bootstrapError: null,
+      downloadMode: 'on-demand',  // Default to on-demand
       preloadedImages: null,
       latestRun: null,
       userLocation: null,
@@ -133,6 +134,14 @@ export class AppStateService {
 
   setBootstrapError(error: string | null): void {
     this.state.bootstrapError = error;
+  }
+
+  getDownloadMode(): 'aggressive' | 'on-demand' {
+    return this.state.downloadMode;
+  }
+
+  setDownloadMode(mode: 'aggressive' | 'on-demand'): void {
+    this.state.downloadMode = mode;
   }
 
   // Preloaded resources

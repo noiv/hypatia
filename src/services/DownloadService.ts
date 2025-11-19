@@ -170,11 +170,13 @@ export class DownloadService {
 
   /**
    * Initialize layer - load adjacent ±1 timestamps first
+   * @param strategy - 'on-demand': only load critical ±1, 'aggressive': queue all timesteps
    */
   async initializeLayer(
     layerId: LayerId,
     currentTime: Date,
-    onProgress?: (loaded: number, total: number) => void
+    onProgress?: (loaded: number, total: number) => void,
+    strategy: 'aggressive' | 'on-demand' = 'on-demand'
   ): Promise<void> {
     const timeSteps = this.timeSteps.get(layerId)
     if (!timeSteps) {
@@ -184,7 +186,7 @@ export class DownloadService {
     const currentIndex = this.dateTimeService.timeToIndex(currentTime, timeSteps)
     const adjacentIndices = this.dateTimeService.getAdjacentIndices(currentTime, timeSteps)
 
-    console.log(`[DownloadService] Initializing ${layerId} at index ${currentIndex}`)
+    console.log(`[DownloadService] Initializing ${layerId} at index ${currentIndex} (${strategy} mode)`)
 
     // 1. Load ±1 immediately (critical priority)
     let loaded = 0
@@ -196,14 +198,16 @@ export class DownloadService {
       }
     }
 
-    // 2. Queue windowed range (background priority)
-    const windowIndices = this.calculateWindowIndices(
-      Math.floor(currentIndex),
-      timeSteps.length,
-      this.config.maxRangeDays
-    )
+    // 2. If on-demand mode, stop here (only critical ±1 loaded)
+    if (strategy === 'on-demand') {
+      console.log(`[DownloadService] On-demand mode: loaded ${adjacentIndices.length} critical timesteps`)
+      this.emitProgress(layerId)
+      return
+    }
 
-    for (const index of windowIndices) {
+    // 3. Aggressive mode: Queue all remaining timesteps (background priority)
+    console.log(`[DownloadService] Aggressive mode: queueing all ${timeSteps.length} timesteps`)
+    for (let index = 0; index < timeSteps.length; index++) {
       if (!this.isLoaded(layerId, index) && !this.isLoading(layerId, index)) {
         const timeStep = timeSteps[index]
         if (timeStep) {
@@ -212,11 +216,37 @@ export class DownloadService {
       }
     }
 
-    // 3. Start background processing
+    // 4. Start background processing
     this.processQueue()
 
     // Emit progress event
     this.emitProgress(layerId)
+  }
+
+  /**
+   * Download all timesteps for a layer (aggressive mode)
+   */
+  downloadAllTimesteps(layerId: LayerId): void {
+    const timeSteps = this.timeSteps.get(layerId)
+    if (!timeSteps) {
+      console.warn(`[DownloadService] Cannot download all timesteps: layer ${layerId} not registered`)
+      return
+    }
+
+    console.log(`[DownloadService] Queueing all ${timeSteps.length} timesteps for ${layerId}`)
+
+    // Queue all timesteps that aren't loaded or loading
+    for (let index = 0; index < timeSteps.length; index++) {
+      if (!this.isLoaded(layerId, index) && !this.isLoading(layerId, index)) {
+        const timeStep = timeSteps[index]
+        if (timeStep) {
+          this.enqueue({ layerId, index, timeStep, priority: 'background' })
+        }
+      }
+    }
+
+    // Start processing
+    this.processQueue()
   }
 
   /**

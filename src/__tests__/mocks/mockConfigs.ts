@@ -54,6 +54,7 @@ export const mockHypatiaConfig: HypatiaConfig = {
   dataCache: {
     maxConcurrentDownloads: 4,
     cacheStrategy: 'spiral-out',
+    downloadMode: 'on-demand',
   },
   features: {
     enableGeolocation: true,

@@ -6,15 +6,18 @@ interface BootstrapModalAttrs {
   progress: BootstrapProgress | null;
   error: string | null;
   status?: BootstrapStatus;
+  visible?: boolean;
   onRetry?: () => void;
-  onContinue?: () => void;
+  onContinue?: (downloadMode: 'aggressive' | 'on-demand') => void;
 }
 
 export const BootstrapModal: m.Component<BootstrapModalAttrs> = {
   view(vnode) {
-    const { progress, error, status, onRetry, onContinue } = vnode.attrs;
+    const { progress, error, status, visible = true, onRetry, onContinue } = vnode.attrs;
 
-    return m('div.bootstrap-modal', [
+    return m('div.bootstrap-modal', {
+      style: visible ? '' : 'display: none;'
+    }, [
       m('div.bootstrap-content', [
         m('img.bootstrap-brand', {
           src: '/hypatia-brand-white.svg',
@@ -61,10 +64,23 @@ export const BootstrapModal: m.Component<BootstrapModalAttrs> = {
             m('p.progress-text', status === 'waiting' ? 'Ready' : `${Math.round(progress?.percentage || 0)}%`),
             progress?.currentFile && status !== 'waiting' ?
               m('p.progress-file', progress.currentFile) : null,
-            m('button.time-edge-button', {
-              onclick: onContinue,
-              style: `margin-top: 20px; visibility: ${status === 'waiting' ? 'visible' : 'hidden'}`
-            }, 'Continue')
+            status === 'waiting' ? [
+              m('p.download-mode-prompt', 'Choose download strategy:'),
+              m('div.download-mode-buttons', [
+                m('button.download-mode-btn.aggressive', {
+                  onclick: () => onContinue?.('aggressive')
+                }, [
+                  m('strong', 'Aggressive'),
+                  m('span.btn-desc', 'Download all data now')
+                ]),
+                m('button.download-mode-btn.on-demand', {
+                  onclick: () => onContinue?.('on-demand')
+                }, [
+                  m('strong', 'On-Demand'),
+                  m('span.btn-desc', 'Download only when needed')
+                ])
+              ])
+            ] : null
           ])
         ] : [
           // Initial state

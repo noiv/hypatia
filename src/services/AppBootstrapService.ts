@@ -175,9 +175,6 @@ export class AppBootstrapService {
           throw new Error('Scene not initialized');
         }
 
-        // Get non-data layers (always create these)
-        const nonDataLayers = app.configService.getNonDataLayers() as LayerId[];
-
         // Get layers from URL
         const urlState = parseUrlState();
         const urlLayerIds: LayerId[] = [];
@@ -188,8 +185,12 @@ export class AppBootstrapService {
           }
         }
 
+        // Always create sun, graticule, text (truly non-data layers)
+        // Earth should only be created if in URL (it downloads images)
+        const alwaysCreateLayers: LayerId[] = ['sun', 'graticule', 'text'];
+
         // Merge into Set to deduplicate
-        const allLayers = new Set<LayerId>([...nonDataLayers, ...urlLayerIds]);
+        const allLayers = new Set<LayerId>([...alwaysCreateLayers, ...urlLayerIds]);
         console.log('[SCENE] Creating layers:', Array.from(allLayers));
 
         // Create all layers via LayersService
@@ -271,6 +272,7 @@ export class AppBootstrapService {
             });
 
             // Initialize layer with progress callback
+            // Always use 'on-demand' during bootstrap (only load 2 critical timestamps)
             await app.downloadService.initializeLayer(
               layerId,
               currentTime,
@@ -281,7 +283,8 @@ export class AppBootstrapService {
                   percentage,
                   label: `Loading ${layerId} ${loaded}/${total}...`
                 });
-              }
+              },
+              'on-demand'  // Bootstrap always uses on-demand mode
             );
 
             currentLayerIndex++;
@@ -315,16 +318,39 @@ export class AppBootstrapService {
       end: 98,
       label: 'Activating...',
       async run(_state, app) {
+        // Force one final render to ensure all textures are uploaded
+        const scene = app.stateService.get().scene;
+        if (scene) {
+          scene.renderFrame();
+          console.log('[ACTIVATE] Final render before starting animation loop');
+        }
+
+        // Activate scene and UI (starts animation loop)
         app.activate();
+
+        // Check autoContinue BEFORE setting status
+        const hypatiaConfig = app.configService.getHypatiaConfig();
+        const autoContinue = hypatiaConfig.bootstrap.autoContinue;
+
+        if (!autoContinue) {
+          // Set to waiting immediately (UI + modal appear together)
+          app.stateService.setBootstrapStatus('waiting');
+          console.log('Bootstrap.done (waiting for user to choose download mode)');
+        } else {
+          // Set to ready (UI appears, no modal)
+          app.stateService.setBootstrapStatus('ready');
+          console.log('Bootstrap.done (auto-continue)');
+        }
       }
     },
 
-    READY: {
+    FINALIZE: {
       start: 98,
       end: 100,
       label: 'Ready',
       async run() {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Brief pause for animation to complete
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
     }
   };
@@ -403,17 +429,8 @@ export class AppBootstrapService {
       }
     }
 
-    // Check autoContinue setting
-    const hypatiaConfig = app.configService.getHypatiaConfig();
-    const autoContinue = hypatiaConfig.bootstrap.autoContinue;
-
-    if (autoContinue) {
-      app.stateService.setBootstrapStatus('ready');
-      console.log('Bootstrap.done (auto-continue)');
-    } else {
-      app.stateService.setBootstrapStatus('waiting');
-      console.log('Bootstrap.done (waiting for user)');
-    }
+    // Status is now set by WAIT_OR_CONTINUE step
+    // No additional logic needed here
   }
 
   /**

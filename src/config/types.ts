@@ -53,6 +53,7 @@ export interface HypatiaConfig {
   dataCache: {
     maxConcurrentDownloads: number;
     cacheStrategy: 'future-first' | 'spiral-out';
+    downloadMode: 'aggressive' | 'on-demand';
   };
   features: {
     enableGeolocation: boolean;

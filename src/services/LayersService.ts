@@ -39,6 +39,7 @@ export interface LayerMetadata {
 export interface LayerToggleOptions {
   currentTime?: Date // For initializing data layers
   onProgress?: (loaded: number, total: number) => void
+  downloadMode?: 'aggressive' | 'on-demand' // Download strategy
 }
 
 /**
@@ -221,8 +222,14 @@ export class LayersService {
           `[LayersService] Layer ${layerId} needs timesteps registered before toggle. This should be done during layer creation.`
         )
       } else {
-        // Data already registered, just ensure critical timesteps are loaded
-        await this.downloadService.initializeLayer(layerId, currentTime, options?.onProgress)
+        // Data already registered, load based on download mode
+        const downloadMode = options?.downloadMode || 'on-demand'
+        await this.downloadService.initializeLayer(
+          layerId,
+          currentTime,
+          options?.onProgress,
+          downloadMode
+        )
       }
     }
 

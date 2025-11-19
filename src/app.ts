@@ -65,6 +65,7 @@ interface AppComponent extends m.Component {
   // Bootstrap
   runBootstrap(): Promise<void>;
   initializeScene(): Promise<Scene | undefined>;
+  startAggressiveDownloads(): void;
 
   // Handlers
   handleTimeChange(newTime: Date): void;
@@ -425,6 +426,25 @@ export const App: AppComponent = {
     return range || { startTime: new Date(), endTime: new Date() };
   },
 
+  /**
+   * Start aggressive downloads for all visible layers
+   * Called when user chooses "Aggressive" mode
+   */
+  startAggressiveDownloads() {
+    if (!this.layersService || !this.downloadService) return;
+
+    const visibleLayerIds = this.layersService.getVisibleLayerIds();
+    console.log(`[App] Starting aggressive downloads for layers:`, visibleLayerIds);
+
+    // Queue all timesteps for each visible data layer
+    for (const layerId of visibleLayerIds) {
+      const metadata = this.layersService.getMetadata(layerId);
+      if (metadata?.isDataLayer) {
+        this.downloadService.downloadAllTimesteps(layerId);
+      }
+    }
+  },
+
   onremove() {
     this.eventService?.dispose();
     this.viewportControls?.dispose();
@@ -441,26 +461,45 @@ export const App: AppComponent = {
 
     const state = this.stateService.get();
 
-    // Show bootstrap modal during loading
-    if (state.bootstrapStatus !== 'ready') {
-      return m(BootstrapModal as any, {
-        progress: state.bootstrapProgress,
-        error: state.bootstrapError,
-        status: state.bootstrapStatus,
-        onRetry: state.bootstrapStatus === 'error' ? () => {
-          this.stateService!.setBootstrapStatus('loading');
-          this.stateService!.setBootstrapError(null);
-          this.stateService!.setBootstrapProgress(null);
-          this.runBootstrap();
-        } : undefined,
-        onContinue: state.bootstrapStatus === 'waiting' ? () => {
-          this.stateService!.setBootstrapStatus('ready');
-        } : undefined
-      });
-    }
+    // Always render modal, but hide it when ready
+    const showModal = state.bootstrapStatus === 'loading' ||
+                      state.bootstrapStatus === 'error' ||
+                      state.bootstrapStatus === 'waiting';
 
-    // Show main app when ready
-    return m('div.app-container.ready.no-events', [
+    const modalOverlay = m(BootstrapModal as any, {
+      progress: state.bootstrapProgress,
+      error: state.bootstrapError,
+      status: state.bootstrapStatus,
+      visible: showModal,  // Pass visibility flag
+      onRetry: state.bootstrapStatus === 'error' ? () => {
+        this.stateService!.setBootstrapStatus('loading');
+        this.stateService!.setBootstrapError(null);
+        this.stateService!.setBootstrapProgress(null);
+        this.runBootstrap();
+      } : undefined,
+      onContinue: state.bootstrapStatus === 'waiting' ? (downloadMode: 'aggressive' | 'on-demand') => {
+        this.stateService!.setDownloadMode(downloadMode);
+        this.stateService!.setBootstrapStatus('ready');
+        console.log(`[App] User selected download mode: ${downloadMode}`);
+
+        // If aggressive, trigger background downloads
+        if (downloadMode === 'aggressive') {
+          this.startAggressiveDownloads();
+        }
+      } : undefined
+    });
+
+    // Main app should be visible when ready OR waiting
+    const showApp = state.bootstrapStatus === 'ready' || state.bootstrapStatus === 'waiting';
+
+    return m('div', [
+      // Modal overlay (shown FIRST so it's always ready on top)
+      modalOverlay,
+
+      // App container (always rendered, but hidden during loading/error)
+      m('div.app-container.ready.no-events', {
+        style: showApp ? '' : 'display: none;'
+      }, [
       m(HeaderPanel, {
         onLogoClick: () => window.location.href = '/'
       }),
@@ -499,6 +538,7 @@ export const App: AppComponent = {
       m(PerformancePanel, {
         onElementCreated: (el) => state.scene?.setPerformanceElement(el)
       })
+      ])
     ]);
   }
 };
