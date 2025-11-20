@@ -11,7 +11,7 @@ import { checkBrowserCapabilities, getCapabilityHelpUrls } from '../utils/capabi
 import { preloadFont } from 'troika-three-text';
 import { TEXT_CONFIG } from '../config';
 import type { LayerId } from '../layers/ILayer';
-import { parseUrlState } from '../utils/urlState';
+import { parseUrlState } from './UrlService';
 import type { LayersService } from './LayersService';
 import type { DownloadService } from './DownloadService';
 import type { ConfigService } from './ConfigService';

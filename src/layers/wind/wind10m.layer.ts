@@ -28,6 +28,8 @@ import { EARTH_RADIUS_UNITS } from '../../utils/constants';
 import { generateFibonacciSphere } from '../../utils/sphereSeeds';
 import { WIND10M_CONFIG } from '../../config';
 import type { TimeStep } from '../../config/types';
+import windComputeShader from './wind-compute.wgsl?raw';
+import { WindGeometry, type WindGeometryConfig } from './wind-geometry';
 
 export class Wind10mLayer implements ILayer {
   layerId: LayerId = 'wind10m';
@@ -42,6 +44,9 @@ export class Wind10mLayer implements ILayer {
 
   // Performance mode: 'linesegments2' or 'custom'
   private static readonly USE_CUSTOM_GEOMETRY = false;
+
+  // Geometry helper
+  private geometry: WindGeometry;
 
   // Wind data
   private downloadService: DownloadService;
@@ -74,9 +79,6 @@ export class Wind10mLayer implements ILayer {
   private lastTimeIndex: number = -1;
   private animationPhase: number = 0;
   private updatePromise: Promise<void> | null = null;
-  private cachedRandomOffsets: Float32Array | null = null;
-  private cachedPositions: Float32Array | null = null;
-  private cachedColors: Float32Array | null = null;
 
   private static readonly LINE_STEPS = 32;
   // STEP_FACTOR defined in shader (0.00045)
@@ -98,6 +100,16 @@ export class Wind10mLayer implements ILayer {
 
     // Generate uniformly distributed seed points on sphere using Fibonacci lattice
     this.seeds = generateFibonacciSphere(8192, EARTH_RADIUS_UNITS);
+
+    // Initialize geometry helper
+    const geometryConfig: WindGeometryConfig = {
+      lineSteps: Wind10mLayer.LINE_STEPS,
+      lineWidth: Wind10mLayer.LINE_WIDTH,
+      taperSegments: Wind10mLayer.TAPER_SEGMENTS,
+      snakeLength: Wind10mLayer.SNAKE_LENGTH,
+      useCustomGeometry: Wind10mLayer.USE_CUSTOM_GEOMETRY
+    };
+    this.geometry = new WindGeometry(this.seeds, geometryConfig);
 
     console.log(`Wind10mLayer: Generated ${this.seeds.length} grid points`);
 
@@ -199,9 +211,8 @@ export class Wind10mLayer implements ILayer {
       usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
     });
 
-    // Shader code (same as original)
-    const shaderCode = this.getShaderCode();
-    const shaderModule = this.device.createShaderModule({ code: shaderCode });
+    // Load shader code from external file
+    const shaderModule = this.device.createShaderModule({ code: windComputeShader });
 
     // Create bind group layout
     this.bindGroupLayout = this.device.createBindGroupLayout({
@@ -250,213 +261,6 @@ export class Wind10mLayer implements ILayer {
     console.log(`Wind layer: registered ${timesteps.length} timesteps`);
   }
 
-  /**
-   * Get WebGPU shader code
-   */
-  private getShaderCode(): string {
-    return `
-      struct Seed {
-        position: vec3f,
-        padding: f32,
-      }
-
-      @group(0) @binding(0) var<storage, read> seeds: array<Seed>;
-      @group(0) @binding(1) var<storage, read_write> output: array<vec4f>;
-      @group(0) @binding(2) var<storage, read> windU0: array<u32>;
-      @group(0) @binding(3) var<storage, read> windV0: array<u32>;
-      @group(0) @binding(4) var<storage, read> windU1: array<u32>;
-      @group(0) @binding(5) var<storage, read> windV1: array<u32>;
-      @group(0) @binding(6) var<uniform> blend: f32;
-
-      const WIDTH: u32 = 1441u;
-      const HEIGHT: u32 = 721u;
-      const STEP_FACTOR: f32 = 0.00045;
-      const PI: f32 = 3.14159265359;
-
-      fn fp16ToFloat(fp16: u32) -> f32 {
-        let sign = (fp16 >> 15u) & 1u;
-        let exponent = (fp16 >> 10u) & 31u;
-        let fraction = fp16 & 1023u;
-        if (exponent == 0u) { return 0.0; }
-        let signF = select(1.0, -1.0, sign == 1u);
-        let expF = f32(i32(exponent) - 15);
-        let fracF = f32(fraction) / 1024.0;
-        return signF * pow(2.0, expF) * (1.0 + fracF);
-      }
-
-      fn sampleWind0(lat: f32, lon: f32) -> vec2f {
-        let x = (lon + 180.0) / 0.25;
-        let y = (90.0 - lat) / 0.25;
-        let x0 = u32(floor(x)) % WIDTH;
-        let x1 = (x0 + 1u) % WIDTH;
-        let y0 = clamp(u32(floor(y)), 0u, HEIGHT - 1u);
-        let y1 = clamp(y0 + 1u, 0u, HEIGHT - 1u);
-        let fx = fract(x);
-        let fy = fract(y);
-
-        let idx00 = y0 * WIDTH + x0;
-        let idx10 = y0 * WIDTH + x1;
-        let idx01 = y1 * WIDTH + x0;
-        let idx11 = y1 * WIDTH + x1;
-
-        let u00 = fp16ToFloat(windU0[idx00]);
-        let u10 = fp16ToFloat(windU0[idx10]);
-        let u01 = fp16ToFloat(windU0[idx01]);
-        let u11 = fp16ToFloat(windU0[idx11]);
-        let v00 = fp16ToFloat(windV0[idx00]);
-        let v10 = fp16ToFloat(windV0[idx10]);
-        let v01 = fp16ToFloat(windV0[idx01]);
-        let v11 = fp16ToFloat(windV0[idx11]);
-
-        let u_top = mix(u00, u10, fx);
-        let u_bot = mix(u01, u11, fx);
-        let u = mix(u_top, u_bot, fy);
-        let v_top = mix(v00, v10, fx);
-        let v_bot = mix(v01, v11, fx);
-        let v = mix(v_top, v_bot, fy);
-
-        return vec2f(u, v);
-      }
-
-      fn sampleWind1(lat: f32, lon: f32) -> vec2f {
-        let x = (lon + 180.0) / 0.25;
-        let y = (90.0 - lat) / 0.25;
-        let x0 = u32(floor(x)) % WIDTH;
-        let x1 = (x0 + 1u) % WIDTH;
-        let y0 = clamp(u32(floor(y)), 0u, HEIGHT - 1u);
-        let y1 = clamp(y0 + 1u, 0u, HEIGHT - 1u);
-        let fx = fract(x);
-        let fy = fract(y);
-
-        let idx00 = y0 * WIDTH + x0;
-        let idx10 = y0 * WIDTH + x1;
-        let idx01 = y1 * WIDTH + x0;
-        let idx11 = y1 * WIDTH + x1;
-
-        let u00 = fp16ToFloat(windU1[idx00]);
-        let u10 = fp16ToFloat(windU1[idx10]);
-        let u01 = fp16ToFloat(windU1[idx01]);
-        let u11 = fp16ToFloat(windU1[idx11]);
-        let v00 = fp16ToFloat(windV1[idx00]);
-        let v10 = fp16ToFloat(windV1[idx10]);
-        let v01 = fp16ToFloat(windV1[idx01]);
-        let v11 = fp16ToFloat(windV1[idx11]);
-
-        let u_top = mix(u00, u10, fx);
-        let u_bot = mix(u01, u11, fx);
-        let u = mix(u_top, u_bot, fy);
-        let v_top = mix(v00, v10, fx);
-        let v_bot = mix(v01, v11, fx);
-        let v = mix(v_top, v_bot, fy);
-
-        return vec2f(u, v);
-      }
-
-      fn sampleWind(lat: f32, lon: f32) -> vec2f {
-        let wind0 = sampleWind0(lat, lon);
-        let wind1 = sampleWind1(lat, lon);
-        return mix(wind0, wind1, blend);
-      }
-
-      fn cartesianToLatLon(pos: vec3f) -> vec2f {
-        let normalized = normalize(pos);
-        let lat = asin(clamp(normalized.y, -1.0, 1.0));
-
-        // Handle poles: at poles (|y| ≈ 1), longitude is undefined, use 0
-        var lon: f32;
-        if (abs(normalized.y) > 0.9999) {
-          lon = 0.0; // Arbitrary longitude at poles
-        } else {
-          lon = atan2(normalized.z, normalized.x);
-        }
-
-        // Apply rain layer transformation (90° west rotation + horizontal mirror)
-        var u = ((lon - PI/2.0) + PI) / (2.0 * PI);  // Rotate 90° west
-        u = 1.0 - u;  // Mirror horizontally
-        let lonDeg = u * 360.0 - 180.0;  // Convert to degrees [-180, 180]
-
-        let latDeg = lat * 180.0 / PI;
-
-        return vec2f(latDeg, lonDeg);
-      }
-
-      @compute @workgroup_size(64)
-      fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-        let seedIdx = global_id.x;
-        if (seedIdx >= arrayLength(&seeds)) { return; }
-
-        var pos = seeds[seedIdx].position;
-        var normPos = normalize(pos);
-
-        output[seedIdx * 32u] = vec4f(pos, 1.0);
-
-        for (var step = 1u; step < 32u; step++) {
-          let latLon = cartesianToLatLon(pos);
-          let wind = sampleWind(latLon.x, latLon.y);
-
-          let up = vec3f(0.0, 1.0, 0.0);
-          var tangentX = cross(normPos, up);
-
-          if (length(tangentX) < 0.001) {
-            tangentX = cross(normPos, vec3f(1.0, 0.0, 0.0));
-          }
-          tangentX = normalize(tangentX);
-          let tangentY = normalize(cross(tangentX, normPos));
-
-          let windTangent = -(tangentX * wind.x - tangentY * wind.y);
-          let windSpeed = length(windTangent);
-
-          if (windSpeed < 0.001) {
-            output[seedIdx * 32u + step] = vec4f(pos, 1.0);
-            continue;
-          }
-
-          let axis = normalize(cross(normPos, windTangent));
-          let angle = windSpeed * STEP_FACTOR;
-
-          let cosA = cos(angle);
-          let sinA = sin(angle);
-          let dotVal = dot(axis, normPos);
-
-          let rotated = normPos * cosA + cross(axis, normPos) * sinA + axis * dotVal * (1.0 - cosA);
-          let newPos = normalize(rotated) * length(pos);
-
-          let isValid = all(newPos == newPos) && length(newPos) > 0.0 && length(newPos) < 1000.0;
-
-          if (isValid) {
-            pos = newPos;
-            normPos = normalize(pos);
-            output[seedIdx * 32u + step] = vec4f(pos, 1.0);
-          } else {
-            output[seedIdx * 32u + step] = vec4f(pos, 1.0);
-          }
-        }
-      }
-    `;
-  }
-
-  /**
-   * Calculate which seeds are camera-facing
-   */
-  private calculateVisibleSeeds(cameraPosition: THREE.Vector3): { indices: Uint32Array, count: number } {
-    const cameraDir = cameraPosition.clone().normalize();
-
-    if (!this.visibleSeeds || this.visibleSeeds.length !== this.seeds.length) {
-      this.visibleSeeds = new Uint32Array(this.seeds.length);
-    }
-
-    let count = 0;
-    for (let i = 0; i < this.seeds.length; i++) {
-      const seedDir = this.seeds[i].clone().normalize();
-      const dot = seedDir.dot(cameraDir);
-
-      if (dot > 0) {
-        this.visibleSeeds[count++] = i;
-      }
-    }
-
-    return { indices: this.visibleSeeds, count };
-  }
 
   /**
    * Update wind lines for current time using WebGPU compute
@@ -469,7 +273,8 @@ export class Wind10mLayer implements ILayer {
     const cameraMoved = this.lastCameraPosition.distanceToSquared(cameraPosition) > 0.01;
     if (cameraMoved) {
       this.lastCameraPosition.copy(cameraPosition);
-      const { count } = this.calculateVisibleSeeds(cameraPosition);
+      const { indices, count } = this.geometry.calculateVisibleSeeds(cameraPosition);
+      this.visibleSeeds = indices;
       this.visibleCount = count;
     }
 
@@ -549,7 +354,16 @@ export class Wind10mLayer implements ILayer {
     const mapTime = performance.now();
 
     const resultData = new Float32Array(this.stagingBuffer!.getMappedRange());
-    this.updateGeometry(resultData);
+    const result = this.geometry.updateGeometry(
+      resultData,
+      this.visibleSeeds,
+      this.visibleCount,
+      this.lines,
+      this.group,
+      this.material
+    );
+    this.lines = result.lines;
+    this.material = result.material;
     const geometryTime = performance.now();
 
     this.stagingBuffer!.unmap();
@@ -565,258 +379,7 @@ export class Wind10mLayer implements ILayer {
     console.log(`Wind update: ${totalTime.toFixed(1)}ms [submit: ${submitMs.toFixed(1)}ms, map: ${mapMs.toFixed(1)}ms, geom: ${geomMs.toFixed(1)}ms] bindGroup: ${cacheHit}, visible: ${visibilityPct}%`);
   }
 
-  /**
-   * Update LineSegments2 geometry with computed vertices
-   */
-  private updateGeometry(vertices: Float32Array): void {
-    const isVisible = new Uint8Array(this.seeds.length);
-    if (this.visibleSeeds && this.visibleCount > 0) {
-      for (let i = 0; i < this.visibleCount; i++) {
-        isVisible[this.visibleSeeds[i]] = 1;
-      }
-    } else {
-      for (let i = 0; i < this.seeds.length; i++) {
-        isVisible[i] = 1;
-      }
-    }
-
-    let visibleSegmentCount = 0;
-    for (let lineIdx = 0; lineIdx < this.seeds.length; lineIdx++) {
-      if (isVisible[lineIdx]) {
-        visibleSegmentCount += Wind10mLayer.LINE_STEPS - 1;
-      }
-    }
-
-    const arraySize = visibleSegmentCount * 6;
-
-    if (!this.cachedPositions || this.cachedPositions.length !== arraySize) {
-      this.cachedPositions = new Float32Array(arraySize);
-      this.cachedColors = new Float32Array(arraySize);
-    }
-
-    const positions = this.cachedPositions;
-    const colors = this.cachedColors;
-
-    const cycleLength = Wind10mLayer.LINE_STEPS + Wind10mLayer.SNAKE_LENGTH;
-    const totalSegments = Wind10mLayer.LINE_STEPS - 1;
-
-    if (!this.cachedRandomOffsets) {
-      this.cachedRandomOffsets = new Float32Array(this.seeds.length);
-      for (let i = 0; i < this.seeds.length; i++) {
-        this.cachedRandomOffsets[i] = Math.random() * cycleLength;
-      }
-    }
-
-    let posIdx = 0;
-    let colorIdx = 0;
-
-    for (let lineIdx = 0; lineIdx < this.seeds.length; lineIdx++) {
-      if (!isVisible[lineIdx]) continue;
-
-      const randomOffset = this.cachedRandomOffsets[lineIdx];
-      const offset = lineIdx * Wind10mLayer.LINE_STEPS * 4;
-      const normalizedOffset = randomOffset / cycleLength;
-
-      for (let i = 0; i < Wind10mLayer.LINE_STEPS - 1; i++) {
-        const idx0 = offset + i * 4;
-        const idx1 = offset + (i + 1) * 4;
-
-        positions[posIdx++] = vertices[idx0];
-        positions[posIdx++] = vertices[idx0 + 1];
-        positions[posIdx++] = vertices[idx0 + 2];
-        positions[posIdx++] = vertices[idx1];
-        positions[posIdx++] = vertices[idx1 + 1];
-        positions[posIdx++] = vertices[idx1 + 2];
-
-        const remainingSegments = totalSegments - i;
-        const taperFactor = remainingSegments <= Wind10mLayer.TAPER_SEGMENTS
-          ? remainingSegments / Wind10mLayer.TAPER_SEGMENTS
-          : 1.0;
-
-        const normalizedIndex = i / totalSegments;
-
-        colors[colorIdx++] = normalizedIndex;
-        colors[colorIdx++] = normalizedOffset;
-        colors[colorIdx++] = taperFactor;
-        colors[colorIdx++] = normalizedIndex;
-        colors[colorIdx++] = normalizedOffset;
-        colors[colorIdx++] = taperFactor;
-      }
-    }
-
-    if (this.lines) {
-      if (Wind10mLayer.USE_CUSTOM_GEOMETRY) {
-        this.updateCustomGeometry(positions, colors);
-      } else {
-        const geometry = this.lines.geometry as LineSegmentsGeometry;
-        geometry.setPositions(positions as any);
-        geometry.setColors(colors as any);
-      }
-    } else {
-      this.createLines(positions, colors);
-    }
-  }
-
-  /**
-   * Update custom geometry buffers
-   */
-  private updateCustomGeometry(positions: Float32Array, colors: Float32Array): void {
-    const geometry = (this.lines as THREE.Mesh).geometry;
-    const instanceStart = geometry.getAttribute('instanceStart') as THREE.BufferAttribute;
-    const instanceEnd = geometry.getAttribute('instanceEnd') as THREE.BufferAttribute;
-    const instanceColorStart = geometry.getAttribute('instanceColorStart') as THREE.BufferAttribute;
-    const instanceColorEnd = geometry.getAttribute('instanceColorEnd') as THREE.BufferAttribute;
-
-    const numSegments = positions.length / 6;
-    for (let i = 0; i < numSegments; i++) {
-      const posIdx = i * 6;
-
-      instanceStart.setXYZ(i, positions[posIdx], positions[posIdx + 1], positions[posIdx + 2]);
-      instanceEnd.setXYZ(i, positions[posIdx + 3], positions[posIdx + 4], positions[posIdx + 5]);
-      instanceColorStart.setXYZ(i, colors[posIdx], colors[posIdx + 1], colors[posIdx + 2]);
-      instanceColorEnd.setXYZ(i, colors[posIdx + 3], colors[posIdx + 4], colors[posIdx + 5]);
-    }
-
-    instanceStart.needsUpdate = true;
-    instanceEnd.needsUpdate = true;
-    instanceColorStart.needsUpdate = true;
-    instanceColorEnd.needsUpdate = true;
-  }
-
-  /**
-   * Create LineSegments2 or custom geometry
-   */
-  private createLines(positions: Float32Array | number[], colors: Float32Array | number[]): void {
-    if (Wind10mLayer.USE_CUSTOM_GEOMETRY) {
-      this.createCustomGeometry(positions as Float32Array, colors as Float32Array);
-    } else {
-      this.createLineSegments2(positions, colors);
-    }
-  }
-
-  /**
-   * Create LineSegments2 with snake animation
-   */
-  private createLineSegments2(positions: Float32Array | number[], colors: Float32Array | number[]): void {
-    const geometry = new LineSegmentsGeometry();
-    geometry.setPositions(positions);
-    geometry.setColors(colors);
-
-    this.material = new LineMaterial({
-      linewidth: Wind10mLayer.LINE_WIDTH,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.6,
-      depthWrite: false,
-      depthTest: true,
-      alphaToCoverage: false
-    });
-
-    this.material.resolution.set(window.innerWidth, window.innerHeight);
-
-    (this.material as any).uniforms = {
-      ...this.material.uniforms,
-      animationPhase: { value: 0.0 },
-      snakeLength: { value: Wind10mLayer.SNAKE_LENGTH },
-      lineSteps: { value: Wind10mLayer.LINE_STEPS }
-    };
-
-    this.material.onBeforeCompile = (shader) => {
-      shader.uniforms.animationPhase = (this.material as any).uniforms.animationPhase;
-      shader.uniforms.snakeLength = (this.material as any).uniforms.snakeLength;
-      shader.uniforms.lineSteps = (this.material as any).uniforms.lineSteps;
-
-      shader.fragmentShader = shader.fragmentShader.replace(
-        'void main() {',
-        `
-        uniform float animationPhase;
-        uniform float snakeLength;
-        uniform float lineSteps;
-        void main() {
-        `
-      );
-
-      if (shader.fragmentShader.includes('gl_FragColor =')) {
-        shader.fragmentShader = shader.fragmentShader.replace(
-          /gl_FragColor = vec4\( diffuseColor\.rgb, alpha \);/,
-          `
-          float normalizedIndex = diffuseColor.r;
-          float normalizedOffset = diffuseColor.g;
-          float taperFactor = diffuseColor.b;
-
-          float cycleLength = lineSteps + snakeLength;
-          float segmentIndex = normalizedIndex * (lineSteps - 1.0);
-          float randomOffset = normalizedOffset * cycleLength;
-          float snakeHead = mod(animationPhase + randomOffset, cycleLength);
-          float distanceFromHead = segmentIndex - snakeHead;
-
-          if (distanceFromHead < -snakeLength) {
-            distanceFromHead += cycleLength;
-          }
-
-          float segmentOpacity = 0.0;
-          if (distanceFromHead >= -snakeLength && distanceFromHead <= 0.0) {
-            float positionInSnake = (distanceFromHead + snakeLength) / snakeLength;
-            segmentOpacity = positionInSnake;
-          }
-
-          float finalAlpha = alpha * segmentOpacity * taperFactor;
-          gl_FragColor = vec4( vec3(1.0), finalAlpha );
-          `
-        );
-      }
-    };
-
-    this.lines = new LineSegments2(geometry, this.material);
-    this.group.add(this.lines);
-
-    console.log(`Created wind lines: ${this.seeds.length} lines, ${positions.length / 6} segments`);
-  }
-
-  /**
-   * Create custom instanced geometry (unused by default)
-   */
-  private createCustomGeometry(positions: Float32Array, colors: Float32Array): void {
-    // Implementation omitted for brevity - same as original
-  }
-
   // ILayer interface implementation
-
-  update(state: AnimationState): void {
-    const cameraMoved = this.lastCameraPosition.distanceToSquared(state.camera.position) > 0.01;
-
-    if (!this.lastTime || state.time.getTime() !== this.lastTime.getTime() || cameraMoved) {
-      this.updateTimeAsync(state.time, state.camera.position).catch(err => {
-        console.error('Failed to update wind layer:', err);
-      });
-      this.lastTime = state.time;
-    }
-
-    if (this.lastDistance !== state.camera.distance) {
-      this.updateLineWidth(state.camera.distance);
-      this.lastDistance = state.camera.distance;
-    }
-
-    if (this.material && state.deltaTime > 0) {
-      const animationSpeed = 20.0;
-      const cycleLength = Wind10mLayer.LINE_STEPS + Wind10mLayer.SNAKE_LENGTH;
-      this.animationPhase = (this.animationPhase + state.deltaTime * animationSpeed) % cycleLength;
-
-      if ('animationPhase' in this.material.uniforms) {
-        this.material.uniforms.animationPhase.value = this.animationPhase;
-      }
-    }
-  }
-
-  updateTime(time: Date): void {
-    this.updateTimeAsync(time, this.lastCameraPosition).catch(err => {
-      console.error('Failed to update wind layer:', err);
-    });
-  }
-
-  getSceneObject(): THREE.Object3D {
-    return this.group;
-  }
 
   /**
    * Update layer based on animation state (called every frame)
@@ -839,9 +402,30 @@ export class Wind10mLayer implements ILayer {
 
     // Check distance change (for line width scaling)
     if (this.lastDistance !== state.camera.distance) {
-      this.updateLineWidth(state.camera.distance);
+      this.geometry.updateLineWidth(state.camera.distance, this.material);
       this.lastDistance = state.camera.distance;
     }
+
+    // Update snake animation
+    if (this.material && state.deltaTime > 0) {
+      const animationSpeed = 20.0;
+      const cycleLength = Wind10mLayer.LINE_STEPS + Wind10mLayer.SNAKE_LENGTH;
+      this.animationPhase = (this.animationPhase + state.deltaTime * animationSpeed) % cycleLength;
+
+      if ('animationPhase' in this.material.uniforms) {
+        this.material.uniforms.animationPhase.value = this.animationPhase;
+      }
+    }
+  }
+
+  updateTime(time: Date): void {
+    this.updateTimeAsync(time, this.lastCameraPosition).catch(err => {
+      console.error('Failed to update wind layer:', err);
+    });
+  }
+
+  getSceneObject(): THREE.Object3D {
+    return this.group;
   }
 
   setVisible(visible: boolean): void {
@@ -853,17 +437,11 @@ export class Wind10mLayer implements ILayer {
   }
 
   setResolution(width: number, height: number): void {
-    if (!this.material) return;
-
-    if (Wind10mLayer.USE_CUSTOM_GEOMETRY) {
-      (this.material as THREE.ShaderMaterial).uniforms.resolution.value.set(width, height);
-    } else {
-      (this.material as LineMaterial).resolution.set(width, height);
-    }
+    this.geometry.setResolution(width, height, this.material);
   }
 
   updateDistance(distance: number): void {
-    this.updateLineWidth(distance);
+    this.geometry.updateLineWidth(distance, this.material);
   }
 
   updateSunDirection(_sunDir: THREE.Vector3): void {
@@ -876,26 +454,6 @@ export class Wind10mLayer implements ILayer {
 
   updateTextEnabled(_enabled: boolean): void {
     // No-op
-  }
-
-  private updateLineWidth(cameraDistance: number): void {
-    if (!this.material) return;
-
-    const minDistance = 1.157;
-    const maxDistance = 10.0;
-    const minWidth = 2.0;
-    const maxWidth = 0.02;
-
-    const t = (Math.log(cameraDistance) - Math.log(minDistance)) /
-              (Math.log(maxDistance) - Math.log(minDistance));
-    const clampedT = Math.max(0, Math.min(1, t));
-    const lineWidth = minWidth + (maxWidth - minWidth) * clampedT;
-
-    if (Wind10mLayer.USE_CUSTOM_GEOMETRY) {
-      (this.material as THREE.ShaderMaterial).uniforms.linewidth.value = lineWidth;
-    } else {
-      (this.material as LineMaterial).linewidth = lineWidth;
-    }
   }
 
   getNumSeeds(): number {

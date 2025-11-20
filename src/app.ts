@@ -33,8 +33,7 @@ import { ViewportControlsService } from './services/ViewportControlsService';
 
 // Utils
 import { detectLocale, formatLocaleInfo } from './services/LocaleService';
-import { sanitizeUrl } from './utils/sanitizeUrl';
-import { parseUrlState } from './utils/urlState';
+import { sanitizeUrlState, parseUrlState } from './services/UrlService';
 
 import type { LayerId } from './layers/ILayer';
 
@@ -96,7 +95,7 @@ export const App: AppComponent = {
     await this.configService.loadAll();
 
     // Sanitize URL and get corrected state (needs config loaded first)
-    const sanitizedState = sanitizeUrl(this.configService, localeInfo);
+    const sanitizedState = sanitizeUrlState(this.configService, localeInfo);
 
     // 2. Download service
     const hypatiaConfig = this.configService.getHypatiaConfig();

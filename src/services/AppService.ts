@@ -15,7 +15,7 @@ import type { AppStateService } from './AppStateService'
 import type { Scene } from '../visualization/scene'
 import type { LayersService } from './LayersService'
 import type { ConfigService } from './ConfigService'
-import { debouncedUpdateUrlState } from '../utils/urlState'
+import { debouncedUpdateUrlState } from './UrlService'
 import type { LayerId } from '../layers/ILayer'
 
 export class AppService {
