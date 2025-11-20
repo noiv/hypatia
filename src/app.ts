@@ -10,7 +10,7 @@ import m from 'mithril';
 // Components
 import { TimeCirclePanel } from './components/TimeCirclePanel';
 import { TimeBarPanel } from './components/TimeBarPanel';
-import { BootstrapModal } from './components/BootstrapModal';
+import { BootstrapModal, type BootstrapModalAttrs } from './components/BootstrapModal';
 import { HeaderPanel } from './components/HeaderPanel';
 import { FullscreenPanel } from './components/FullscreenPanel';
 import { LayersPanel } from './components/LayersPanel';
@@ -439,31 +439,37 @@ export const App: AppComponent = {
                       state.bootstrapStatus === 'error' ||
                       state.bootstrapStatus === 'waiting';
 
-    const modalOverlay = m(BootstrapModal as any, {
+    const modalProps: BootstrapModalAttrs = {
       progress: state.bootstrapProgress,
       error: state.bootstrapError,
       status: state.bootstrapStatus,
-      visible: showModal,  // Pass visibility flag
-      onRetry: state.bootstrapStatus === 'error' ? () => {
-        this.stateService!.setBootstrapStatus('loading');
-        this.stateService!.setBootstrapError(null);
-        this.stateService!.setBootstrapProgress(null);
-        this.runBootstrap();
-      } : undefined,
-      onContinue: state.bootstrapStatus === 'waiting' ? (downloadMode: 'aggressive' | 'on-demand') => {
-        this.stateService!.setDownloadMode(downloadMode);
-        this.stateService!.setBootstrapStatus('ready');
-        console.log(`[App] User selected download mode: ${downloadMode}`);
-
-        // Sync URL with current state (AppService created in bootstrap)
-        this.appService!.updateUrl();
-
-        // If aggressive, trigger background downloads
-        if (downloadMode === 'aggressive') {
-          this.startAggressiveDownloads();
+      visible: showModal,
+      ...(state.bootstrapStatus === 'error' && {
+        onRetry: () => {
+          this.stateService!.setBootstrapStatus('loading');
+          this.stateService!.setBootstrapError(null);
+          this.stateService!.setBootstrapProgress(null);
+          this.runBootstrap();
         }
-      } : undefined
-    });
+      }),
+      ...(state.bootstrapStatus === 'waiting' && {
+        onContinue: (downloadMode: 'aggressive' | 'on-demand') => {
+          this.stateService!.setDownloadMode(downloadMode);
+          this.stateService!.setBootstrapStatus('ready');
+          console.log(`[App] User selected download mode: ${downloadMode}`);
+
+          // Sync URL with current state (AppService created in bootstrap)
+          this.appService!.updateUrl();
+
+          // If aggressive, trigger background downloads
+          if (downloadMode === 'aggressive') {
+            this.startAggressiveDownloads();
+          }
+        }
+      })
+    };
+
+    const modalOverlay = m(BootstrapModal, modalProps);
 
     // Main app should be visible when ready OR waiting
     const showApp = state.bootstrapStatus === 'ready' || state.bootstrapStatus === 'waiting';
