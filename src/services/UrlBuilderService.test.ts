@@ -49,7 +49,7 @@ describe('UrlBuilderService', () => {
       const url = service.buildUrl({
         provider: 'local',
         model: 'ifs',
-        param: 'temp2m',
+        param: 'temp',
         date: '20251109',
         timestep: 12,
       })
@@ -61,7 +61,7 @@ describe('UrlBuilderService', () => {
       const url = service.buildUrl({
         provider: 'local',
         model: 'ifs',
-        param: 'temp2m',
+        param: 'temp',
         date: '20251109',
         timestep: 6,
       })
@@ -73,7 +73,7 @@ describe('UrlBuilderService', () => {
       const tempUrl = service.buildUrl({
         provider: 'local',
         model: 'ifs',
-        param: 'temp2m',
+        param: 'temp',
         date: '20251109',
         timestep: 0,
       })
@@ -94,7 +94,7 @@ describe('UrlBuilderService', () => {
       const url = service.buildUrl({
         provider: 'local',
         model: 'ifs',
-        param: 'temp2m',
+        param: 'temp',
         date: '20251109',
         timestep: 0,
       })
@@ -106,7 +106,7 @@ describe('UrlBuilderService', () => {
       const url = service.buildUrl({
         provider: 'local',
         model: 'ifs',
-        param: 'temp2m',
+        param: 'temp',
         date: '20251109',
         timestep: 18,
       })
@@ -121,7 +121,7 @@ describe('UrlBuilderService', () => {
       const url = service.buildUrl({
         provider: 'local',
         model: 'ifs',
-        param: 'temp2m',
+        param: 'temp',
         date: '20251105',
         timestep: 12,
       })
@@ -136,7 +136,7 @@ describe('UrlBuilderService', () => {
       const url = service.buildUrl({
         provider: 'local',
         model: 'ifs',
-        param: 'temp2m',
+        param: 'temp',
         date: '20251001', // Before 20251101
         timestep: 12,
       })
@@ -153,7 +153,7 @@ describe('UrlBuilderService', () => {
       const url = service.buildUrl({
         provider: 'local',
         model: 'ifs',
-        param: 'temp2m',
+        param: 'temp',
         date: '20251120', // After 20251115
         timestep: 12,
       })
@@ -167,7 +167,7 @@ describe('UrlBuilderService', () => {
       const url = service.buildUrl({
         provider: 'local',
         model: 'ifs',
-        param: 'temp2m',
+        param: 'temp',
         date: '20251101',
         timestep: 0,
       })
@@ -179,7 +179,7 @@ describe('UrlBuilderService', () => {
       const url = service.buildUrl({
         provider: 'local',
         model: 'ifs',
-        param: 'temp2m',
+        param: 'temp',
         date: '20251115',
         timestep: 18,
       })
@@ -211,7 +211,7 @@ describe('UrlBuilderService', () => {
       const url = service.buildUrl({
         provider: 'local',
         model: 'ifs',
-        param: 'temp2m',
+        param: 'temp',
         date: '20251109',
         timestep: 12,
       })
@@ -225,7 +225,7 @@ describe('UrlBuilderService', () => {
       const url = service.buildUrl({
         provider: 'ecmwf',
         model: 'ifs',
-        param: 'temp2m',
+        param: 'temp',
         date: '20251109',
         timestep: 12,
       })
@@ -242,7 +242,7 @@ describe('UrlBuilderService', () => {
       const url = service.buildUrl({
         provider: 'copernicus',
         model: 'era5',
-        param: 'temp2m',
+        param: 'temp',
         date: '20251109',
         timestep: 12,
       })
@@ -260,7 +260,7 @@ describe('UrlBuilderService', () => {
         {
           provider: 'local',
           model: 'ifs',
-          param: 'temp2m',
+          param: 'temp',
         },
         ['20251105', '20251105', '20251105'],
         [0, 6, 12]
@@ -279,7 +279,7 @@ describe('UrlBuilderService', () => {
         {
           provider: 'local',
           model: 'ifs',
-          param: 'temp2m',
+          param: 'temp',
         },
         ['20251105', '20251001', '20251105'], // Middle one is out of range
         [0, 6, 12]
@@ -299,7 +299,7 @@ describe('UrlBuilderService', () => {
           {
             provider: 'local',
             model: 'ifs',
-            param: 'temp2m',
+            param: 'temp',
           },
           ['20251105', '20251106'],
           [0, 6, 12] // Different length
@@ -310,7 +310,7 @@ describe('UrlBuilderService', () => {
 
   describe('Dataset Queries', () => {
     it('should get available range', () => {
-      const range = service.getAvailableRange('temp2m')
+      const range = service.getAvailableRange('temp')
 
       expect(range).not.toBeNull()
       expect(range?.startTime.toISOString()).toBe('2025-11-01T00:00:00.000Z')
@@ -323,13 +323,13 @@ describe('UrlBuilderService', () => {
     })
 
     it('should check if dataset exists', () => {
-      expect(service.hasDataset('temp2m')).toBe(true)
-      expect(service.hasDataset('wind10m')).toBe(true)
+      expect(service.hasDataset('temp')).toBe(true)
+      expect(service.hasDataset('wind')).toBe(true)
       expect(service.hasDataset('geopotential')).toBe(false)
     })
 
     it('should get dataset step', () => {
-      const step = service.getDatasetStep('temp2m')
+      const step = service.getDatasetStep('temp')
       expect(step).toBe('6h')
     })
 
@@ -339,7 +339,7 @@ describe('UrlBuilderService', () => {
     })
 
     it('should get dataset count', () => {
-      const count = service.getDatasetCount('temp2m')
+      const count = service.getDatasetCount('temp')
       expect(count).toBe(60)
     })
 
@@ -349,12 +349,12 @@ describe('UrlBuilderService', () => {
     })
 
     it('should get missing timesteps', () => {
-      const missing = service.getMissingTimesteps('wind10m')
+      const missing = service.getMissingTimesteps('wind')
       expect(missing).toEqual(['20251105_06z'])
     })
 
     it('should return empty array for parameter with no missing timesteps', () => {
-      const missing = service.getMissingTimesteps('temp2m')
+      const missing = service.getMissingTimesteps('temp')
       expect(missing).toEqual([])
     })
 
@@ -369,7 +369,7 @@ describe('UrlBuilderService', () => {
       const url = service.buildUrl({
         provider: 'local',
         model: 'ifs',
-        param: 'temp2m',
+        param: 'temp',
         date: '20251231',
         timestep: 23,
       })
@@ -382,7 +382,7 @@ describe('UrlBuilderService', () => {
       const url = service.buildUrl({
         provider: 'local',
         model: 'ifs',
-        param: 'temp2m',
+        param: 'temp',
         date: '20240229', // Leap year
         timestep: 12,
       })
@@ -396,7 +396,7 @@ describe('UrlBuilderService', () => {
         const url = service.buildUrl({
           provider: 'local',
           model: 'ifs',
-          param: 'temp2m',
+          param: 'temp',
           date: '20251105',
           timestep: hour,
         })

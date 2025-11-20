@@ -23,7 +23,7 @@ export const mockHypatiaConfig: HypatiaConfig = {
     maxZoom: 10,
     minZoom: 1,
     defaultAltitude: 1000,
-    defaultLayers: ['earth', 'temp2m'],
+    defaultLayers: ['earth', 'temp'],
   },
   camera: {
     minDistance: 100,
@@ -95,7 +95,7 @@ export const mockLayersConfig: LayersConfig = {
   version: '1.0',
   layers: [
     {
-      id: 'temp2m',
+      id: 'temp',
       urlKey: 'temp',
       label: {
         short: 'Temperature',
@@ -116,7 +116,7 @@ export const mockLayersConfig: LayersConfig = {
       },
     },
     {
-      id: 'wind10m',
+      id: 'wind',
       urlKey: 'wind',
       label: {
         short: 'Wind',

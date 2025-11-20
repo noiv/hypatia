@@ -59,13 +59,14 @@ export interface ILayer {
 
 /**
  * Layer ID type - all possible layers in the system
+ * Uses urlKey as the canonical identifier (matches URL params and folder names)
  */
 export type LayerId =
   | 'earth'
   | 'sun'
   | 'graticule'
-  | 'temp2m'
-  | 'precipitation'
-  | 'wind10m'
-  | 'pressure_msl'
+  | 'temp'          // was 'temp'
+  | 'rain'          // was 'rain'
+  | 'wind'          // was 'wind'
+  | 'pressure'      // was 'pressure'
   | 'text';

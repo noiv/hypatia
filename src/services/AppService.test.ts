@@ -144,7 +144,7 @@ describe('AppService', () => {
     })
 
     it('should warn if layer is not registered', async () => {
-      await service.handleLayerToggle('temp2m')
+      await service.handleLayerToggle('temp')
 
       expect(console.warn).toHaveBeenCalled()
     })
@@ -259,7 +259,7 @@ describe('AppService', () => {
       const layer2 = createMockLayer()
 
       layersService.registerLayer('earth', layer1, false)
-      layersService.registerLayer('temp2m', layer2, true)
+      layersService.registerLayer('temp', layer2, true)
 
       const stats = service.getLayerStats()
 
@@ -272,7 +272,7 @@ describe('AppService', () => {
     it('should convert layer IDs to URL keys', () => {
       // This tests the private method indirectly through updateUrl
       const layer = createMockLayer()
-      layersService.registerLayer('temp2m', layer, false)
+      layersService.registerLayer('temp', layer, false)
 
       // Just verify updateUrl works with data layers
       expect(() => service.updateUrl()).not.toThrow()

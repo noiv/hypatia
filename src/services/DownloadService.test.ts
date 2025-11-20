@@ -115,32 +115,32 @@ describe('DownloadService', () => {
 
   describe('Layer Registration', () => {
     it('should register a layer with timesteps', () => {
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
-      expect(service.getTimestepCount('temp2m')).toBe(5)
+      expect(service.getTimestepCount('temp')).toBe(5)
     })
 
     it('should initialize empty state for all timesteps', () => {
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       for (let i = 0; i < mockTimeSteps.length; i++) {
-        expect(service.isLoaded('temp2m', i)).toBe(false)
-        expect(service.isLoading('temp2m', i)).toBe(false)
+        expect(service.isLoaded('temp', i)).toBe(false)
+        expect(service.isLoading('temp', i)).toBe(false)
       }
     })
   })
 
   describe('Layer Initialization', () => {
     it('should load adjacent timesteps during initialization', async () => {
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       const currentTime = new Date('2025-11-11T12:00:00Z') // Index 2
-      await service.initializeLayer('temp2m', currentTime)
+      await service.initializeLayer('temp', currentTime)
 
       // Should have loaded adjacent indices
       // The service loads ±1 around current, so indices 1 and 3 minimum
       // (Index 2 may or may not be loaded depending on interpolation logic)
-      const loadedIndices = service.getLoadedIndices('temp2m')
+      const loadedIndices = service.getLoadedIndices('temp')
       expect(loadedIndices.size).toBeGreaterThan(0)
 
       // At minimum, should have the bounding indices
@@ -148,7 +148,7 @@ describe('DownloadService', () => {
     })
 
     it('should call onProgress callback during initialization', async () => {
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       const progressCalls: Array<{ loaded: number; total: number }> = []
       const onProgress = (loaded: number, total: number) => {
@@ -156,7 +156,7 @@ describe('DownloadService', () => {
       }
 
       const currentTime = new Date('2025-11-11T12:00:00Z')
-      await service.initializeLayer('temp2m', currentTime, onProgress)
+      await service.initializeLayer('temp', currentTime, onProgress)
 
       expect(progressCalls.length).toBeGreaterThan(0)
       expect(progressCalls[progressCalls.length - 1].loaded).toBe(
@@ -165,13 +165,13 @@ describe('DownloadService', () => {
     })
 
     it('should handle wind layer with U+V components', async () => {
-      service.registerLayer('wind10m', mockWindTimeSteps)
+      service.registerLayer('wind', mockWindTimeSteps)
 
       const currentTime = new Date('2025-11-11T00:00:00Z')
-      await service.initializeLayer('wind10m', currentTime)
+      await service.initializeLayer('wind', currentTime)
 
       // Should load wind data with u and v components
-      const data = service.getData('wind10m', 0)
+      const data = service.getData('wind', 0)
       expect(data).toBeDefined()
       expect(data).toHaveProperty('u')
       expect(data).toHaveProperty('v')
@@ -180,12 +180,12 @@ describe('DownloadService', () => {
 
   describe('Download Management', () => {
     it('should track loaded indices', async () => {
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       const currentTime = new Date('2025-11-11T12:00:00Z')
-      await service.initializeLayer('temp2m', currentTime)
+      await service.initializeLayer('temp', currentTime)
 
-      const loadedIndices = service.getLoadedIndices('temp2m')
+      const loadedIndices = service.getLoadedIndices('temp')
       expect(loadedIndices.size).toBeGreaterThan(0)
       expect(loadedIndices.has(2)).toBe(true) // Current index
     })
@@ -197,25 +197,25 @@ describe('DownloadService', () => {
         status: 404,
       })
 
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       const currentTime = new Date('2025-11-11T12:00:00Z')
-      await service.initializeLayer('temp2m', currentTime)
+      await service.initializeLayer('temp', currentTime)
 
-      const failedIndices = service.getFailedIndices('temp2m')
+      const failedIndices = service.getFailedIndices('temp')
       expect(failedIndices.size).toBeGreaterThan(0)
     })
 
     it('should not re-download already loaded timesteps', async () => {
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       const currentTime = new Date('2025-11-11T12:00:00Z')
-      await service.initializeLayer('temp2m', currentTime)
+      await service.initializeLayer('temp', currentTime)
 
       const fetchCallCount = (global.fetch as any).mock.calls.length
 
       // Try to initialize again
-      await service.initializeLayer('temp2m', currentTime)
+      await service.initializeLayer('temp', currentTime)
 
       // Should not make additional fetch calls
       expect((global.fetch as any).mock.calls.length).toBe(fetchCallCount)
@@ -224,31 +224,31 @@ describe('DownloadService', () => {
 
   describe('Priority Management', () => {
     it('should prioritize adjacent timesteps when time changes', async () => {
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       const initialTime = new Date('2025-11-11T00:00:00Z')
-      await service.initializeLayer('temp2m', initialTime)
+      await service.initializeLayer('temp', initialTime)
 
       // Change to different time
       const newTime = new Date('2025-11-12T00:00:00Z') // Index 4
-      service.prioritizeTimestamps('temp2m', newTime)
+      service.prioritizeTimestamps('temp', newTime)
 
       // Wait a bit for queue processing
       await new Promise((resolve) => setTimeout(resolve, 100))
 
       // Index 4 should be loaded or loading
-      const isLoaded = service.isLoaded('temp2m', 4)
-      const isLoading = service.isLoading('temp2m', 4)
+      const isLoaded = service.isLoaded('temp', 4)
+      const isLoading = service.isLoading('temp', 4)
       expect(isLoaded || isLoading).toBe(true)
     })
   })
 
   describe('Bandwidth Tracking', () => {
     it('should track bandwidth statistics', async () => {
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       const currentTime = new Date('2025-11-11T12:00:00Z')
-      await service.initializeLayer('temp2m', currentTime)
+      await service.initializeLayer('temp', currentTime)
 
       const stats = service.getBandwidthStats()
       expect(stats.totalBytesDownloaded).toBeGreaterThan(0)
@@ -257,10 +257,10 @@ describe('DownloadService', () => {
     })
 
     it('should calculate moving average for bandwidth', async () => {
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       const currentTime = new Date('2025-11-11T12:00:00Z')
-      await service.initializeLayer('temp2m', currentTime)
+      await service.initializeLayer('temp', currentTime)
 
       const stats = service.getBandwidthStats()
       expect(stats.averageBytesPerSec).toBeGreaterThan(0)
@@ -270,25 +270,25 @@ describe('DownloadService', () => {
 
   describe('Progress Tracking', () => {
     it('should calculate download progress', async () => {
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       const currentTime = new Date('2025-11-11T12:00:00Z')
-      await service.initializeLayer('temp2m', currentTime)
+      await service.initializeLayer('temp', currentTime)
 
-      const progress = service.getProgress('temp2m')
-      expect(progress.layerId).toBe('temp2m')
+      const progress = service.getProgress('temp')
+      expect(progress.layerId).toBe('temp')
       expect(progress.total).toBe(5)
       expect(progress.loaded).toBeGreaterThan(0)
       expect(progress.percentComplete).toBeGreaterThan(0)
     })
 
     it('should estimate time remaining', async () => {
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       const currentTime = new Date('2025-11-11T12:00:00Z')
-      await service.initializeLayer('temp2m', currentTime)
+      await service.initializeLayer('temp', currentTime)
 
-      const progress = service.getProgress('temp2m')
+      const progress = service.getProgress('temp')
 
       // If there are empty timesteps, ETA should be calculated
       if (progress.empty > 0) {
@@ -303,10 +303,10 @@ describe('DownloadService', () => {
       const loadingEvents: any[] = []
       service.on('timestampLoading', (event) => loadingEvents.push(event))
 
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       const currentTime = new Date('2025-11-11T12:00:00Z')
-      await service.initializeLayer('temp2m', currentTime)
+      await service.initializeLayer('temp', currentTime)
 
       expect(loadingEvents.length).toBeGreaterThan(0)
       expect(loadingEvents[0]).toHaveProperty('layerId')
@@ -318,10 +318,10 @@ describe('DownloadService', () => {
       const loadedEvents: any[] = []
       service.on('timestampLoaded', (event) => loadedEvents.push(event))
 
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       const currentTime = new Date('2025-11-11T12:00:00Z')
-      await service.initializeLayer('temp2m', currentTime)
+      await service.initializeLayer('temp', currentTime)
 
       expect(loadedEvents.length).toBeGreaterThan(0)
       expect(loadedEvents[0]).toHaveProperty('layerId')
@@ -334,10 +334,10 @@ describe('DownloadService', () => {
       const progressEvents: any[] = []
       service.on('downloadProgress', (event) => progressEvents.push(event))
 
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       const currentTime = new Date('2025-11-11T12:00:00Z')
-      await service.initializeLayer('temp2m', currentTime)
+      await service.initializeLayer('temp', currentTime)
 
       expect(progressEvents.length).toBeGreaterThan(0)
       expect(progressEvents[0]).toHaveProperty('layerId')
@@ -350,7 +350,7 @@ describe('DownloadService', () => {
       service.on('timestampLoaded', listener)
       service.off('timestampLoaded', listener)
 
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
       // Trigger would happen during initialization, but listener should not be called
       expect(listener).not.toHaveBeenCalled()
     })
@@ -358,37 +358,37 @@ describe('DownloadService', () => {
 
   describe('Data Retrieval', () => {
     it('should return loaded data for timestep', async () => {
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       const currentTime = new Date('2025-11-11T12:00:00Z')
-      await service.initializeLayer('temp2m', currentTime)
+      await service.initializeLayer('temp', currentTime)
 
-      const data = service.getData('temp2m', 2)
+      const data = service.getData('temp', 2)
       expect(data).toBeDefined()
       expect(data).toBeInstanceOf(Uint16Array)
     })
 
     it('should return undefined for unloaded timestep', () => {
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
-      const data = service.getData('temp2m', 4)
+      const data = service.getData('temp', 4)
       expect(data).toBeUndefined()
     })
   })
 
   describe('Layer Cleanup', () => {
     it('should clear layer data', async () => {
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       const currentTime = new Date('2025-11-11T12:00:00Z')
-      await service.initializeLayer('temp2m', currentTime)
+      await service.initializeLayer('temp', currentTime)
 
-      expect(service.getTimestepCount('temp2m')).toBe(5)
+      expect(service.getTimestepCount('temp')).toBe(5)
 
-      service.clearLayer('temp2m')
+      service.clearLayer('temp')
 
-      expect(service.getTimestepCount('temp2m')).toBe(0)
-      expect(service.getLoadedIndices('temp2m').size).toBe(0)
+      expect(service.getTimestepCount('temp')).toBe(0)
+      expect(service.getLoadedIndices('temp').size).toBe(0)
     })
   })
 
@@ -397,12 +397,12 @@ describe('DownloadService', () => {
       // Mock fetch to fail
       ;(global.fetch as any).mockRejectedValue(new Error('Network error'))
 
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       const currentTime = new Date('2025-11-11T12:00:00Z')
-      await service.initializeLayer('temp2m', currentTime)
+      await service.initializeLayer('temp', currentTime)
 
-      const failedIndices = service.getFailedIndices('temp2m')
+      const failedIndices = service.getFailedIndices('temp')
       expect(failedIndices.size).toBeGreaterThan(0)
     })
 
@@ -416,12 +416,12 @@ describe('DownloadService', () => {
         arrayBuffer: async () => new ArrayBuffer(100),
       })
 
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       const currentTime = new Date('2025-11-11T12:00:00Z')
-      await service.initializeLayer('temp2m', currentTime)
+      await service.initializeLayer('temp', currentTime)
 
-      const failedIndices = service.getFailedIndices('temp2m')
+      const failedIndices = service.getFailedIndices('temp')
       expect(failedIndices.size).toBeGreaterThan(0)
     })
 
@@ -435,19 +435,19 @@ describe('DownloadService', () => {
         arrayBuffer: async () => new ArrayBuffer(123), // Odd number
       })
 
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       const currentTime = new Date('2025-11-11T12:00:00Z')
-      await service.initializeLayer('temp2m', currentTime)
+      await service.initializeLayer('temp', currentTime)
 
-      const failedIndices = service.getFailedIndices('temp2m')
+      const failedIndices = service.getFailedIndices('temp')
       expect(failedIndices.size).toBeGreaterThan(0)
     })
   })
 
   describe('Concurrency Control', () => {
     it('should respect max concurrent downloads', async () => {
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       // Track concurrent downloads
       let maxConcurrent = 0
@@ -471,7 +471,7 @@ describe('DownloadService', () => {
       })
 
       const currentTime = new Date('2025-11-11T12:00:00Z')
-      await service.initializeLayer('temp2m', currentTime)
+      await service.initializeLayer('temp', currentTime)
 
       // Max concurrent should not exceed configured limit
       expect(maxConcurrent).toBeLessThanOrEqual(4)
@@ -482,25 +482,25 @@ describe('DownloadService', () => {
 
   describe('Done Method', () => {
     it('should wait for critical downloads to complete', async () => {
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       const currentTime = new Date('2025-11-11T12:00:00Z')
-      const initPromise = service.initializeLayer('temp2m', currentTime)
+      const initPromise = service.initializeLayer('temp', currentTime)
 
       // done() should wait for critical downloads
       await service.done()
 
       // Critical downloads should be complete
-      expect(service.isLoaded('temp2m', 2)).toBe(true)
+      expect(service.isLoaded('temp', 2)).toBe(true)
 
       await initPromise
     })
 
     it('should not wait for background downloads', async () => {
-      service.registerLayer('temp2m', mockTimeSteps)
+      service.registerLayer('temp', mockTimeSteps)
 
       const currentTime = new Date('2025-11-11T12:00:00Z')
-      await service.initializeLayer('temp2m', currentTime)
+      await service.initializeLayer('temp', currentTime)
 
       // done() should return immediately if only background downloads remain
       const start = Date.now()

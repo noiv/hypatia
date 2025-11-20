@@ -249,7 +249,7 @@ export class AppBootstrapService {
 
         // Filter to only data layers (layers were already created in SCENE step)
         const dataLayersToLoad = layersToLoad.filter(layerId =>
-          layerId === 'temp2m' || layerId === 'precipitation'
+          layerId === 'temp' || layerId === 'rain'
         );
 
         if (dataLayersToLoad.length === 0) {

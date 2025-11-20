@@ -291,7 +291,7 @@ export const App: AppComponent = {
     this.scene?.updateTime(clamped);
 
     // Prioritize timestamps for progressive loading
-    const weatherLayers: LayerId[] = ['temp2m', 'precipitation'];
+    const weatherLayers: LayerId[] = ['temp', 'rain'];
     for (const layerId of weatherLayers) {
       this.downloadService!.prioritizeTimestamps(layerId, clamped);
     }
@@ -370,10 +370,10 @@ export const App: AppComponent = {
       'earth',
       'sun',
       'graticule',
-      'temp2m',
-      'precipitation',
-      'wind10m',
-      'pressure_msl'
+      'temp',
+      'rain',
+      'wind',
+      'pressure'
     ];
 
     // Use LayersService as source of truth for layer state
@@ -394,7 +394,7 @@ export const App: AppComponent = {
   },
 
   getDataRange(): { startTime: Date; endTime: Date } {
-    const range = this.configService!.getDatasetRange('temp2m');
+    const range = this.configService!.getDatasetRange('temp');
     return range || { startTime: new Date(), endTime: new Date() };
   },
 

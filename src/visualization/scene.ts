@@ -204,7 +204,7 @@ export class Scene {
     this.renderer.setSize(width, height);
 
     // Update Line2 material resolution for wind layer
-    const windLayer = this.layers.get('wind10m');
+    const windLayer = this.layers.get('wind');
     if (windLayer && 'setResolution' in windLayer && typeof (windLayer as any).setResolution === 'function') {
       (windLayer as any).setResolution(width, height);
     }

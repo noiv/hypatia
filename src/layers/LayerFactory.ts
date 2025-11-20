@@ -10,9 +10,9 @@ import { GraticuleRenderService } from './graticule/graticule.render-service';
 import { TextRenderService } from './text/text.render-service';
 
 // New event-driven layers
-import { Temp2mLayer } from './temp/temp2m.layer';
-import { PrecipitationLayer } from './rain/precipitation.layer';
-import { Wind10mLayer } from './wind/wind10m.layer';
+import { TempLayer } from './temp/temp.layer';
+import { RainLayer } from './rain/rain.layer';
+import { WindLayer } from './wind/wind.layer';
 import { PressureLayer } from './pressure/pressure.layer';
 
 /**
@@ -58,7 +58,7 @@ export class LayerFactory {
       case 'graticule':
         return GraticuleRenderService.create(layerId);
 
-      case 'temp2m': {
+      case 'temp': {
         // Generate timesteps for the layer (6-hour intervals)
         const timeSteps = dateTimeService.generateTimeSteps(
           currentTime,
@@ -67,7 +67,7 @@ export class LayerFactory {
         );
 
         // Create layer with services
-        const layer = new Temp2mLayer(
+        const layer = new TempLayer(
           layerId,
           timeSteps,
           downloadService,
@@ -81,7 +81,7 @@ export class LayerFactory {
         return layer;
       }
 
-      case 'precipitation': {
+      case 'rain': {
         // Generate timesteps for the layer (6-hour intervals)
         const timeSteps = dateTimeService.generateTimeSteps(
           currentTime,
@@ -90,7 +90,7 @@ export class LayerFactory {
         );
 
         // Create layer with services
-        const layer = new PrecipitationLayer(
+        const layer = new RainLayer(
           layerId,
           timeSteps,
           downloadService,
@@ -104,7 +104,7 @@ export class LayerFactory {
         return layer;
       }
 
-      case 'wind10m': {
+      case 'wind': {
         // Generate timesteps for the layer (6-hour intervals)
         const timeSteps = dateTimeService.generateTimeSteps(
           currentTime,
@@ -113,7 +113,7 @@ export class LayerFactory {
         );
 
         // Wind layer doesn't use TextureService (uses WebGPU compute)
-        const layer = new Wind10mLayer(
+        const layer = new WindLayer(
           layerId,
           downloadService,
           dateTimeService,
@@ -135,7 +135,7 @@ export class LayerFactory {
         return layer;
       }
 
-      case 'pressure_msl': {
+      case 'pressure': {
         // Generate timesteps for the layer (6-hour intervals)
         const timeSteps = dateTimeService.generateTimeSteps(
           currentTime,
@@ -171,7 +171,7 @@ export class LayerFactory {
    * Get list of all available layer IDs
    */
   static getAllLayerIds(): LayerId[] {
-    return ['earth', 'sun', 'graticule', 'temp2m', 'precipitation', 'wind10m', 'pressure_msl', 'text'];
+    return ['earth', 'sun', 'graticule', 'temp', 'rain', 'wind', 'pressure', 'text'];
   }
 
   /**
@@ -186,6 +186,6 @@ export class LayerFactory {
    * Get optional layers that can be toggled by user
    */
   static getOptionalLayers(): LayerId[] {
-    return ['earth', 'sun', 'graticule', 'temp2m', 'precipitation', 'wind10m', 'pressure_msl', 'text'];
+    return ['earth', 'sun', 'graticule', 'temp', 'rain', 'wind', 'pressure', 'text'];
   }
 }

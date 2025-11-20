@@ -27,7 +27,7 @@ export class DataLoader {
    * @param forecast 0h, 6h, 12h, etc.
    */
   async loadTimestep(date: string, cycle: string, forecast: string): Promise<WeatherData> {
-    const temp = await this.loadParameter(date, cycle, forecast, 'temp2m');
+    const temp = await this.loadParameter(date, cycle, forecast, 'temp');
     const wind_u = await this.loadParameter(date, cycle, forecast, 'wind10m_u');
     const wind_v = await this.loadParameter(date, cycle, forecast, 'wind10m_v');
 

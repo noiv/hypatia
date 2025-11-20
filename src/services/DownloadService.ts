@@ -332,7 +332,7 @@ export class DownloadService {
       let data: Uint16Array | { u: Uint16Array; v: Uint16Array }
       let totalBytes = 0
 
-      if (layerId === 'wind10m') {
+      if (layerId === 'wind') {
         // Wind layer has U and V components
         const urls = this.urlBuilder.buildWindUrls(urlConfig, timeStep)
         const [u, v] = await Promise.all([

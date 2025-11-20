@@ -80,10 +80,10 @@ describe('LayersService', () => {
 
     it('should register a data layer', () => {
       const layer = createMockLayer()
-      service.registerLayer('temp2m', layer, true)
+      service.registerLayer('temp', layer, true)
 
-      expect(service.hasLayer('temp2m')).toBe(true)
-      const metadata = service.getMetadata('temp2m')
+      expect(service.hasLayer('temp')).toBe(true)
+      const metadata = service.getMetadata('temp')
       expect(metadata?.isDataLayer).toBe(true)
       expect(metadata?.loadProgress).toBe(0)
     })
@@ -123,10 +123,10 @@ describe('LayersService', () => {
 
     it('should toggle data layer visibility', async () => {
       const layer = createMockLayer()
-      service.registerLayer('temp2m', layer, true)
+      service.registerLayer('temp', layer, true)
 
       // Register timesteps in download service
-      downloadService.registerLayer('temp2m', [
+      downloadService.registerLayer('temp', [
         {
           date: '20251111',
           cycle: '00',
@@ -136,11 +136,11 @@ describe('LayersService', () => {
         } as any,
       ])
 
-      await service.toggle('temp2m', true, {
+      await service.toggle('temp', true, {
         currentTime: new Date('2025-11-11T00:00:00Z'),
       })
 
-      expect(service.isVisible('temp2m')).toBe(true)
+      expect(service.isVisible('temp')).toBe(true)
       expect(layer.setVisible).toHaveBeenCalledWith(true)
     })
 
@@ -156,7 +156,7 @@ describe('LayersService', () => {
     })
 
     it('should throw error for unregistered layer', async () => {
-      await expect(service.toggle('temp2m', true)).rejects.toThrow(
+      await expect(service.toggle('temp', true)).rejects.toThrow(
         'Layer temp2m not registered'
       )
     })
@@ -165,9 +165,9 @@ describe('LayersService', () => {
   describe('Layer Opacity', () => {
     it('should set opacity if layer supports it', () => {
       const layer = createMockLayer()
-      service.registerLayer('temp2m', layer, false)
+      service.registerLayer('temp', layer, false)
 
-      service.setOpacity('temp2m', 0.5)
+      service.setOpacity('temp', 0.5)
 
       expect(layer.setOpacity).toHaveBeenCalledWith(0.5)
     })
@@ -187,32 +187,32 @@ describe('LayersService', () => {
     beforeEach(() => {
       service.registerLayer('earth', createMockLayer(), false)
       service.registerLayer('sun', createMockLayer(), false)
-      service.registerLayer('temp2m', createMockLayer(), true)
-      service.registerLayer('wind10m', createMockLayer(), true)
+      service.registerLayer('temp', createMockLayer(), true)
+      service.registerLayer('wind', createMockLayer(), true)
     })
 
     it('should get all layer IDs', () => {
       const layerIds = service.getAllLayerIds()
       expect(layerIds).toHaveLength(4)
       expect(layerIds).toContain('earth')
-      expect(layerIds).toContain('temp2m')
+      expect(layerIds).toContain('temp')
     })
 
     it('should get visible layer IDs', async () => {
       await service.toggle('earth', true)
-      await service.toggle('temp2m', true)
+      await service.toggle('temp', true)
 
       const visibleIds = service.getVisibleLayerIds()
       expect(visibleIds).toHaveLength(2)
       expect(visibleIds).toContain('earth')
-      expect(visibleIds).toContain('temp2m')
+      expect(visibleIds).toContain('temp')
     })
 
     it('should get data layer IDs', () => {
       const dataLayerIds = service.getDataLayerIds()
       expect(dataLayerIds).toHaveLength(2)
-      expect(dataLayerIds).toContain('temp2m')
-      expect(dataLayerIds).toContain('wind10m')
+      expect(dataLayerIds).toContain('temp')
+      expect(dataLayerIds).toContain('wind')
     })
 
     it('should get layer instance', () => {
@@ -223,7 +223,7 @@ describe('LayersService', () => {
 
     it('should check if layer is registered', () => {
       expect(service.hasLayer('earth')).toBe(true)
-      expect(service.hasLayer('pressure_msl' as LayerId)).toBe(false)
+      expect(service.hasLayer('pressure' as LayerId)).toBe(false)
     })
   })
 
@@ -234,11 +234,11 @@ describe('LayersService', () => {
       const layer3 = createMockLayer(2)
 
       service.registerLayer('earth', layer1, false)
-      service.registerLayer('temp2m', layer2, false)
+      service.registerLayer('temp', layer2, false)
       service.registerLayer('sun', layer3, false)
 
       await service.toggle('earth', true)
-      await service.toggle('temp2m', true)
+      await service.toggle('temp', true)
       await service.toggle('sun', true)
 
       const mockState = {} as AnimationState
@@ -274,7 +274,7 @@ describe('LayersService', () => {
 
     it('should throw error when updating unregistered layer', () => {
       const mockState = {} as AnimationState
-      expect(() => service.updateLayer('temp2m', mockState)).toThrow(
+      expect(() => service.updateLayer('temp', mockState)).toThrow(
         'Layer temp2m not registered'
       )
     })
@@ -283,7 +283,7 @@ describe('LayersService', () => {
   describe('Download Prioritization', () => {
     it('should prioritize downloads for visible data layers', async () => {
       const layer = createMockLayer()
-      service.registerLayer('temp2m', layer, true)
+      service.registerLayer('temp', layer, true)
 
       // Register timesteps
       const timesteps = [
@@ -302,9 +302,9 @@ describe('LayersService', () => {
           filePath: '/data/temp2m/2025111106.fp16',
         } as any,
       ]
-      downloadService.registerLayer('temp2m', timesteps)
+      downloadService.registerLayer('temp', timesteps)
 
-      await service.toggle('temp2m', true, {
+      await service.toggle('temp', true, {
         currentTime: new Date('2025-11-11T00:00:00Z'),
       })
 
@@ -312,12 +312,12 @@ describe('LayersService', () => {
       const spy = vi.spyOn(downloadService, 'prioritizeTimestamps')
       service.prioritizeDownloads(new Date('2025-11-11T06:00:00Z'))
 
-      expect(spy).toHaveBeenCalledWith('temp2m', expect.any(Date))
+      expect(spy).toHaveBeenCalledWith('temp', expect.any(Date))
     })
 
     it('should not prioritize for invisible layers', () => {
       const layer = createMockLayer()
-      service.registerLayer('temp2m', layer, true)
+      service.registerLayer('temp', layer, true)
 
       const spy = vi.spyOn(downloadService, 'prioritizeTimestamps')
       service.prioritizeDownloads(new Date('2025-11-11T00:00:00Z'))
@@ -329,7 +329,7 @@ describe('LayersService', () => {
   describe('Memory Management', () => {
     it('should estimate memory usage', async () => {
       const layer = createMockLayer()
-      service.registerLayer('temp2m', layer, true)
+      service.registerLayer('temp', layer, true)
 
       const timesteps = [
         {
@@ -340,9 +340,9 @@ describe('LayersService', () => {
           filePath: '/data/temp2m/2025111100.fp16',
         } as any,
       ]
-      downloadService.registerLayer('temp2m', timesteps)
+      downloadService.registerLayer('temp', timesteps)
 
-      await service.toggle('temp2m', true, {
+      await service.toggle('temp', true, {
         currentTime: new Date('2025-11-11T00:00:00Z'),
       })
 
@@ -353,7 +353,7 @@ describe('LayersService', () => {
 
     it('should clear layer data', () => {
       const layer = createMockLayer()
-      service.registerLayer('temp2m', layer, true)
+      service.registerLayer('temp', layer, true)
 
       const timesteps = [
         {
@@ -364,11 +364,11 @@ describe('LayersService', () => {
           filePath: '/data/temp2m/2025111100.fp16',
         } as any,
       ]
-      downloadService.registerLayer('temp2m', timesteps)
+      downloadService.registerLayer('temp', timesteps)
 
-      service.clearLayerData('temp2m')
+      service.clearLayerData('temp')
 
-      const metadata = service.getMetadata('temp2m')
+      const metadata = service.getMetadata('temp')
       expect(metadata?.loadProgress).toBe(0)
     })
 
@@ -387,7 +387,7 @@ describe('LayersService', () => {
     it('should get layer statistics', async () => {
       service.registerLayer('earth', createMockLayer(), false)
       service.registerLayer('sun', createMockLayer(), false)
-      service.registerLayer('temp2m', createMockLayer(), true)
+      service.registerLayer('temp', createMockLayer(), true)
 
       await service.toggle('earth', true)
 
@@ -402,7 +402,7 @@ describe('LayersService', () => {
   describe('Event Handling', () => {
     it('should update load progress when download progresses', async () => {
       const layer = createMockLayer()
-      service.registerLayer('temp2m', layer, true)
+      service.registerLayer('temp', layer, true)
 
       const timesteps = [
         {
@@ -413,16 +413,16 @@ describe('LayersService', () => {
           filePath: '/data/temp2m/2025111100.fp16',
         } as any,
       ]
-      downloadService.registerLayer('temp2m', timesteps)
+      downloadService.registerLayer('temp', timesteps)
 
-      await service.toggle('temp2m', true, {
+      await service.toggle('temp', true, {
         currentTime: new Date('2025-11-11T00:00:00Z'),
       })
 
       // Wait a bit for progress events
       await new Promise((resolve) => setTimeout(resolve, 50))
 
-      const progress = service.getLoadProgress('temp2m')
+      const progress = service.getLoadProgress('temp')
       expect(progress).toBeDefined()
       expect(progress).toBeGreaterThanOrEqual(0)
     })
@@ -434,14 +434,14 @@ describe('LayersService', () => {
       const layer2 = createMockLayer()
 
       service.registerLayer('earth', layer1, false)
-      service.registerLayer('temp2m', layer2, true)
+      service.registerLayer('temp', layer2, true)
 
       service.dispose()
 
       expect(layer1.dispose).toHaveBeenCalled()
       expect(layer2.dispose).toHaveBeenCalled()
       expect(service.hasLayer('earth')).toBe(false)
-      expect(service.hasLayer('temp2m')).toBe(false)
+      expect(service.hasLayer('temp')).toBe(false)
     })
   })
 })

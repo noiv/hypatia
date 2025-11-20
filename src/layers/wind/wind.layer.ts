@@ -1,5 +1,5 @@
 /**
- * Wind10m Layer - Event-Driven Architecture
+ * Wind Layer - Event-Driven Architecture
  *
  * Wind visualization layer using WebGPU compute shaders for particle tracing.
  * Refactored to use DownloadService for initial bulk data loading.
@@ -25,13 +25,13 @@ import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { EARTH_RADIUS_UNITS } from '../../utils/constants';
 import { generateFibonacciSphere } from '../../utils/sphereSeeds';
-import { WIND10M_CONFIG } from '../../config';
+import { WIND_CONFIG } from '../../config';
 import type { TimeStep } from '../../config/types';
 import windComputeShader from './wind-compute.wgsl?raw';
 import { WindGeometry, type WindGeometryConfig } from './wind-geometry';
 
-export class Wind10mLayer implements ILayer {
-  layerId: LayerId = 'wind10m';
+export class WindLayer implements ILayer {
+  layerId: LayerId = 'wind';
   timeSteps: TimeStep[] = [];
   public group: THREE.Group;
   private seeds: THREE.Vector3[];
@@ -102,15 +102,15 @@ export class Wind10mLayer implements ILayer {
 
     // Initialize geometry helper
     const geometryConfig: WindGeometryConfig = {
-      lineSteps: Wind10mLayer.LINE_STEPS,
-      lineWidth: Wind10mLayer.LINE_WIDTH,
-      taperSegments: Wind10mLayer.TAPER_SEGMENTS,
-      snakeLength: Wind10mLayer.SNAKE_LENGTH,
-      useCustomGeometry: Wind10mLayer.USE_CUSTOM_GEOMETRY
+      lineSteps: WindLayer.LINE_STEPS,
+      lineWidth: WindLayer.LINE_WIDTH,
+      taperSegments: WindLayer.TAPER_SEGMENTS,
+      snakeLength: WindLayer.SNAKE_LENGTH,
+      useCustomGeometry: WindLayer.USE_CUSTOM_GEOMETRY
     };
     this.geometry = new WindGeometry(this.seeds, geometryConfig);
 
-    console.log(`Wind10mLayer: Generated ${this.seeds.length} grid points`);
+    console.log(`WindLayer: Generated ${this.seeds.length} grid points`);
 
     // Listen to download events for both U and V components
     this.setupDownloadListeners();
@@ -204,7 +204,7 @@ export class Wind10mLayer implements ILayer {
     this.device.queue.writeBuffer(this.seedBuffer, 0, seedData);
 
     // Create output buffer (vec4f = 4 floats = 16 bytes per vertex)
-    const outputSize = this.seeds.length * Wind10mLayer.LINE_STEPS * 4 * 4;
+    const outputSize = this.seeds.length * WindLayer.LINE_STEPS * 4 * 4;
     this.outputBuffer = this.device.createBuffer({
       size: outputSize,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
@@ -373,7 +373,7 @@ export class Wind10mLayer implements ILayer {
     passEncoder.dispatchWorkgroups(numWorkgroups);
     passEncoder.end();
 
-    const outputSize = this.seeds.length * Wind10mLayer.LINE_STEPS * 4 * 4;
+    const outputSize = this.seeds.length * WindLayer.LINE_STEPS * 4 * 4;
     commandEncoder.copyBufferToBuffer(this.outputBuffer, 0, this.stagingBuffer, 0, outputSize);
     this.device.queue.submit([commandEncoder.finish()]);
 
@@ -438,7 +438,7 @@ export class Wind10mLayer implements ILayer {
     // Update snake animation
     if (this.material && state.deltaTime > 0) {
       const animationSpeed = 20.0;
-      const cycleLength = Wind10mLayer.LINE_STEPS + Wind10mLayer.SNAKE_LENGTH;
+      const cycleLength = WindLayer.LINE_STEPS + WindLayer.SNAKE_LENGTH;
       this.animationPhase = (this.animationPhase + state.deltaTime * animationSpeed) % cycleLength;
 
       if ('animationPhase' in this.material.uniforms) {
@@ -494,7 +494,7 @@ export class Wind10mLayer implements ILayer {
   }
 
   getConfig() {
-    return WIND10M_CONFIG;
+    return WIND_CONFIG;
   }
 
   dispose(): void {

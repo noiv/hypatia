@@ -1,10 +1,10 @@
 /**
- * Precipitation Layer - Event-Driven Architecture
+ * Temp Layer - Event-Driven Architecture
  *
- * Precipitation rate visualization layer.
+ * Temperature at 2 meters above surface visualization layer.
  * Refactored to use DownloadService events instead of direct data loading.
  *
- * Key changes from precipitation.render-service.ts:
+ * Key changes from temp2m.render-service.ts:
  * - No direct data loading (delegates to DownloadService)
  * - Listens to download events for texture updates
  * - Uses TextureService for efficient GPU uploads
@@ -13,7 +13,7 @@
 
 import * as THREE from 'three'
 import { EARTH_RADIUS_UNITS } from '../../utils/constants'
-import { PRECIPITATION_CONFIG } from '../../config'
+import { TEMP_CONFIG } from '../../config'
 import type { TimeStep } from '../../config/types'
 import type { ILayer, LayerId } from '../ILayer'
 import type { AnimationState } from '../../visualization/IAnimationState'
@@ -21,8 +21,8 @@ import type { DownloadService } from '../../services/DownloadService'
 import type { TextureService } from '../../services/TextureService'
 import type { DateTimeService } from '../../services/DateTimeService'
 
-export class PrecipitationLayer implements ILayer {
-  layerId: LayerId = 'precipitation'
+export class TempLayer implements ILayer {
+  layerId: LayerId = 'temp'
   timeSteps: TimeStep[] = []
   private mesh: THREE.Mesh
   private material: THREE.ShaderMaterial
@@ -37,11 +37,12 @@ export class PrecipitationLayer implements ILayer {
 
   // Cached state for comparison
   private lastTime?: Date
+  private lastSunDirection?: THREE.Vector3
 
   // Data constants
   private static readonly WIDTH = 1441
   private static readonly HEIGHT = 721
-  private static readonly NO_DATA_SENTINEL = 65504 // Max finite fp16
+  private static readonly NO_DATA_SENTINEL = 0 // 0 Kelvin is impossible
 
   // Event cleanup
   private eventCleanup: Array<() => void> = []
@@ -59,7 +60,7 @@ export class PrecipitationLayer implements ILayer {
     this.textureService = textureService
     this.dateTimeService = dateTimeService
 
-    console.log(`[precipitation] Constructing layer with ${timeSteps.length} timesteps`)
+    console.log(`[temp2m] Constructing layer with ${timeSteps.length} timesteps`)
 
     // Initialize availability tracking
     this.timestepAvailable = new Array(timeSteps.length).fill(false)
@@ -68,34 +69,40 @@ export class PrecipitationLayer implements ILayer {
     this.dataTexture = this.createEmptyTexture(timeSteps.length)
 
     // Create geometry
-    const radius = EARTH_RADIUS_UNITS * (1 + PRECIPITATION_CONFIG.visual.altitudeKm / 6371)
+    const radius = EARTH_RADIUS_UNITS * (1 + TEMP_CONFIG.visual.altitudeKm / 6371)
     const geometry = new THREE.SphereGeometry(
       radius,
-      PRECIPITATION_CONFIG.geometry.widthSegments,
-      PRECIPITATION_CONFIG.geometry.heightSegments
+      TEMP_CONFIG.geometry.widthSegments,
+      TEMP_CONFIG.geometry.heightSegments
     )
 
     // Create shader material
     this.material = new THREE.ShaderMaterial({
+      defines: {
+        DEVELOPMENT: '', // Enable debug rendering
+      },
       uniforms: {
         dataTexture: { value: this.dataTexture },
         timeIndex: { value: 0.0 },
         maxTimeIndex: { value: timeSteps.length - 1 },
-        opacity: { value: PRECIPITATION_CONFIG.visual.opacity },
+        sunDirection: { value: new THREE.Vector3(0, 0, 0) },
+        opacity: { value: TEMP_CONFIG.visual.opacity },
+        dayNightSharpness: { value: TEMP_CONFIG.visual.dayNightSharpness },
+        dayNightFactor: { value: TEMP_CONFIG.visual.dayNightFactor },
       },
       vertexShader: this.getVertexShader(),
       fragmentShader: this.getFragmentShader(),
       transparent: true,
       side: THREE.FrontSide,
       depthWrite: false,
-      polygonOffset: PRECIPITATION_CONFIG.depth.polygonOffset,
-      polygonOffsetFactor: PRECIPITATION_CONFIG.depth.polygonOffsetFactor,
-      polygonOffsetUnits: PRECIPITATION_CONFIG.depth.polygonOffsetUnits,
+      polygonOffset: TEMP_CONFIG.depth.polygonOffset,
+      polygonOffsetFactor: TEMP_CONFIG.depth.polygonOffsetFactor,
+      polygonOffsetUnits: TEMP_CONFIG.depth.polygonOffsetUnits,
     })
 
     this.mesh = new THREE.Mesh(geometry, this.material)
-    this.mesh.name = 'PrecipitationLayer'
-    this.mesh.renderOrder = 2 // Render after temp2m
+    this.mesh.name = 'TempLayer'
+    this.mesh.renderOrder = 1
     this.mesh.visible = false // Initially hidden until data loads
 
     // Set up event listeners for download events
@@ -110,12 +117,12 @@ export class PrecipitationLayer implements ILayer {
       if (event.layerId !== this.layerId) return
 
       const { index, data } = event
-      console.log(`[precipitation] Timestamp ${index} loaded, updating texture`)
+      console.log(`[temp2m] Timestamp ${index} loaded, updating texture`)
 
-      // Extract Uint16Array from data
+      // Extract Uint16Array from data (might be wrapped in object for wind)
       const layerData = data instanceof Uint16Array ? data : data.data
       if (!layerData) {
-        console.error(`[precipitation] Invalid data format for index ${index}`)
+        console.error(`[temp2m] Invalid data format for index ${index}`)
         return
       }
 
@@ -144,14 +151,14 @@ export class PrecipitationLayer implements ILayer {
    * Create empty 3D texture filled with NO_DATA sentinel
    */
   private createEmptyTexture(depth: number): THREE.Data3DTexture {
-    const totalSize = PrecipitationLayer.WIDTH * PrecipitationLayer.HEIGHT * depth
+    const totalSize = TempLayer.WIDTH * TempLayer.HEIGHT * depth
     const data = new Uint16Array(totalSize)
-    data.fill(PrecipitationLayer.NO_DATA_SENTINEL)
+    data.fill(TempLayer.NO_DATA_SENTINEL)
 
     const texture = new THREE.Data3DTexture(
       data,
-      PrecipitationLayer.WIDTH,
-      PrecipitationLayer.HEIGHT,
+      TempLayer.WIDTH,
+      TempLayer.HEIGHT,
       depth
     )
     texture.format = THREE.RedFormat
@@ -162,6 +169,26 @@ export class PrecipitationLayer implements ILayer {
     texture.wrapT = THREE.ClampToEdgeWrapping
 
     return texture
+  }
+
+  /**
+   * Update layer based on animation state (called every frame)
+   * Checks for time and sun direction changes
+   */
+  update(state: AnimationState): void {
+    // Check time change
+    if (!this.lastTime || state.time.getTime() !== this.lastTime.getTime()) {
+      // Calculate time index from current time using DateTimeService
+      const fractionalIndex = this.dateTimeService.timeToIndex(state.time, this.timeSteps)
+      this.setTimeIndex(fractionalIndex)
+      this.lastTime = state.time
+    }
+
+    // Check sun direction change
+    if (!this.lastSunDirection || !this.lastSunDirection.equals(state.sunDirection)) {
+      this.material.uniforms.sunDirection?.value.copy(state.sunDirection)
+      this.lastSunDirection = state.sunDirection.clone()
+    }
   }
 
   /**
@@ -186,9 +213,18 @@ export class PrecipitationLayer implements ILayer {
 
     if (this.mesh.visible !== shouldBeVisible) {
       console.log(
-        `[precipitation] Visibility: ${this.mesh.visible} -> ${shouldBeVisible} | idx=${index.toFixed(2)} [${idx1}:${data1}, ${idx2}:${data2}]`
+        `[temp2m] Visibility: ${this.mesh.visible} -> ${shouldBeVisible} | idx=${index.toFixed(2)} [${idx1}:${data1}, ${idx2}:${data2}]`
       )
       this.mesh.visible = shouldBeVisible
+    }
+  }
+
+  /**
+   * Update sun direction for day/night shading
+   */
+  protected updateSunDirection(direction: THREE.Vector3): void {
+    if (this.material.uniforms.sunDirection) {
+      this.material.uniforms.sunDirection.value.copy(direction)
     }
   }
 
@@ -198,20 +234,6 @@ export class PrecipitationLayer implements ILayer {
   setOpacity(opacity: number): void {
     if (this.material.uniforms.opacity) {
       this.material.uniforms.opacity.value = opacity
-    }
-  }
-
-  /**
-   * Update layer based on animation state (called every frame)
-   * Checks for time changes
-   */
-  update(state: AnimationState): void {
-    // Check time change
-    if (!this.lastTime || state.time.getTime() !== this.lastTime.getTime()) {
-      // Calculate time index from current time using DateTimeService
-      const fractionalIndex = this.dateTimeService.timeToIndex(state.time, this.timeSteps)
-      this.setTimeIndex(fractionalIndex)
-      this.lastTime = state.time
     }
   }
 
@@ -238,7 +260,7 @@ export class PrecipitationLayer implements ILayer {
    * Get layer configuration
    */
   getConfig() {
-    return PRECIPITATION_CONFIG
+    return TEMP_CONFIG
   }
 
   /**
@@ -268,6 +290,7 @@ export class PrecipitationLayer implements ILayer {
   private getVertexShader(): string {
     return `
       varying vec2 vUv;
+      varying vec3 vPosition;
       varying vec3 vNormal;
 
       void main() {
@@ -285,6 +308,7 @@ export class PrecipitationLayer implements ILayer {
         float v = 1.0 - ((lat + 1.57079632) / 3.14159265);
 
         vUv = vec2(u, v);
+        vPosition = (modelMatrix * vec4(position, 1.0)).xyz;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `
@@ -295,58 +319,94 @@ export class PrecipitationLayer implements ILayer {
       uniform sampler3D dataTexture;
       uniform float timeIndex;
       uniform float maxTimeIndex;
+      uniform vec3 sunDirection;
       uniform float opacity;
+      uniform float dayNightSharpness;
+      uniform float dayNightFactor;
 
       varying vec2 vUv;
+      varying vec3 vPosition;
       varying vec3 vNormal;
 
-      const float DISCARD_THRESHOLD = ${PRECIPITATION_CONFIG.discardThreshold.toExponential()};
+      const float NODATA = -9999.0;
       const float NO_DATA_SENTINEL = 65504.0;
+      const float NO_DATA_THRESHOLD = 60000.0;
+      const float MIN_TEMP = -30.0;
+      const float MAX_TEMP = 40.0;
 
-      vec4 getPrateColor(float rate) {
+      vec3 getTempColor(float tempC) {
         return
-          rate < 0.0004 ? vec4(0.04, 0.24, 0.59, 0.30) :
-          rate < 0.0007 ? vec4(0.11, 0.30, 0.62, 0.40) :
-          rate < 0.0013 ? vec4(0.18, 0.36, 0.66, 0.50) :
-          rate < 0.0024 ? vec4(0.25, 0.43, 0.70, 0.60) :
-          rate < 0.0042 ? vec4(0.32, 0.49, 0.74, 0.70) :
-          rate < 0.0076 ? vec4(0.39, 0.55, 0.77, 0.80) :
-          rate < 0.0136 ? vec4(0.47, 0.62, 0.81, 0.90) :
-                          vec4(1.00, 1.00, 1.00, 1.00);
+          tempC < -20.0 ? vec3(0.667, 0.400, 0.667) :
+          tempC < -10.0 ? vec3(0.808, 0.608, 0.898) :
+          tempC <   0.0 ? vec3(0.463, 0.808, 0.886) :
+          tempC <  10.0 ? vec3(0.424, 0.937, 0.424) :
+          tempC <  20.0 ? vec3(0.929, 0.976, 0.424) :
+          tempC <  30.0 ? vec3(1.000, 0.733, 0.333) :
+          tempC <  40.0 ? vec3(0.984, 0.396, 0.306) :
+                          vec3(0.800, 0.251, 0.251);
       }
 
       void main() {
-        float t = clamp(timeIndex, 0.0, maxTimeIndex);
-
-        float z1 = floor(t);
-        float z2 = min(z1 + 1.0, maxTimeIndex);
-        float mix_factor = fract(t);
-
-        vec3 uvw1 = vec3(vUv.x, vUv.y, (z1 + 0.5) / (maxTimeIndex + 1.0));
-        vec3 uvw2 = vec3(vUv.x, vUv.y, (z2 + 0.5) / (maxTimeIndex + 1.0));
-
-        float rate1 = texture(dataTexture, uvw1).r;
-        float rate2 = texture(dataTexture, uvw2).r;
-
-        if (rate1 > 60000.0 || rate2 > 60000.0) {
-          #ifdef DEVELOPMENT
-            gl_FragColor = vec4(0.3, 0.3, 0.3, 0.3);
-          #else
-            discard;
-          #endif
+        #ifdef DEBUG_UV
+          float u = vUv.x;
+          vec3 color;
+          if (u < 0.05 || u > 0.95) {
+            color = vec3(1.0, 1.0, 0.0);
+          } else {
+            color = vec3(u, 0.0, 0.0);
+          }
+          gl_FragColor = vec4(color, opacity);
           return;
-        }
+        #else
+          float val1, val2, frac;
 
-        float rate = mix(rate1, rate2, mix_factor);
+          if (timeIndex < 0.0 || timeIndex > maxTimeIndex) {
+            #ifdef DEVELOPMENT
+              gl_FragColor = vec4(1.0, 0.0, 0.0, 0.3);
+            #else
+              discard;
+            #endif
+            return;
+          }
 
-        if (rate <= DISCARD_THRESHOLD) {
-          discard;
-        }
+          float t1 = floor(timeIndex);
+          float t2 = min(t1 + 1.0, maxTimeIndex);
+          frac = fract(timeIndex);
 
-        vec4 color = getPrateColor(rate);
-        color.a *= opacity;
+          float z1 = (t1 + 0.5) / (maxTimeIndex + 1.0);
+          float z2 = (t2 + 0.5) / (maxTimeIndex + 1.0);
 
-        gl_FragColor = color;
+          val1 = texture(dataTexture, vec3(vUv, z1)).r;
+          val2 = texture(dataTexture, vec3(vUv, z2)).r;
+
+          if (val1 == 0.0 || val2 == 0.0 || val1 == NODATA || val2 == NODATA) {
+            #ifdef DEVELOPMENT
+              gl_FragColor = vec4(0.2, 0.2, 0.2, 0.3);
+            #else
+              discard;
+            #endif
+            return;
+          }
+
+          float value = mix(val1, val2, frac);
+          float tempC = value - 273.15;
+          vec3 color = getTempColor(tempC);
+
+          float sunLength = length(sunDirection);
+          vec3 finalColor;
+
+          if (sunLength > 0.01) {
+            vec3 lightDir = normalize(sunDirection);
+            float dotNL = dot(vNormal, lightDir);
+            float dnZone = clamp(dotNL * dayNightSharpness, -1.0, 1.0);
+            float lightMix = 0.5 + dnZone * dayNightFactor;
+            finalColor = color * lightMix;
+          } else {
+            finalColor = color;
+          }
+
+          gl_FragColor = vec4(finalColor, opacity);
+        #endif
       }
     `
   }

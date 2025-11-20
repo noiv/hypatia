@@ -213,12 +213,12 @@ describe('ConfigService', () => {
       const layers = service.getLayers()
 
       expect(layers.length).toBe(2)
-      expect(layers[0]?.id).toBe('temp2m')
-      expect(layers[1]?.id).toBe('wind10m')
+      expect(layers[0]?.id).toBe('temp')
+      expect(layers[1]?.id).toBe('wind')
     })
 
     it('should get layer by ID', () => {
-      const layer = service.getLayerById('temp2m')
+      const layer = service.getLayerById('temp')
 
       expect(layer).toBeDefined()
       expect(layer?.label.short).toBe('Temperature')
@@ -233,17 +233,17 @@ describe('ConfigService', () => {
       const layer = service.getLayerByUrlKey('temp')
 
       expect(layer).toBeDefined()
-      expect(layer?.id).toBe('temp2m')
+      expect(layer?.id).toBe('temp')
     })
 
     it('should convert layer ID to URL key', () => {
-      const urlKey = service.layerIdToUrlKey('temp2m')
+      const urlKey = service.layerIdToUrlKey('temp')
       expect(urlKey).toBe('temp')
     })
 
     it('should convert URL key to layer ID', () => {
       const layerId = service.urlKeyToLayerId('temp')
-      expect(layerId).toBe('temp2m')
+      expect(layerId).toBe('temp')
     })
 
     it('should return ID as-is if no layer found', () => {
@@ -255,7 +255,7 @@ describe('ConfigService', () => {
       const defaultLayers = service.getDefaultLayers()
 
       expect(defaultLayers.length).toBe(1)
-      expect(defaultLayers[0]?.id).toBe('temp2m')
+      expect(defaultLayers[0]?.id).toBe('temp')
     })
   })
 
@@ -279,7 +279,7 @@ describe('ConfigService', () => {
     })
 
     it('should get dataset info', () => {
-      const datasetInfo = service.getDatasetInfo('temp2m')
+      const datasetInfo = service.getDatasetInfo('temp')
 
       expect(datasetInfo).toBeDefined()
       expect(datasetInfo?.count).toBe(60)
@@ -297,7 +297,7 @@ describe('ConfigService', () => {
     })
 
     it('should get dataset range', () => {
-      const range = service.getDatasetRange('temp2m')
+      const range = service.getDatasetRange('temp')
 
       expect(range).not.toBeNull()
       expect(range?.startTime.toISOString()).toBe('2025-11-01T00:00:00.000Z')
@@ -310,7 +310,7 @@ describe('ConfigService', () => {
     })
 
     it('should parse timestamp correctly', () => {
-      const range = service.getDatasetRange('temp2m')
+      const range = service.getDatasetRange('temp')
 
       expect(range).not.toBeNull()
       expect(range?.startTime).toBeInstanceOf(Date)

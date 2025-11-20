@@ -5,13 +5,13 @@
  */
 
 import earthData from '../layers/earth/earth.config.json';
-import temp2mData from '../layers/temp/temp2m.config.json';
+import tempData from '../layers/temp/temp.config.json';
 import atmosphereData from '../layers/sun/atmosphere.config.json';
 import graticuleData from '../layers/graticule/graticule.config.json';
-import precipitationData from '../layers/rain/precipitation.config.json';
+import rainData from '../layers/rain/rain.config.json';
 import pressureData from '../layers/pressure/pressure.config.json';
 import textData from '../layers/text/text.config.json';
-import wind10mData from '../layers/wind/wind10m.config.json';
+import windData from '../layers/wind/wind.config.json';
 
 import type {
   EarthConfig,
@@ -26,13 +26,13 @@ import type {
 
 // Export typed configuration constants
 export const EARTH_CONFIG: EarthConfig = earthData;
-export const TEMP2M_CONFIG: Temp2mConfig = temp2mData as Temp2mConfig;
+export const TEMP_CONFIG: Temp2mConfig = tempData as Temp2mConfig;
 export const ATMOSPHERE_CONFIG: AtmosphereConfig = atmosphereData as AtmosphereConfig;
 export const GRATICULE_CONFIG: GraticuleConfig = graticuleData;
-export const PRECIPITATION_CONFIG: PrecipitationConfig = precipitationData as PrecipitationConfig;
+export const RAIN_CONFIG: PrecipitationConfig = rainData as PrecipitationConfig;
 export const PRESSURE_CONFIG: PressureConfig = pressureData;
 export const TEXT_CONFIG: TextConfig = textData;
-export const WIND10M_CONFIG: Wind10mConfig = wind10mData;
+export const WIND_CONFIG: Wind10mConfig = windData;
 
 // Export config loader
 export { configLoader } from './loader';

@@ -38,10 +38,10 @@ const LAYER_DISPLAY_NAMES: Record<LayerId, string> = {
   earth: 'Earth',
   sun: 'Sun',
   graticule: 'Graticule',
-  temp2m: 'Temperature',
-  precipitation: 'Rain',
-  wind10m: 'Wind',
-  pressure_msl: 'Pressure',
+  temp: 'Temperature',
+  rain: 'Rain',
+  wind: 'Wind',
+  pressure: 'Pressure',
   text: 'Text'
 };
 
@@ -93,7 +93,7 @@ export const LayersPanel: m.Component<LayersPanelAttrs> = {
       const isLoading = state?.loading;
 
       // Check if this is a weather layer that uses progressive loading
-      const weatherLayers: LayerId[] = ['temp2m', 'precipitation'];
+      const weatherLayers: LayerId[] = ['temp', 'rain'];
       const hasProgressCanvas = weatherLayers.includes(layerId);
 
       const button = m('button.btn', {
@@ -146,10 +146,10 @@ export const LayersPanel: m.Component<LayersPanelAttrs> = {
       // Weather layers
       m('div.layer-group', [
         m('h4', 'Weather'),
-        renderLayerButton('temp2m'),
-        renderLayerButton('precipitation'),
-        renderLayerButton('wind10m'),
-        renderLayerButton('pressure_msl'),
+        renderLayerButton('temp'),
+        renderLayerButton('rain'),
+        renderLayerButton('wind'),
+        renderLayerButton('pressure'),
       ]),
 
       // Text overlay

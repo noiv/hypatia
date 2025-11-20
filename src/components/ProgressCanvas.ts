@@ -23,14 +23,14 @@ export interface ProgressCanvasAttrs {
 
 // Layer colors (can be moved to config later)
 const LAYER_COLORS: Record<LayerId, string> = {
-  temp2m: '#ff6b35',          // Orange-red
-  precipitation: '#4ecdc4',   // Cyan
-  wind10m: '#95e1d3',         // Light teal
-  pressure_msl: '#f38181',    // Light red
-  earth: '#4a69bd',           // Blue (unused)
-  sun: '#feca57',             // Yellow (unused)
-  graticule: '#ffffff',       // White (unused)
-  text: '#ffffff'             // White (unused)
+  temp: '#ff6b35',       // Orange-red
+  rain: '#4ecdc4',       // Cyan
+  wind: '#95e1d3',       // Light teal
+  pressure: '#f38181',   // Light red
+  earth: '#4a69bd',      // Blue (unused)
+  sun: '#feca57',        // Yellow (unused)
+  graticule: '#ffffff',  // White (unused)
+  text: '#ffffff'        // White (unused)
 };
 
 const CANVAS_HEIGHT = 2; // pixels

@@ -11,11 +11,11 @@ import type { ConfigService } from './ConfigService'
 export type DataProvider = 'local' | 'ecmwf' | 'copernicus'
 export type DataModel = 'ifs' | 'aifs' | 'era5'
 export type DataParam =
-  | 'temp2m'
+  | 'temp'
   | 'wind10u'
   | 'wind10v'
-  | 'precipitation'
-  | 'pressure_msl'
+  | 'rain'
+  | 'pressure'
   | 'geopotential'
 
 export interface UrlParams {

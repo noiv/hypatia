@@ -113,7 +113,7 @@ export function createMockHypatiaConfig() {
     datasets: {
       temp2m: {
         name: 'Temperature at 2m',
-        param: 'temp2m',
+        param: 'temp',
         startTime: '2025-11-01T00:00:00Z',
         endTime: '2025-11-20T00:00:00Z',
       },

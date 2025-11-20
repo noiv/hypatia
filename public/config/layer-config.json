@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "layers": [
     {
-      "id": "temp2m",
+      "id": "temp",
       "urlKey": "temp",
       "label": {
         "short": "Temp",
@@ -28,7 +28,7 @@
       }
     },
     {
-      "id": "wind10m",
+      "id": "wind",
       "urlKey": "wind",
       "label": {
         "short": "Wind",
@@ -54,7 +54,7 @@
       }
     },
     {
-      "id": "precipitation",
+      "id": "rain",
       "urlKey": "rain",
       "label": {
         "short": "Rain",
@@ -79,7 +79,7 @@
       }
     },
     {
-      "id": "pressure_msl",
+      "id": "pressure",
       "urlKey": "pressure",
       "label": {
         "short": "Pressure",
