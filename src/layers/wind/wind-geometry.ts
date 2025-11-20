@@ -51,7 +51,10 @@ export class WindGeometry {
 
     let count = 0;
     for (let i = 0; i < this.seeds.length; i++) {
-      const seedDir = this.seeds[i].clone().normalize();
+      const seed = this.seeds[i];
+      if (!seed) continue; // Skip if seed doesn't exist
+
+      const seedDir = seed.clone().normalize();
       const dot = seedDir.dot(cameraDir);
 
       if (dot > 0) {
@@ -77,7 +80,10 @@ export class WindGeometry {
     const isVisible = new Uint8Array(this.seeds.length);
     if (visibleSeeds && visibleCount > 0) {
       for (let i = 0; i < visibleCount; i++) {
-        isVisible[visibleSeeds[i]] = 1;
+        const seedIndex = visibleSeeds[i];
+        if (seedIndex !== undefined) {
+          isVisible[seedIndex] = 1;
+        }
       }
     } else {
       for (let i = 0; i < this.seeds.length; i++) {
@@ -103,6 +109,11 @@ export class WindGeometry {
     const positions = this.cachedPositions;
     const colors = this.cachedColors;
 
+    // Ensure buffers are allocated (should always be true after allocation above)
+    if (!positions || !colors) {
+      throw new Error('Failed to allocate geometry buffers');
+    }
+
     const cycleLength = this.config.lineSteps + this.config.snakeLength;
     const totalSegments = this.config.lineSteps - 1;
 
@@ -122,6 +133,8 @@ export class WindGeometry {
       if (!isVisible[lineIdx]) continue;
 
       const randomOffset = this.cachedRandomOffsets[lineIdx];
+      if (randomOffset === undefined) continue; // Skip if no random offset
+
       const offset = lineIdx * this.config.lineSteps * 4;
       const normalizedOffset = randomOffset / cycleLength;
 
@@ -129,13 +142,25 @@ export class WindGeometry {
         const idx0 = offset + i * 4;
         const idx1 = offset + (i + 1) * 4;
 
-        // Positions
-        positions[posIdx++] = vertices[idx0];
-        positions[posIdx++] = vertices[idx0 + 1];
-        positions[posIdx++] = vertices[idx0 + 2];
-        positions[posIdx++] = vertices[idx1];
-        positions[posIdx++] = vertices[idx1 + 1];
-        positions[posIdx++] = vertices[idx1 + 2];
+        // Positions - vertices are guaranteed to exist at these indices
+        const v0x = vertices[idx0];
+        const v0y = vertices[idx0 + 1];
+        const v0z = vertices[idx0 + 2];
+        const v1x = vertices[idx1];
+        const v1y = vertices[idx1 + 1];
+        const v1z = vertices[idx1 + 2];
+
+        if (v0x === undefined || v0y === undefined || v0z === undefined ||
+            v1x === undefined || v1y === undefined || v1z === undefined) {
+          continue; // Skip if vertex data is missing
+        }
+
+        positions[posIdx++] = v0x;
+        positions[posIdx++] = v0y;
+        positions[posIdx++] = v0z;
+        positions[posIdx++] = v1x;
+        positions[posIdx++] = v1y;
+        positions[posIdx++] = v1z;
 
         // Taper factor (fade out at line end)
         const remainingSegments = totalSegments - i;
@@ -156,15 +181,20 @@ export class WindGeometry {
     }
 
     // Update or create geometry
+    // Note: positions and colors are guaranteed non-null (checked above at lines 113-115)
     if (lines) {
       if (this.config.useCustomGeometry) {
         this.updateCustomGeometry(positions, colors, lines as THREE.Mesh);
       } else {
         const geometry = lines.geometry as LineSegmentsGeometry;
-        geometry.setPositions(positions as any);
-        geometry.setColors(colors as any);
+        geometry.setPositions(positions);
+        geometry.setColors(colors);
       }
-      return { lines, material: material! };
+      // Material is guaranteed non-null when lines exists
+      if (!material) {
+        throw new Error('Material must be provided with existing lines');
+      }
+      return { lines, material };
     } else {
       return this.createLines(positions, colors, group);
     }
@@ -184,10 +214,30 @@ export class WindGeometry {
     for (let i = 0; i < numSegments; i++) {
       const posIdx = i * 6;
 
-      instanceStart.setXYZ(i, positions[posIdx], positions[posIdx + 1], positions[posIdx + 2]);
-      instanceEnd.setXYZ(i, positions[posIdx + 3], positions[posIdx + 4], positions[posIdx + 5]);
-      instanceColorStart.setXYZ(i, colors[posIdx], colors[posIdx + 1], colors[posIdx + 2]);
-      instanceColorEnd.setXYZ(i, colors[posIdx + 3], colors[posIdx + 4], colors[posIdx + 5]);
+      const p0x = positions[posIdx];
+      const p0y = positions[posIdx + 1];
+      const p0z = positions[posIdx + 2];
+      const p1x = positions[posIdx + 3];
+      const p1y = positions[posIdx + 4];
+      const p1z = positions[posIdx + 5];
+      const c0x = colors[posIdx];
+      const c0y = colors[posIdx + 1];
+      const c0z = colors[posIdx + 2];
+      const c1x = colors[posIdx + 3];
+      const c1y = colors[posIdx + 4];
+      const c1z = colors[posIdx + 5];
+
+      if (p0x === undefined || p0y === undefined || p0z === undefined ||
+          p1x === undefined || p1y === undefined || p1z === undefined ||
+          c0x === undefined || c0y === undefined || c0z === undefined ||
+          c1x === undefined || c1y === undefined || c1z === undefined) {
+        continue; // Skip if data is missing
+      }
+
+      instanceStart.setXYZ(i, p0x, p0y, p0z);
+      instanceEnd.setXYZ(i, p1x, p1y, p1z);
+      instanceColorStart.setXYZ(i, c0x, c0y, c0z);
+      instanceColorEnd.setXYZ(i, c1x, c1y, c1z);
     }
 
     instanceStart.needsUpdate = true;
@@ -307,7 +357,10 @@ export class WindGeometry {
     const lineWidth = minWidth + (maxWidth - minWidth) * clampedT;
 
     if (this.config.useCustomGeometry) {
-      (material as THREE.ShaderMaterial).uniforms.linewidth.value = lineWidth;
+      const shaderMat = material as THREE.ShaderMaterial;
+      if (shaderMat.uniforms && shaderMat.uniforms.linewidth) {
+        shaderMat.uniforms.linewidth.value = lineWidth;
+      }
     } else {
       (material as LineMaterial).linewidth = lineWidth;
     }
@@ -324,7 +377,10 @@ export class WindGeometry {
     if (!material) return;
 
     if (this.config.useCustomGeometry) {
-      (material as THREE.ShaderMaterial).uniforms.resolution.value.set(width, height);
+      const shaderMat = material as THREE.ShaderMaterial;
+      if (shaderMat.uniforms && shaderMat.uniforms.resolution) {
+        shaderMat.uniforms.resolution.value.set(width, height);
+      }
     } else {
       (material as LineMaterial).resolution.set(width, height);
     }

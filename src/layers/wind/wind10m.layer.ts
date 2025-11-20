@@ -22,7 +22,6 @@ import type { DownloadService } from '../../services/DownloadService';
 import type { DateTimeService } from '../../services/DateTimeService';
 import * as THREE from 'three';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
-import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { EARTH_RADIUS_UNITS } from '../../utils/constants';
 import { generateFibonacciSphere } from '../../utils/sphereSeeds';
@@ -150,20 +149,18 @@ export class Wind10mLayer implements ILayer {
         const uData = this.windDataU.get(i)!;
         const vData = this.windDataV.get(i)!;
 
-        const u_u32 = new Uint32Array(uData.buffer);
-        const v_u32 = new Uint32Array(vData.buffer);
-
+        // Convert to ArrayBuffer view for WebGPU
         const uBuffer = this.device.createBuffer({
-          size: u_u32.byteLength,
+          size: uData.byteLength,
           usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
         });
-        this.device.queue.writeBuffer(uBuffer, 0, u_u32);
+        this.device.queue.writeBuffer(uBuffer, 0, uData.buffer, 0, uData.byteLength);
 
         const vBuffer = this.device.createBuffer({
-          size: v_u32.byteLength,
+          size: vData.byteLength,
           usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
         });
-        this.device.queue.writeBuffer(vBuffer, 0, v_u32);
+        this.device.queue.writeBuffer(vBuffer, 0, vData.buffer, 0, vData.byteLength);
 
         this.windBuffers.push(uBuffer, vBuffer);
         console.log(`Wind GPU: uploaded timestep ${i}`);
@@ -187,10 +184,17 @@ export class Wind10mLayer implements ILayer {
     // Create seed buffer
     const seedData = new Float32Array(this.seeds.length * 4);
     for (let i = 0; i < this.seeds.length; i++) {
-      seedData[i * 4 + 0] = this.seeds[i].x;
-      seedData[i * 4 + 1] = this.seeds[i].y;
-      seedData[i * 4 + 2] = this.seeds[i].z;
+      const seed = this.seeds[i];
+      if (!seed) continue; // Skip if seed doesn't exist
+
+      seedData[i * 4 + 0] = seed.x;
+      seedData[i * 4 + 1] = seed.y;
+      seedData[i * 4 + 2] = seed.z;
       seedData[i * 4 + 3] = 0;  // padding
+    }
+
+    if (!this.device) {
+      throw new Error('GPU device not initialized');
     }
 
     this.seedBuffer = this.device.createBuffer({
@@ -289,9 +293,18 @@ export class Wind10mLayer implements ILayer {
     const doUpdateWork = async () => {
       this.lastTimeIndex = timeIndex;
 
-      const adjacentIndices = this.dateTimeService.getAdjacentIndices(timeIndex, this.timesteps.length);
+      // Get adjacent timestep indices for interpolation
+      const adjacentIndices = this.dateTimeService.getAdjacentIndices(currentTime, this.timesteps);
       const index0 = adjacentIndices[0];
-      const index1 = adjacentIndices.length > 1 ? adjacentIndices[1] : adjacentIndices[0];
+      if (index0 === undefined) {
+        console.error('No adjacent index found for timeIndex', timeIndex);
+        return;
+      }
+
+      const index1 = adjacentIndices.length > 1 && adjacentIndices[1] !== undefined
+        ? adjacentIndices[1]
+        : index0;
+      // Blend factor between the two timesteps (0.0 to 1.0)
       const blend = timeIndex - index0;
 
       await this.doUpdate(index0, index1, blend);
@@ -311,25 +324,41 @@ export class Wind10mLayer implements ILayer {
       return;
     }
 
+    if (!this.blendBuffer || !this.seedBuffer || !this.outputBuffer ||
+        !this.bindGroupLayout || !this.pipeline || !this.stagingBuffer) {
+      console.error('GPU buffers not initialized');
+      return;
+    }
+
     const startTime = performance.now();
 
-    this.device.queue.writeBuffer(this.blendBuffer!, 0, new Float32Array([blend]));
+    this.device.queue.writeBuffer(this.blendBuffer, 0, new Float32Array([blend]));
 
     const cacheKey = `${index0}-${index1}`;
     let bindGroup = this.bindGroupCache.get(cacheKey);
     const wasInCache = !!bindGroup;
 
     if (!bindGroup) {
+      const uBuffer0 = this.windBuffers[index0 * 2];
+      const vBuffer0 = this.windBuffers[index0 * 2 + 1];
+      const uBuffer1 = this.windBuffers[index1 * 2];
+      const vBuffer1 = this.windBuffers[index1 * 2 + 1];
+
+      if (!uBuffer0 || !vBuffer0 || !uBuffer1 || !vBuffer1) {
+        console.error('Wind buffers not loaded for indices', index0, index1);
+        return;
+      }
+
       bindGroup = this.device.createBindGroup({
-        layout: this.bindGroupLayout!,
+        layout: this.bindGroupLayout,
         entries: [
-          { binding: 0, resource: { buffer: this.seedBuffer! } },
-          { binding: 1, resource: { buffer: this.outputBuffer! } },
-          { binding: 2, resource: { buffer: this.windBuffers[index0 * 2] } },
-          { binding: 3, resource: { buffer: this.windBuffers[index0 * 2 + 1] } },
-          { binding: 4, resource: { buffer: this.windBuffers[index1 * 2] } },
-          { binding: 5, resource: { buffer: this.windBuffers[index1 * 2 + 1] } },
-          { binding: 6, resource: { buffer: this.blendBuffer! } },
+          { binding: 0, resource: { buffer: this.seedBuffer } },
+          { binding: 1, resource: { buffer: this.outputBuffer } },
+          { binding: 2, resource: { buffer: uBuffer0 } },
+          { binding: 3, resource: { buffer: vBuffer0 } },
+          { binding: 4, resource: { buffer: uBuffer1 } },
+          { binding: 5, resource: { buffer: vBuffer1 } },
+          { binding: 6, resource: { buffer: this.blendBuffer } },
         ],
       });
       this.bindGroupCache.set(cacheKey, bindGroup);
@@ -345,15 +374,15 @@ export class Wind10mLayer implements ILayer {
     passEncoder.end();
 
     const outputSize = this.seeds.length * Wind10mLayer.LINE_STEPS * 4 * 4;
-    commandEncoder.copyBufferToBuffer(this.outputBuffer!, 0, this.stagingBuffer!, 0, outputSize);
+    commandEncoder.copyBufferToBuffer(this.outputBuffer, 0, this.stagingBuffer, 0, outputSize);
     this.device.queue.submit([commandEncoder.finish()]);
 
     const submitTime = performance.now();
 
-    await this.stagingBuffer!.mapAsync(GPUMapMode.READ);
+    await this.stagingBuffer.mapAsync(GPUMapMode.READ);
     const mapTime = performance.now();
 
-    const resultData = new Float32Array(this.stagingBuffer!.getMappedRange());
+    const resultData = new Float32Array(this.stagingBuffer.getMappedRange());
     const result = this.geometry.updateGeometry(
       resultData,
       this.visibleSeeds,
@@ -366,7 +395,7 @@ export class Wind10mLayer implements ILayer {
     this.material = result.material;
     const geometryTime = performance.now();
 
-    this.stagingBuffer!.unmap();
+    this.stagingBuffer.unmap();
 
     const totalTime = performance.now() - startTime;
     const submitMs = submitTime - startTime;
