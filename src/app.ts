@@ -13,7 +13,7 @@ import { TimeBarPanel } from './components/TimeBarPanel';
 import { BootstrapModal, type BootstrapModalAttrs } from './components/BootstrapModal';
 import { HeaderPanel } from './components/HeaderPanel';
 import { FullscreenPanel } from './components/FullscreenPanel';
-import { LayersPanel } from './components/LayersPanel';
+import { LayersPanel, type LayersPanelAttrs } from './components/LayersPanel';
 import { PerformancePanel } from './components/PerformancePanel';
 
 // New Services
@@ -491,7 +491,7 @@ export const App: AppComponent = {
         onToggle: () => this.handleFullscreenToggle()
       }),
 
-      m(LayersPanel as any, {
+      m(LayersPanel, {
         layerStates: this.getLayerStates(),
         textEnabled: state.textEnabled,
         onLayerToggle: (id: LayerId) => this.handleLayerToggle(id),
@@ -501,8 +501,8 @@ export const App: AppComponent = {
           this.stateService!.setBlend(newBlend);
           this.scene?.setBasemapBlend(newBlend);
         },
-        downloadService: this.downloadService || undefined
-      }),
+        ...(this.downloadService && { downloadService: this.downloadService })
+      } satisfies LayersPanelAttrs),
 
       m(TimeCirclePanel, {
         currentTime: state.currentTime
