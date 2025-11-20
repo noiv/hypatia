@@ -230,9 +230,9 @@ export const App: AppComponent = {
       this.appService!.updateUrl();
     }
 
-    // Log memory usage
-    if ((performance as any).memory) {
-      const mem = (performance as any).memory;
+    // Log memory usage (Chrome/Edge/Safari only)
+    if (performance.memory) {
+      const mem = performance.memory;
       console.log(`[HYPATIA_LOADED] Mem: ${(mem.usedJSHeapSize / 1024 / 1024).toFixed(1)}MB / ${(mem.totalJSHeapSize / 1024 / 1024).toFixed(1)}MB`);
     } else {
       console.log('[HYPATIA_LOADED]');
