@@ -4,16 +4,16 @@ import type { DownloadService } from '../services/DownloadService';
 import type { TextureService } from '../services/TextureService';
 import type { DateTimeService } from '../services/DateTimeService';
 import type { ConfigService } from '../services/ConfigService';
-import { EarthRenderService } from './earth.render-service';
-import { SunRenderService } from './sun.render-service';
-import { GraticuleRenderService } from './graticule.render-service';
-import { TextRenderService } from './text.render-service';
+import { EarthRenderService } from './earth/earth.render-service';
+import { SunRenderService } from './sun/sun.render-service';
+import { GraticuleRenderService } from './graticule/graticule.render-service';
+import { TextRenderService } from './text/text.render-service';
 
 // New event-driven layers
-import { Temp2mLayer } from '../layers/temp2m.layer';
-import { PrecipitationLayer } from '../layers/precipitation.layer';
-import { Wind10mLayer } from '../layers/wind10m.layer';
-import { PressureLayer } from '../layers/pressure.layer';
+import { Temp2mLayer } from './temp/temp2m.layer';
+import { PrecipitationLayer } from './rain/precipitation.layer';
+import { Wind10mLayer } from './wind/wind10m.layer';
+import { PressureLayer } from './pressure/pressure.layer';
 
 /**
  * LayerFactory - Polymorphic factory for creating all layer types

@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { ViewportControlsService, type ViewportControlsCallbacks, tweenGroup } from '../services/ViewportControlsService';
 import type { LayerRenderState } from '../config/types';
-import type { ILayer, LayerId } from './ILayer';
-import type { AnimationState } from './AnimationState';
-import type { EarthRenderService } from './earth.render-service';
-import type { SunRenderService } from './sun.render-service';
-import { TextRenderService } from './text.render-service';
+import type { ILayer, LayerId } from '../layers/ILayer';
+import type { AnimationState } from './IAnimationState';
+import type { EarthRenderService } from '../layers/earth/earth.render-service';
+import type { SunRenderService } from '../layers/sun/sun.render-service';
+import { TextRenderService } from '../layers/text/text.render-service';
 import * as perform from '../utils/performance';
 import { mouseToNDC, raycastObject, cartesianToLatLon } from '../utils/raycasting';
 

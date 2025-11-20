@@ -36,7 +36,7 @@ import { detectLocale, formatLocaleInfo } from './services/LocaleService';
 import { sanitizeUrl } from './utils/sanitizeUrl';
 import { parseUrlState } from './utils/urlState';
 
-import type { LayerId } from './visualization/ILayer';
+import type { LayerId } from './layers/ILayer';
 
 interface AppComponent extends m.Component {
   // New Services

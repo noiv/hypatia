@@ -12,9 +12,9 @@
 
 import * as THREE from 'three';
 import { Text } from 'troika-three-text';
-import { TEXT_CONFIG } from '../config';
-import type { ILayer, LayerId } from './ILayer';
-import type { AnimationState } from './AnimationState';
+import { TEXT_CONFIG } from '../../config';
+import type { ILayer, LayerId } from '../ILayer';
+import type { AnimationState } from '../../visualization/IAnimationState';
 
 export interface TextLabel {
   text: string;

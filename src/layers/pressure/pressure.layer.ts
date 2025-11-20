@@ -17,13 +17,13 @@
  */
 
 import * as THREE from 'three';
-import type { ILayer, LayerId } from '../visualization/ILayer';
-import type { AnimationState } from '../visualization/AnimationState';
-import type { DownloadService } from '../services/DownloadService';
-import type { DateTimeService } from '../services/DateTimeService';
-import type { TimeStep } from '../config/types';
-import { PRESSURE_CONFIG } from '../config';
-import ContourWorker from '../workers/contourWorker?worker';
+import type { ILayer, LayerId } from '../ILayer';
+import type { AnimationState } from '../../visualization/IAnimationState';
+import type { DownloadService } from '../../services/DownloadService';
+import type { DateTimeService } from '../../services/DateTimeService';
+import type { TimeStep } from '../../config/types';
+import { PRESSURE_CONFIG } from '../../config';
+import ContourWorker from './contour.worker?worker';
 
 interface WorkerResponse {
   vertices: Float32Array;

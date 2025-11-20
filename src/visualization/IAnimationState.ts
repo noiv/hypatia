@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TextLabel } from './text.render-service';
+import { TextLabel } from '../layers/text/text.render-service';
 
 /**
  * Immutable animation state passed to layers each frame

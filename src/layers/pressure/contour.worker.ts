@@ -20,7 +20,7 @@ interface WorkerResponse {
   timestamp: number;
 }
 
-import { PRESSURE_CONFIG } from '../config';
+import { PRESSURE_CONFIG } from '../../config';
 
 // Grid dimensions from config
 const GRID_WIDTH = PRESSURE_CONFIG.grid.width;

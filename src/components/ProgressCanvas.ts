@@ -10,7 +10,7 @@
  */
 
 import m from 'mithril';
-import type { LayerId } from '../visualization/ILayer';
+import type { LayerId } from '../layers/ILayer';
 
 export interface ProgressCanvasAttrs {
   layerId: LayerId;

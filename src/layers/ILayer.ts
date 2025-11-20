@@ -5,7 +5,7 @@
  */
 
 import type * as THREE from 'three';
-import type { AnimationState } from './AnimationState';
+import type { AnimationState } from '../visualization/IAnimationState';
 
 /**
  * Base layer config - all layer configs must include these fields

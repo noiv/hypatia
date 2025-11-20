@@ -13,7 +13,7 @@
  * - Concurrency control and resource management
  */
 
-import type { LayerId } from '../visualization/ILayer'
+import type { LayerId } from '../layers/ILayer'
 import type { TimeStep } from '../config/types'
 import { PriorityQueue, type Priority } from '../utils/PriorityQueue'
 import type { ConfigService } from './ConfigService'

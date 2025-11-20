@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { EARTH_RADIUS_UNITS } from '../utils/constants';
-import { ATMOSPHERE_CONFIG } from '../config';
-import type { ILayer, LayerId } from './ILayer';
-import type { AnimationState } from './AnimationState';
+import { EARTH_RADIUS_UNITS } from '../../utils/constants';
+import { ATMOSPHERE_CONFIG } from '../../config';
+import type { ILayer, LayerId } from '../ILayer';
+import type { AnimationState } from '../../visualization/IAnimationState';
 
 /**
  * Calculate sun position for given time

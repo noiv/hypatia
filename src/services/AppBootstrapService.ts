@@ -10,7 +10,7 @@ import { getUserLocation } from './GeolocationService';
 import { checkBrowserCapabilities, getCapabilityHelpUrls } from '../utils/capabilityCheck';
 import { preloadFont } from 'troika-three-text';
 import { TEXT_CONFIG } from '../config';
-import type { LayerId } from '../visualization/ILayer';
+import type { LayerId } from '../layers/ILayer';
 import { parseUrlState } from '../utils/urlState';
 import type { LayersService } from './LayersService';
 import type { DownloadService } from './DownloadService';

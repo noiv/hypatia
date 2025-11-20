@@ -8,7 +8,7 @@
 import m from 'mithril';
 import { BlendSlider } from './BlendSlider';
 import { ProgressCanvas } from './ProgressCanvas';
-import type { LayerId } from '../visualization/ILayer';
+import type { LayerId } from '../layers/ILayer';
 import type { DownloadService } from '../services/DownloadService';
 
 export interface LayerState {

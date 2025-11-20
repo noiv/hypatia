@@ -4,14 +4,14 @@
  * Central export point for all configuration-related functionality
  */
 
-import earthData from './earth.config.json';
-import temp2mData from './temp2m.config.json';
-import atmosphereData from './atmosphere.config.json';
-import graticuleData from './graticule.config.json';
-import precipitationData from './precipitation.config.json';
-import pressureData from './pressure.config.json';
-import textData from './text.config.json';
-import wind10mData from './wind10m.config.json';
+import earthData from '../layers/earth/earth.config.json';
+import temp2mData from '../layers/temp/temp2m.config.json';
+import atmosphereData from '../layers/sun/atmosphere.config.json';
+import graticuleData from '../layers/graticule/graticule.config.json';
+import precipitationData from '../layers/rain/precipitation.config.json';
+import pressureData from '../layers/pressure/pressure.config.json';
+import textData from '../layers/text/text.config.json';
+import wind10mData from '../layers/wind/wind10m.config.json';
 
 import type {
   EarthConfig,

@@ -16,18 +16,18 @@
  * - GPU-accelerated wind line tracing (~3.4ms for 16384 lines)
  */
 
-import type { ILayer, LayerId } from '../visualization/ILayer';
-import type { AnimationState } from '../visualization/AnimationState';
-import type { DownloadService } from '../services/DownloadService';
-import type { DateTimeService } from '../services/DateTimeService';
+import type { ILayer, LayerId } from '../ILayer';
+import type { AnimationState } from '../../visualization/IAnimationState';
+import type { DownloadService } from '../../services/DownloadService';
+import type { DateTimeService } from '../../services/DateTimeService';
 import * as THREE from 'three';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
-import { EARTH_RADIUS_UNITS } from '../utils/constants';
-import { generateFibonacciSphere } from '../utils/sphereSeeds';
-import { WIND10M_CONFIG } from '../config';
-import type { TimeStep } from '../config/types';
+import { EARTH_RADIUS_UNITS } from '../../utils/constants';
+import { generateFibonacciSphere } from '../../utils/sphereSeeds';
+import { WIND10M_CONFIG } from '../../config';
+import type { TimeStep } from '../../config/types';
 
 export class Wind10mLayer implements ILayer {
   layerId: LayerId = 'wind10m';

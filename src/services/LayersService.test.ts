@@ -7,8 +7,8 @@ import { DownloadService } from './DownloadService'
 import { ConfigService } from './ConfigService'
 import { DateTimeService } from './DateTimeService'
 import { mockHypatiaConfig, mockDataManifest } from '../__tests__/mocks/mockConfigs'
-import type { ILayer, LayerId } from '../visualization/ILayer'
-import type { AnimationState } from '../visualization/AnimationState'
+import type { ILayer, LayerId } from '../layers/ILayer'
+import type { AnimationState } from '../visualization/IAnimationState'
 
 // Mock fetch globally
 global.fetch = vi.fn()

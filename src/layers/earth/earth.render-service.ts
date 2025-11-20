@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { EARTH_RADIUS_UNITS } from '../utils/constants';
-import { EARTH_CONFIG } from '../config';
-import type { ILayer, LayerId } from './ILayer';
-import type { AnimationState } from './AnimationState';
+import { EARTH_RADIUS_UNITS } from '../../utils/constants';
+import { EARTH_CONFIG } from '../../config';
+import type { ILayer, LayerId } from '../ILayer';
+import type { AnimationState } from '../../visualization/IAnimationState';
 
 /**
  * Earth - Earth mesh with basemap textures and day/night lighting

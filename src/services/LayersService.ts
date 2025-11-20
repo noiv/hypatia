@@ -13,15 +13,15 @@
  * - Memory management and cleanup
  */
 
-import type { ILayer, LayerId } from '../visualization/ILayer'
-import type { AnimationState } from '../visualization/AnimationState'
+import type { ILayer, LayerId } from '../layers/ILayer'
+import type { AnimationState } from '../visualization/IAnimationState'
 import type { DownloadService } from './DownloadService'
 import type { ConfigService } from './ConfigService'
 import type { DateTimeService } from './DateTimeService'
 import type { TextureService } from './TextureService'
 import type { Scene } from '../visualization/scene'
 import { LayerState } from '../state/LayerState'
-import { LayerFactory } from '../visualization/LayerFactory'
+import { LayerFactory } from '../layers/LayerFactory'
 
 /**
  * Layer metadata
