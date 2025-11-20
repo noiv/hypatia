@@ -36,6 +36,7 @@ import { detectLocale, formatLocaleInfo } from './services/LocaleService';
 import { sanitizeUrlState, parseUrlState } from './services/UrlService';
 
 import type { LayerId } from './layers/ILayer';
+import type { LayerRenderState } from './config/types';
 
 interface AppComponent extends m.Component {
   // New Services
@@ -74,7 +75,7 @@ interface AppComponent extends m.Component {
   handleTextSizeChange(action: 'increase' | 'decrease' | 'reset'): void;
 
   // Helpers
-  getLayerStates(): Map<LayerId, any>;
+  getLayerStates(): Map<LayerId, LayerRenderState>;
   getDataRange(): { startTime: Date; endTime: Date };
 }
 
@@ -362,8 +363,8 @@ export const App: AppComponent = {
     }
   },
 
-  getLayerStates(): Map<LayerId, any> {
-    const states = new Map<LayerId, any>();
+  getLayerStates(): Map<LayerId, LayerRenderState> {
+    const states = new Map<LayerId, LayerRenderState>();
     const layerIds: LayerId[] = [
       'earth',
       'sun',
@@ -378,8 +379,12 @@ export const App: AppComponent = {
     if (this.layersService) {
       for (const id of layerIds) {
         const created = this.layersService.hasLayer(id);
-        const visible = created && this.layersService.isVisible(id);
-        states.set(id, { created, visible });
+        if (created) {
+          const visible = this.layersService.isVisible(id);
+          states.set(id, { created: true, visible });
+        } else {
+          states.set(id, { created: false, visible: false });
+        }
       }
     } else if (this.scene) {
       // Fallback to scene if LayersService not available

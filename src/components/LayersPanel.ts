@@ -9,17 +9,12 @@ import m from 'mithril';
 import { BlendSlider } from './BlendSlider';
 import { ProgressCanvas } from './ProgressCanvas';
 import type { LayerId } from '../layers/ILayer';
+import type { LayerRenderState } from '../config/types';
 import type { DownloadService } from '../services/DownloadService';
-
-export interface LayerState {
-  created: boolean;
-  visible: boolean;
-  loading?: boolean;
-}
 
 export interface LayersPanelAttrs {
   // Layer states
-  layerStates: Map<LayerId, LayerState>;
+  layerStates: Map<LayerId, LayerRenderState>;
   textEnabled: boolean;
 
   // Handlers
@@ -90,7 +85,6 @@ export const LayersPanel: m.Component<LayersPanelAttrs> = {
     const renderLayerButton = (layerId: LayerId) => {
       const state = layerStates.get(layerId);
       const isActive = state?.created && state?.visible;
-      const isLoading = state?.loading;
 
       // Check if this is a weather layer that uses progressive loading
       const weatherLayers: LayerId[] = ['temp', 'rain'];
@@ -98,9 +92,8 @@ export const LayersPanel: m.Component<LayersPanelAttrs> = {
 
       const button = m('button.btn', {
         class: isActive ? 'active' : '',
-        disabled: isLoading,
         onclick: () => onLayerToggle(layerId)
-      }, LAYER_DISPLAY_NAMES[layerId] + (isLoading ? '...' : ''));
+      }, LAYER_DISPLAY_NAMES[layerId]);
 
       if (hasProgressCanvas && isActive) {
         if (downloadService) {
