@@ -5,7 +5,6 @@
  */
 
 import m from 'mithril';
-import type { ConfigService } from '../services/ConfigService';
 import type { DateTimeService } from '../services/DateTimeService';
 
 export interface TimeBarPanelAttrs {
@@ -13,19 +12,14 @@ export interface TimeBarPanelAttrs {
   initialTime: Date;  // Fixed reference time for slider bounds
   onTimeChange: (time: Date) => void;
   dateTimeService: DateTimeService;
-  configService: ConfigService;
 }
 
 export const TimeBarPanel: m.Component<TimeBarPanelAttrs> = {
   view(vnode) {
-    const { currentTime, initialTime, onTimeChange, dateTimeService, configService } = vnode.attrs;
+    const { currentTime, initialTime, onTimeChange, dateTimeService } = vnode.attrs;
 
     // Calculate fixed slider bounds from initialTime (never changes during session)
-    const hypatiaConfig = configService.getHypatiaConfig();
-    const { startTime, endTime } = dateTimeService.calculateSliderBounds(
-      initialTime,
-      hypatiaConfig.data.maxRangeDays
-    );
+    const { startTime, endTime } = dateTimeService.calculateSliderBounds(initialTime);
 
     // Calculate slider value (0-1 through the forecast range)
     const rangeProgress = (currentTime.getTime() - startTime.getTime()) /
@@ -42,8 +36,7 @@ export const TimeBarPanel: m.Component<TimeBarPanelAttrs> = {
     // Jump to current time
     const jumpToNow = () => {
       const now = new Date();
-      const maxRangeDays = configService.getHypatiaConfig().data.maxRangeDays;
-      const clampedNow = dateTimeService.clampToDataWindow(now, currentTime, maxRangeDays);
+      const clampedNow = dateTimeService.clampToDataWindow(now, currentTime);
       onTimeChange(clampedNow);
     };
 
@@ -90,8 +83,7 @@ export const TimeBarPanel: m.Component<TimeBarPanelAttrs> = {
             e.preventDefault();
             const hoursToAdd = e.deltaY > 0 ? -1 : 1;
             const newTime = new Date(currentTime.getTime() + hoursToAdd * 3600000);
-            const maxRangeDays = configService.getHypatiaConfig().data.maxRangeDays;
-            const clampedTime = dateTimeService.clampToDataWindow(newTime, currentTime, maxRangeDays);
+            const clampedTime = dateTimeService.clampToDataWindow(newTime, currentTime);
             onTimeChange(clampedTime);
           }
         }),

@@ -45,9 +45,6 @@ export class LayerFactory {
     preloadedImages?: Map<string, HTMLImageElement>,
     renderer?: THREE.WebGLRenderer
   ): Promise<ILayer> {
-    const hypatiaConfig = configService.getHypatiaConfig();
-    const maxRangeDays = hypatiaConfig.data.maxRangeDays;
-
     switch (layerId) {
       case 'earth':
         return EarthRenderService.create(layerId, preloadedImages);
@@ -62,7 +59,7 @@ export class LayerFactory {
         // Generate timesteps for the layer (6-hour intervals)
         const timeSteps = dateTimeService.generateTimeSteps(
           currentTime,
-          maxRangeDays,
+          
           6 // stepHours
         );
 
@@ -85,7 +82,7 @@ export class LayerFactory {
         // Generate timesteps for the layer (6-hour intervals)
         const timeSteps = dateTimeService.generateTimeSteps(
           currentTime,
-          maxRangeDays,
+          
           6 // stepHours
         );
 
@@ -108,7 +105,7 @@ export class LayerFactory {
         // Generate timesteps for the layer (6-hour intervals)
         const timeSteps = dateTimeService.generateTimeSteps(
           currentTime,
-          maxRangeDays,
+          
           6 // stepHours
         );
 
@@ -139,7 +136,7 @@ export class LayerFactory {
         // Generate timesteps for the layer (6-hour intervals)
         const timeSteps = dateTimeService.generateTimeSteps(
           currentTime,
-          maxRangeDays,
+          
           6 // stepHours
         );
 

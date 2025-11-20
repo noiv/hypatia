@@ -89,10 +89,12 @@ export const App: AppComponent = {
     // Initialize services in dependency order
     // 1. Foundation services (no dependencies)
     this.configService = new ConfigService();
-    this.dateTimeService = new DateTimeService();
 
     // Load all configs before continuing
     await this.configService.loadAll();
+
+    // 2. Services that depend on config
+    this.dateTimeService = new DateTimeService(this.configService);
 
     // Sanitize URL and get corrected state (needs config loaded first)
     const sanitizedState = sanitizeUrlState(this.configService, localeInfo);
@@ -273,12 +275,8 @@ export const App: AppComponent = {
 
   handleTimeChange(newTime: Date) {
     // Get fixed slider bounds from DateTimeService (using initialTime, not currentTime)
-    const hypatiaConfig = this.configService!.getHypatiaConfig();
     const state = this.stateService!.get();
-    const { startTime, endTime } = this.dateTimeService!.calculateSliderBounds(
-      state.initialTime,
-      hypatiaConfig.data.maxRangeDays
-    );
+    const { startTime, endTime } = this.dateTimeService!.calculateSliderBounds(state.initialTime);
 
     // Clamp time to slider bounds
     const clamped = this.dateTimeService!.clampToFixedBounds(
@@ -503,8 +501,7 @@ export const App: AppComponent = {
         currentTime: state.currentTime,
         initialTime: state.initialTime,
         onTimeChange: (time) => this.handleTimeChange(time),
-        dateTimeService: this.dateTimeService!,
-        configService: this.configService!
+        dateTimeService: this.dateTimeService!
       }),
 
       m(PerformancePanel, {

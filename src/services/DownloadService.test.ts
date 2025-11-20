@@ -92,7 +92,7 @@ describe('DownloadService', () => {
       getDataManifest: () => mockDataManifest,
     } as any
 
-    dateTimeService = new DateTimeService()
+    dateTimeService = new DateTimeService(mockConfigService)
 
     service = new DownloadService(
       {

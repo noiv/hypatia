@@ -4,21 +4,32 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { DateTimeService } from './DateTimeService'
+import type { ConfigService } from './ConfigService'
 import type { TimeStep } from '../config/types'
 
 describe('DateTimeService', () => {
   let service: DateTimeService
+  let mockConfigService: ConfigService
 
   beforeEach(() => {
-    service = new DateTimeService()
+    // Mock ConfigService with maxRangeDays = 15
+    mockConfigService = {
+      getHypatiaConfig: () => ({
+        data: {
+          maxRangeDays: 15,
+          dataBaseUrl: '/data'
+        }
+      })
+    } as ConfigService
+
+    service = new DateTimeService(mockConfigService)
   })
 
   describe('Data Window Calculations', () => {
     it('should calculate data window correctly', () => {
       const currentTime = new Date('2025-11-09T12:00:00Z')
-      const maxRangeDays = 15
 
-      const { startTime, endTime } = service.calculateDataWindow(currentTime, maxRangeDays)
+      const { startTime, endTime } = service.calculateDataWindow(currentTime)
 
       // Start should be 7 days back (floor(15/2)) at 00:00 UTC
       expect(startTime.toISOString()).toBe('2025-11-02T00:00:00.000Z')
@@ -29,9 +40,8 @@ describe('DateTimeService', () => {
 
     it('should handle odd number of days', () => {
       const currentTime = new Date('2025-11-09T12:00:00Z')
-      const maxRangeDays = 14
 
-      const { startTime, endTime } = service.calculateDataWindow(currentTime, maxRangeDays)
+      const { startTime, endTime } = service.calculateDataWindow(currentTime)
 
       // floor(14/2) = 7 days back
       expect(startTime.toISOString()).toBe('2025-11-02T00:00:00.000Z')
@@ -40,46 +50,44 @@ describe('DateTimeService', () => {
 
     it('should check if time is within data window', () => {
       const currentTime = new Date('2025-11-09T12:00:00Z')
-      const maxRangeDays = 15
 
       // Time within window
       const withinTime = new Date('2025-11-05T12:00:00Z')
-      expect(service.isWithinDataWindow(withinTime, currentTime, maxRangeDays)).toBe(true)
+      expect(service.isWithinDataWindow(withinTime, currentTime)).toBe(true)
 
       // Time before window
       const beforeTime = new Date('2025-11-01T12:00:00Z')
-      expect(service.isWithinDataWindow(beforeTime, currentTime, maxRangeDays)).toBe(false)
+      expect(service.isWithinDataWindow(beforeTime, currentTime)).toBe(false)
 
       // Time after window
       const afterTime = new Date('2025-11-18T12:00:00Z')
-      expect(service.isWithinDataWindow(afterTime, currentTime, maxRangeDays)).toBe(false)
+      expect(service.isWithinDataWindow(afterTime, currentTime)).toBe(false)
 
       // Exact start time (inclusive)
       const startTime = new Date('2025-11-02T00:00:00Z')
-      expect(service.isWithinDataWindow(startTime, currentTime, maxRangeDays)).toBe(true)
+      expect(service.isWithinDataWindow(startTime, currentTime)).toBe(true)
 
       // Exact end time (exclusive)
       const endTime = new Date('2025-11-17T00:00:00Z')
-      expect(service.isWithinDataWindow(endTime, currentTime, maxRangeDays)).toBe(false)
+      expect(service.isWithinDataWindow(endTime, currentTime)).toBe(false)
     })
 
     it('should clamp time to data window', () => {
       const currentTime = new Date('2025-11-09T12:00:00Z')
-      const maxRangeDays = 15
 
       // Time before window - clamp to start
       const beforeTime = new Date('2025-11-01T12:00:00Z')
-      const clampedBefore = service.clampToDataWindow(beforeTime, currentTime, maxRangeDays)
+      const clampedBefore = service.clampToDataWindow(beforeTime, currentTime)
       expect(clampedBefore.toISOString()).toBe('2025-11-02T00:00:00.000Z')
 
       // Time after window - clamp to end
       const afterTime = new Date('2025-11-18T12:00:00Z')
-      const clampedAfter = service.clampToDataWindow(afterTime, currentTime, maxRangeDays)
+      const clampedAfter = service.clampToDataWindow(afterTime, currentTime)
       expect(clampedAfter.toISOString()).toBe('2025-11-17T00:00:00.000Z')
 
       // Time within window - no change
       const withinTime = new Date('2025-11-05T12:00:00Z')
-      const clampedWithin = service.clampToDataWindow(withinTime, currentTime, maxRangeDays)
+      const clampedWithin = service.clampToDataWindow(withinTime, currentTime)
       expect(clampedWithin.toISOString()).toBe('2025-11-05T12:00:00.000Z')
     })
   })
@@ -119,12 +127,10 @@ describe('DateTimeService', () => {
   describe('TimeStep Generation', () => {
     it('should generate timesteps correctly', () => {
       const currentTime = new Date('2025-11-09T12:00:00Z')
-      const maxRangeDays = 2 // Small range for testing
       const stepHours = 6
 
       const steps = service.generateTimeSteps(
         currentTime,
-        maxRangeDays,
         stepHours
       )
 
@@ -142,12 +148,10 @@ describe('DateTimeService', () => {
 
     it('should generate correct number of timesteps', () => {
       const currentTime = new Date('2025-11-09T12:00:00Z')
-      const maxRangeDays = 15
       const stepHours = 6
 
       const steps = service.generateTimeSteps(
         currentTime,
-        maxRangeDays,
         stepHours
       )
 

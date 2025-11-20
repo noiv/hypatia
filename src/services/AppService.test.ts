@@ -66,7 +66,7 @@ describe('AppService', () => {
       getLayers: () => [],
     } as any
 
-    dateTimeService = new DateTimeService()
+    dateTimeService = new DateTimeService(mockConfigService)
 
     downloadService = new DownloadService(
       {

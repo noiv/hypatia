@@ -50,7 +50,7 @@ describe('LayersService', () => {
       getDataManifest: () => mockDataManifest,
     } as any
 
-    dateTimeService = new DateTimeService()
+    dateTimeService = new DateTimeService(mockConfigService)
 
     downloadService = new DownloadService(
       {

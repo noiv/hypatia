@@ -459,8 +459,8 @@ export class ViewportControlsService {
           if (this.callbacks.getCurrentTime && this.callbacks.onTimeChange && this.dateTimeService) {
             const currentTime = this.callbacks.getCurrentTime();
             const newTime = new Date(currentTime.getTime() + hoursDelta * 3600000);
-            const maxRangeDays = this.configService.getHypatiaConfig().data.maxRangeDays;
-            const clampedTime = this.dateTimeService.clampToDataWindow(newTime, currentTime, maxRangeDays);
+            
+            const clampedTime = this.dateTimeService.clampToDataWindow(newTime, currentTime);
             this.callbacks.onTimeChange(clampedTime);
           }
         }

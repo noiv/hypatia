@@ -14,8 +14,15 @@
  */
 
 import type { TimeStep } from '../config/types'
+import type { ConfigService } from './ConfigService'
 
 export class DateTimeService {
+  private maxRangeDays: number
+
+  constructor(configService: ConfigService) {
+    this.maxRangeDays = configService.getHypatiaConfig().data.maxRangeDays
+  }
+
   // ============================================================================
   // Data Window Calculations (UTC)
   // ============================================================================
@@ -24,7 +31,6 @@ export class DateTimeService {
    * Calculate data window range centered at currentTime
    *
    * @param currentTime - Center time (UTC)
-   * @param maxRangeDays - Window size in days
    * @returns { startTime, endTime } - Window boundaries (UTC)
    *
    * Example: currentTime = 2025-11-09 12:00 UTC, maxRangeDays = 15
@@ -32,18 +38,15 @@ export class DateTimeService {
    * - startTime = 2025-11-02 00:00 UTC
    * - endTime = 2025-11-17 00:00 UTC (15 days after start)
    */
-  calculateDataWindow(
-    currentTime: Date,
-    maxRangeDays: number
-  ): { startTime: Date; endTime: Date } {
-    const daysBack = Math.floor(maxRangeDays / 2)
+  calculateDataWindow(currentTime: Date): { startTime: Date; endTime: Date } {
+    const daysBack = Math.floor(this.maxRangeDays / 2)
 
     const startTime = new Date(currentTime)
     startTime.setUTCDate(startTime.getUTCDate() - daysBack)
     startTime.setUTCHours(0, 0, 0, 0) // Start at 00z
 
     const endTime = new Date(startTime)
-    endTime.setUTCDate(endTime.getUTCDate() + maxRangeDays)
+    endTime.setUTCDate(endTime.getUTCDate() + this.maxRangeDays)
 
     return { startTime, endTime }
   }
@@ -52,11 +55,8 @@ export class DateTimeService {
    * Calculate slider bounds (data window adjusted for UI)
    * Ends 6 hours earlier than data window to align with last timestep (18z)
    */
-  calculateSliderBounds(
-    currentTime: Date,
-    maxRangeDays: number
-  ): { startTime: Date; endTime: Date } {
-    const { startTime, endTime } = this.calculateDataWindow(currentTime, maxRangeDays)
+  calculateSliderBounds(currentTime: Date): { startTime: Date; endTime: Date } {
+    const { startTime, endTime } = this.calculateDataWindow(currentTime)
 
     // Adjust end time to 18z of last day (last data timestep)
     endTime.setUTCHours(endTime.getUTCHours() - 6)
@@ -69,11 +69,10 @@ export class DateTimeService {
    *
    * @param time - Time to check (UTC)
    * @param currentTime - Reference time (UTC)
-   * @param maxRangeDays - Window size in days
    * @returns true if time is within [startTime, endTime)
    */
-  isWithinDataWindow(time: Date, currentTime: Date, maxRangeDays: number): boolean {
-    const { startTime, endTime } = this.calculateDataWindow(currentTime, maxRangeDays)
+  isWithinDataWindow(time: Date, currentTime: Date): boolean {
+    const { startTime, endTime } = this.calculateDataWindow(currentTime)
     const timeMs = time.getTime()
     return timeMs >= startTime.getTime() && timeMs < endTime.getTime()
   }
@@ -83,11 +82,10 @@ export class DateTimeService {
    *
    * @param time - Time to clamp (UTC)
    * @param currentTime - Reference time (UTC)
-   * @param maxRangeDays - Window size in days
    * @returns Clamped time (UTC)
    */
-  clampToDataWindow(time: Date, currentTime: Date, maxRangeDays: number): Date {
-    const { startTime, endTime } = this.calculateDataWindow(currentTime, maxRangeDays)
+  clampToDataWindow(time: Date, currentTime: Date): Date {
+    const { startTime, endTime } = this.calculateDataWindow(currentTime)
     const timeMs = time.getTime()
 
     return new Date(Math.max(startTime.getTime(), Math.min(endTime.getTime(), timeMs)))
@@ -138,7 +136,6 @@ export class DateTimeService {
    * This keeps DateTimeService focused on time calculations only.
    *
    * @param currentTime - Center time (UTC)
-   * @param maxRangeDays - Window size in days
    * @param stepHours - Step size in hours (e.g., 6 for 6-hourly data)
    * @returns Array of TimeStep objects (date + cycle only)
    *
@@ -147,14 +144,10 @@ export class DateTimeService {
    * - Range: 2025-11-02 00z to 2025-11-16 18z
    * - Returns: [{ date: "20251102", cycle: "00z" }, ...]
    */
-  generateTimeSteps(
-    currentTime: Date,
-    maxRangeDays: number,
-    stepHours: number
-  ): TimeStep[] {
+  generateTimeSteps(currentTime: Date, stepHours: number): TimeStep[] {
     const steps: TimeStep[] = []
 
-    const { startTime, endTime } = this.calculateDataWindow(currentTime, maxRangeDays)
+    const { startTime, endTime } = this.calculateDataWindow(currentTime)
 
     // Generate timesteps
     const current = new Date(startTime)
