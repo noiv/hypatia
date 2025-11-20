@@ -47,7 +47,6 @@ export class LayerFactory {
   ): Promise<ILayer> {
     const hypatiaConfig = configService.getHypatiaConfig();
     const maxRangeDays = hypatiaConfig.data.maxRangeDays;
-    const dataBaseUrl = hypatiaConfig.data.dataBaseUrl;
 
     switch (layerId) {
       case 'earth':
@@ -60,17 +59,11 @@ export class LayerFactory {
         return GraticuleRenderService.create(layerId);
 
       case 'temp2m': {
-        // Get data folder from config
-        const layerConfig = configService.getLayerById(layerId);
-        const dataFolder = layerConfig?.dataFolders[0] || 'temp2m';
-
         // Generate timesteps for the layer (6-hour intervals)
         const timeSteps = dateTimeService.generateTimeSteps(
           currentTime,
           maxRangeDays,
-          6, // stepHours
-          dataBaseUrl,
-          dataFolder
+          6 // stepHours
         );
 
         // Create layer with services
@@ -89,17 +82,11 @@ export class LayerFactory {
       }
 
       case 'precipitation': {
-        // Get data folder from config
-        const layerConfig = configService.getLayerById(layerId);
-        const dataFolder = layerConfig?.dataFolders[0] || 'tprate';
-
         // Generate timesteps for the layer (6-hour intervals)
         const timeSteps = dateTimeService.generateTimeSteps(
           currentTime,
           maxRangeDays,
-          6, // stepHours
-          dataBaseUrl,
-          dataFolder
+          6 // stepHours
         );
 
         // Create layer with services
@@ -118,17 +105,11 @@ export class LayerFactory {
       }
 
       case 'wind10m': {
-        // Get data folders from config (U and V components)
-        const layerConfig = configService.getLayerById(layerId);
-        const dataFolderU = layerConfig?.dataFolders[0] || 'wind10m_u';
-
-        // Generate timesteps for U component (6-hour intervals)
+        // Generate timesteps for the layer (6-hour intervals)
         const timeSteps = dateTimeService.generateTimeSteps(
           currentTime,
           maxRangeDays,
-          6, // stepHours
-          dataBaseUrl,
-          dataFolderU
+          6 // stepHours
         );
 
         // Wind layer doesn't use TextureService (uses WebGPU compute)
@@ -148,16 +129,8 @@ export class LayerFactory {
         await layer.initGPU(renderer);
         await layer.initialize(timeSteps);
 
-        // Register both U and V components with DownloadService
-        const timeStepsV = dateTimeService.generateTimeSteps(
-          currentTime,
-          maxRangeDays,
-          6,
-          dataBaseUrl,
-          'wind10m_v' // Wind V component
-        );
-        downloadService.registerLayer('wind10m_u' as LayerId, timeSteps);
-        downloadService.registerLayer('wind10m_v' as LayerId, timeStepsV);
+        // Register layer with DownloadService (wind data is fetched as U/V pairs)
+        downloadService.registerLayer(layerId, timeSteps);
 
         return layer;
       }
@@ -167,16 +140,15 @@ export class LayerFactory {
         const timeSteps = dateTimeService.generateTimeSteps(
           currentTime,
           maxRangeDays,
-          6, // stepHours
-          dataBaseUrl,
-          'pressure_msl'
+          6 // stepHours
         );
 
         // Pressure layer is CPU-only (no TextureService needed)
         const layer = new PressureLayer(
           layerId,
           downloadService,
-          dateTimeService
+          dateTimeService,
+          configService
         );
 
         // Register with DownloadService for event-driven loading

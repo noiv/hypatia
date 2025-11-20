@@ -21,6 +21,7 @@ import type { ILayer, LayerId } from '../ILayer';
 import type { AnimationState } from '../../visualization/IAnimationState';
 import type { DownloadService } from '../../services/DownloadService';
 import type { DateTimeService } from '../../services/DateTimeService';
+import type { ConfigService } from '../../services/ConfigService';
 import type { TimeStep } from '../../config/types';
 import { PRESSURE_CONFIG } from '../../config';
 import ContourWorker from './contour.worker?worker';
@@ -43,6 +44,7 @@ export class PressureLayer implements ILayer {
   // Services
   private downloadService: DownloadService;
   private dateTimeService: DateTimeService;
+  private configService: ConfigService;
 
   // Timesteps and data
   private timesteps: TimeStep[] = [];
@@ -52,11 +54,13 @@ export class PressureLayer implements ILayer {
   constructor(
     layerId: LayerId,
     downloadService: DownloadService,
-    dateTimeService: DateTimeService
+    dateTimeService: DateTimeService,
+    configService: ConfigService
   ) {
     this.layerId = layerId;
     this.downloadService = downloadService;
     this.dateTimeService = dateTimeService;
+    this.configService = configService;
 
     // Create material from config
     this.material = new THREE.LineBasicMaterial({
@@ -154,6 +158,13 @@ export class PressureLayer implements ILayer {
     const timestamp = Date.now();
     this.currentRequestTimestamp = timestamp;
 
+    // Get layer config for URL construction in worker
+    const layer = this.configService.getLayerById(this.layerId);
+    if (!layer) {
+      throw new Error(`Layer not found: ${this.layerId}`);
+    }
+    const hypatiaConfig = this.configService.getHypatiaConfig();
+
     // Send request to worker with loaded data
     this.worker.postMessage({
       stepA,
@@ -161,6 +172,8 @@ export class PressureLayer implements ILayer {
       isobarLevels: PRESSURE_CONFIG.isobars.levels,
       timestamp,
       timeSteps: this.timesteps,
+      dataBaseUrl: hypatiaConfig.data.dataBaseUrl,
+      dataFolder: layer.dataFolders[0] || this.layerId,
       // Pass the actual data to the worker
       dataA: this.loadedData.get(stepA),
       dataB: this.loadedData.get(stepA + 1)

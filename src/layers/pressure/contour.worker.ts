@@ -11,8 +11,9 @@ interface WorkerMessage {
   blend: number;
   isobarLevels: number[];
   timestamp: number;
-  timeSteps: Array<{ date: string; cycle: string; filePath: string }>;
+  timeSteps: Array<{ date: string; cycle: string }>;
   dataBaseUrl: string;
+  dataFolder: string;
 }
 
 interface WorkerResponse {
@@ -356,7 +357,9 @@ async function loadPressureData(filePath: string): Promise<Float32Array> {
  */
 async function getPressureGrid(
   stepIndex: number,
-  timeSteps: Array<{ date: string; cycle: string; filePath: string }>
+  timeSteps: Array<{ date: string; cycle: string }>,
+  dataBaseUrl: string,
+  dataFolder: string
 ): Promise<Float32Array> {
   // Check cache first
   const cached = pressureCache.get(stepIndex);
@@ -370,7 +373,9 @@ async function getPressureGrid(
     throw new Error(`Invalid step index: ${stepIndex}`);
   }
 
-  const data = await loadPressureData(step.filePath);
+  // Build URL from timestep (same logic as UrlBuilder)
+  const url = `${dataBaseUrl}/${dataFolder}/${step.date}_${step.cycle}.bin`;
+  const data = await loadPressureData(url);
 
   // Cache for reuse
   pressureCache.set(stepIndex, data);
@@ -382,14 +387,14 @@ async function getPressureGrid(
  * Worker message handler
  */
 self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
-  const { stepA, blend, isobarLevels, timestamp, timeSteps } = e.data;
+  const { stepA, blend, isobarLevels, timestamp, timeSteps, dataBaseUrl, dataFolder } = e.data;
 
   try {
     // Load adjacent timesteps (from cache or network)
     const t1 = performance.now();
     const [pressureA, pressureB] = await Promise.all([
-      getPressureGrid(stepA, timeSteps),
-      getPressureGrid(stepA + 1, timeSteps)
+      getPressureGrid(stepA, timeSteps, dataBaseUrl, dataFolder),
+      getPressureGrid(stepA + 1, timeSteps, dataBaseUrl, dataFolder)
     ]);
     const t2 = performance.now();
 

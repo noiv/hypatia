@@ -89,7 +89,6 @@ describe('DateTimeService', () => {
       const step: TimeStep = {
         date: '20251109',
         cycle: '12z',
-        filePath: '/data/temp2m/20251109_12z.bin',
       }
 
       const parsed = service.parseTimeStep(step)
@@ -109,7 +108,6 @@ describe('DateTimeService', () => {
         const step: TimeStep = {
           date: '20251109',
           cycle,
-          filePath: '/data/temp2m/20251109_' + cycle + '.bin',
         }
 
         const parsed = service.parseTimeStep(step)
@@ -123,15 +121,11 @@ describe('DateTimeService', () => {
       const currentTime = new Date('2025-11-09T12:00:00Z')
       const maxRangeDays = 2 // Small range for testing
       const stepHours = 6
-      const dataBaseUrl = 'http://localhost/data'
-      const paramName = 'temp2m'
 
       const steps = service.generateTimeSteps(
         currentTime,
         maxRangeDays,
-        stepHours,
-        dataBaseUrl,
-        paramName
+        stepHours
       )
 
       // 2 days × 4 steps/day = 8 timesteps
@@ -140,7 +134,6 @@ describe('DateTimeService', () => {
       // First step should be at start of window (2025-11-08 00z)
       expect(steps[0]?.date).toBe('20251108')
       expect(steps[0]?.cycle).toBe('00z')
-      expect(steps[0]?.filePath).toBe('http://localhost/data/temp2m/20251108_00z.bin')
 
       // Last step should be 18z the next day (not quite 2 full days)
       expect(steps[7]?.date).toBe('20251109')
@@ -155,9 +148,7 @@ describe('DateTimeService', () => {
       const steps = service.generateTimeSteps(
         currentTime,
         maxRangeDays,
-        stepHours,
-        'http://localhost/data',
-        'temp2m'
+        stepHours
       )
 
       // 15 days × 4 steps/day = 60 timesteps
@@ -167,10 +158,10 @@ describe('DateTimeService', () => {
 
   describe('Time to Index Conversion', () => {
     const mockTimeSteps: TimeStep[] = [
-      { date: '20251109', cycle: '00z', filePath: '/data/20251109_00z.bin' },
-      { date: '20251109', cycle: '06z', filePath: '/data/20251109_06z.bin' },
-      { date: '20251109', cycle: '12z', filePath: '/data/20251109_12z.bin' },
-      { date: '20251109', cycle: '18z', filePath: '/data/20251109_18z.bin' },
+      { date: '20251109', cycle: '00z' },
+      { date: '20251109', cycle: '06z' },
+      { date: '20251109', cycle: '12z' },
+      { date: '20251109', cycle: '18z' },
     ]
 
     it('should return exact index when time matches timestep', () => {
@@ -227,10 +218,10 @@ describe('DateTimeService', () => {
 
   describe('Index to Time Conversion', () => {
     const mockTimeSteps: TimeStep[] = [
-      { date: '20251109', cycle: '00z', filePath: '/data/20251109_00z.bin' },
-      { date: '20251109', cycle: '06z', filePath: '/data/20251109_06z.bin' },
-      { date: '20251109', cycle: '12z', filePath: '/data/20251109_12z.bin' },
-      { date: '20251109', cycle: '18z', filePath: '/data/20251109_18z.bin' },
+      { date: '20251109', cycle: '00z' },
+      { date: '20251109', cycle: '06z' },
+      { date: '20251109', cycle: '12z' },
+      { date: '20251109', cycle: '18z' },
     ]
 
     it('should return exact time for integer index', () => {
@@ -255,10 +246,10 @@ describe('DateTimeService', () => {
 
   describe('Adjacent Indices', () => {
     const mockTimeSteps: TimeStep[] = [
-      { date: '20251109', cycle: '00z', filePath: '/data/20251109_00z.bin' },
-      { date: '20251109', cycle: '06z', filePath: '/data/20251109_06z.bin' },
-      { date: '20251109', cycle: '12z', filePath: '/data/20251109_12z.bin' },
-      { date: '20251109', cycle: '18z', filePath: '/data/20251109_18z.bin' },
+      { date: '20251109', cycle: '00z' },
+      { date: '20251109', cycle: '06z' },
+      { date: '20251109', cycle: '12z' },
+      { date: '20251109', cycle: '18z' },
     ]
 
     it('should return both floor and ceil indices for interpolation', () => {

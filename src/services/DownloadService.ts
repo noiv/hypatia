@@ -18,6 +18,7 @@ import type { TimeStep } from '../config/types'
 import { PriorityQueue, type Priority } from '../utils/PriorityQueue'
 import type { ConfigService } from './ConfigService'
 import type { DateTimeService } from './DateTimeService'
+import { UrlBuilder } from './UrlBuilder'
 
 /**
  * Loading state for a single timestamp
@@ -137,18 +138,20 @@ export class DownloadService {
   private totalDownloadTime: number = 0
 
   // Services
-  // @ts-expect-error - Reserved for future config lookups
   private configService: ConfigService
   private dateTimeService: DateTimeService
+  private urlBuilder: UrlBuilder
 
   constructor(
     config: DownloadServiceConfig,
     configService: ConfigService,
-    dateTimeService: DateTimeService
+    dateTimeService: DateTimeService,
+    urlBuilder: UrlBuilder = new UrlBuilder()
   ) {
     this.config = config
     this.configService = configService
     this.dateTimeService = dateTimeService
+    this.urlBuilder = urlBuilder
     this.queue = new PriorityQueue<DownloadRequest>()
   }
 
@@ -314,26 +317,35 @@ export class DownloadService {
     const startTime = performance.now()
 
     try {
+      // Get layer config for URL construction
+      const layer = this.configService.getLayerById(layerId)
+      if (!layer) {
+        throw new Error(`Layer not found: ${layerId}`)
+      }
+      const hypatiaConfig = this.configService.getHypatiaConfig()
+      const urlConfig = {
+        dataBaseUrl: hypatiaConfig.data.dataBaseUrl,
+        dataFolder: layer.dataFolders[0] || layerId,
+      }
+
       // Load based on layer type
       let data: Uint16Array | { u: Uint16Array; v: Uint16Array }
       let totalBytes = 0
 
-      if (layerId === 'wind10m' && 'uFilePath' in timeStep && 'vFilePath' in timeStep) {
+      if (layerId === 'wind10m') {
         // Wind layer has U and V components
-        const windTimeStep = timeStep as any
+        const urls = this.urlBuilder.buildWindUrls(urlConfig, timeStep)
         const [u, v] = await Promise.all([
-          this.fetchBinaryFile(windTimeStep.uFilePath as string),
-          this.fetchBinaryFile(windTimeStep.vFilePath as string),
+          this.fetchBinaryFile(urls.u),
+          this.fetchBinaryFile(urls.v),
         ])
         data = { u, v }
         totalBytes = u.byteLength + v.byteLength
-      } else if ('filePath' in timeStep) {
-        // Single file layers
-        const singleFileTimeStep = timeStep as any
-        data = await this.fetchBinaryFile(singleFileTimeStep.filePath as string)
-        totalBytes = data.byteLength
       } else {
-        throw new Error(`Invalid timeStep structure for ${layerId}`)
+        // Single file layers (temp, precipitation, pressure)
+        const url = this.urlBuilder.buildDataUrl(urlConfig, timeStep)
+        data = await this.fetchBinaryFile(url)
+        totalBytes = data.byteLength
       }
 
       const downloadTime = performance.now() - startTime

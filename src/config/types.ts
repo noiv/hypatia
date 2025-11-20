@@ -161,11 +161,13 @@ export interface DataManifest {
 /**
  * Timestep metadata for a data file
  * Used by all layer types
+ *
+ * Note: File paths are constructed by UrlBuilder when needed,
+ * not stored in timesteps (separation of concerns)
  */
 export interface TimeStep {
-  date: string;    // YYYYMMDD
-  cycle: string;   // 00z, 06z, 12z, 18z
-  filePath: string;
+  date: string;    // YYYYMMDD (e.g., "20251109")
+  cycle: string;   // HHz format (e.g., "00z", "06z", "12z", "18z")
 }
 
 /**
