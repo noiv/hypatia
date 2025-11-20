@@ -2,7 +2,7 @@ import m from 'mithril';
 import type { BootstrapProgress, BootstrapStatus } from '../services/AppBootstrapService';
 import { getCapabilityHelpUrls } from '../utils/capabilityCheck';
 
-interface BootstrapModalAttrs {
+export interface BootstrapModalAttrs {
   progress: BootstrapProgress | null;
   error: string | null;
   status?: BootstrapStatus;
