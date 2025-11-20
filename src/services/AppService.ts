@@ -14,7 +14,6 @@
 import type { AppStateService } from './AppStateService'
 import type { Scene } from '../visualization/scene'
 import type { LayersService } from './LayersService'
-import type { ConfigService } from './ConfigService'
 import { debouncedUpdateUrlState } from './UrlService'
 import type { LayerId } from '../layers/ILayer'
 
@@ -23,7 +22,6 @@ export class AppService {
     private stateService: AppStateService,
     private getScene: () => Scene | undefined,
     private layersService: LayersService,
-    private configService: ConfigService,
     private isBootstrapping: () => boolean
   ) {}
 
@@ -72,18 +70,12 @@ export class AppService {
     // Get visible layers from LayersService
     const visibleLayerIds = this.layersService.getVisibleLayerIds()
 
-    // Convert LayerIDs to URL keys (temp2m -> temp, etc.)
-    const layerConfigs = this.configService.getLayers()
-    const visibleUrlKeys = visibleLayerIds.map((layerId) => {
-      const layerConfig = layerConfigs.find(l => l.id === layerId)
-      return layerConfig?.urlKey || this.layerIdToUrlKey(layerId)
-    })
-
     // Add 'text' to layers if enabled and not already present
-    const layers =
-      state.textEnabled && !visibleUrlKeys.includes('text')
-        ? [...visibleUrlKeys, 'text']
-        : visibleUrlKeys
+    // Note: LayerId now equals urlKey, no conversion needed
+    const layers: LayerId[] =
+      state.textEnabled && !visibleLayerIds.includes('text')
+        ? [...visibleLayerIds, 'text']
+        : visibleLayerIds
 
     debouncedUpdateUrlState(
       {
@@ -176,21 +168,4 @@ export class AppService {
     return this.layersService.getStats()
   }
 
-  /**
-   * Fallback: Convert LayerId to URL key (temp2m -> temp)
-   * TODO: This should be removed once all layers have proper config
-   */
-  private layerIdToUrlKey(layerId: LayerId): string {
-    const mapping: Record<string, string> = {
-      temp2m: 'temp',
-      wind10m: 'wind',
-      precipitation: 'precip',
-      pressure_msl: 'pressure',
-      earth: 'earth',
-      sun: 'sun',
-      graticule: 'graticule',
-      text: 'text',
-    }
-    return mapping[layerId] || layerId
-  }
 }

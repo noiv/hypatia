@@ -15,24 +15,32 @@ import * as THREE from 'three';
 import { cartesianToLatLon, latLonToCartesian, formatLatLonForUrl, parseLatLonFromUrl } from '../utils/coordinates';
 import { altitudeToDistance, distanceToAltitude } from '../utils/constants';
 import type { ConfigService } from './ConfigService';
+import type { LocaleInfo } from './LocaleService';
+import type { LayerId } from '../layers/ILayer';
 
 /**
- * Complete application state from URL
+ * Geolocation API coordinates result
+ */
+export interface GeolocationCoordinates {
+  latitude: number;
+  longitude: number;
+}
+
+/**
+ * Complete application state from URL (validated and sanitized)
  */
 export interface AppUrlState {
   time: Date;
   camera: { x: number; y: number; z: number; distance: number };
-  layers: string[];
+  layers: LayerId[];  // Validated layer IDs only
 }
 
 /**
- * Partial application state from URL (some params may be missing)
+ * Partial URL state (unvalidated, optional fields)
+ * Same as AppUrlState but layers are raw strings from URL, not yet validated
+ * Internal type - not part of public API
  */
-export interface PartialUrlState {
-  time?: Date;
-  camera?: { x: number; y: number; z: number; distance: number };
-  layers?: string[];
-}
+type PartialUrlState = Partial<Omit<AppUrlState, 'layers'>> & { layers?: string[] };
 
 /**
  * Format date for URL
@@ -115,7 +123,10 @@ function getDefaultTime(mode: 'nearest-run' | 'current-utc' = 'nearest-run'): Da
  * Get default camera position using fallback chain:
  * URL → Locale centroid → Geolocation → (0,0)
  */
-function getDefaultCameraPosition(localeInfo?: any, userLocation?: any): { lat: number; lon: number } {
+function getDefaultCameraPosition(
+  localeInfo?: LocaleInfo,
+  userLocation?: GeolocationCoordinates
+): { lat: number; lon: number } {
   // Try locale-based centroid
   if (localeInfo?.defaultLocation) {
     const { lat, lon } = localeInfo.defaultLocation;
@@ -135,8 +146,11 @@ function getDefaultCameraPosition(localeInfo?: any, userLocation?: any): { lat: 
 /**
  * Parse URL search params to get complete application state
  * Returns full state if all required params present, null otherwise
+ *
+ * Note: layers are NOT validated here (returns string[])
+ * Use sanitizeUrlState() for validated LayerId[]
  */
-export function parseUrlState(): AppUrlState | null {
+export function parseUrlState(): (Omit<AppUrlState, 'layers'> & { layers: string[] }) | null {
   const search = window.location.search.substring(1);
   if (!search) {
     return null;
@@ -191,8 +205,9 @@ export function parseUrlState(): AppUrlState | null {
 /**
  * Parse partial URL state (returns what's available)
  * Unlike parseUrlState(), this doesn't require all params to be present
+ * Internal helper for sanitizeUrlState() - not part of public API
  */
-export function parsePartialUrlState(): PartialUrlState {
+function parsePartialUrlState(): PartialUrlState {
   const search = window.location.search.substring(1);
   if (!search) {
     return {};
@@ -303,8 +318,8 @@ export function debouncedUpdateUrlState(state: AppUrlState, delay: number = 100)
  */
 export function sanitizeUrlState(
   configService: ConfigService,
-  localeInfo?: any,
-  userLocation?: any,
+  localeInfo?: LocaleInfo,
+  userLocation?: GeolocationCoordinates,
   forceBootstrapCamera: boolean = false
 ): AppUrlState {
   const partial = parsePartialUrlState();
@@ -344,9 +359,28 @@ export function sanitizeUrlState(
     camera = partial.camera!;
   }
 
-  // Fill in layers
-  const layers = partial.layers || defaultLayers;
-  if (!partial.layers) {
+  // Fill in layers (validate and filter invalid layer IDs)
+  let layers: LayerId[];
+  if (partial.layers) {
+    // Get valid layer IDs from config
+    const layersConfig = configService.getLayersConfig();
+    const validLayerIds = new Set(layersConfig.layers.map(l => l.id as LayerId));
+
+    // Filter to only valid layer IDs
+    const validLayers = partial.layers.filter((layer): layer is LayerId =>
+      validLayerIds.has(layer as LayerId)
+    );
+
+    // Log if any invalid layers were filtered out
+    const invalidLayers = partial.layers.filter(layer => !validLayerIds.has(layer as LayerId));
+    if (invalidLayers.length > 0) {
+      console.warn(`UrlService: Filtered out invalid layer IDs: ${invalidLayers.join(', ')}`);
+    }
+
+    // Use valid layers or fall back to defaults if none are valid
+    layers = validLayers.length > 0 ? validLayers : defaultLayers as LayerId[];
+  } else {
+    layers = defaultLayers as LayerId[];
     changes.push(`layers: (empty) → [${layers.join(', ')}]`);
   }
 

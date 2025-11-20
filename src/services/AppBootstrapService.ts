@@ -339,7 +339,6 @@ export class AppBootstrapService {
           app.stateService,
           app.getScene,
           app.layersService!,
-          app.configService,
           app.isBootstrapping
         );
 
