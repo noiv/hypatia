@@ -15,6 +15,7 @@ import { parseUrlState } from './UrlService';
 import type { LayersService } from './LayersService';
 import type { DownloadService } from './DownloadService';
 import type { ConfigService } from './ConfigService';
+import type { DateTimeService } from './DateTimeService';
 import type { AppStateService } from './AppStateService';
 import type { Scene } from '../visualization/scene';
 
@@ -44,6 +45,7 @@ export interface AppInstance {
   initializeScene: () => Promise<Scene | undefined>;
   activate: () => void;
   configService: ConfigService;
+  dateTimeService: DateTimeService;
   getScene: () => Scene | undefined;
   stateService: AppStateService;
   layersService: LayersService;
@@ -140,6 +142,8 @@ export class AppBootstrapService {
           const latestRun = await getLatestRun(currentTime);
           if (latestRun) {
             app.stateService.setLatestRun(latestRun);
+            // Set in DateTimeService (single source of truth for data window calculation)
+            app.dateTimeService.setLatestRun(new Date(latestRun.timestamp));
           }
         }
       }

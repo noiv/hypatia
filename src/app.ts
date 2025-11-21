@@ -201,6 +201,7 @@ export const App: AppComponent = {
         initializeScene: this.initializeScene.bind(this),
         activate: this.activate.bind(this),
         configService: this.configService!,
+        dateTimeService: this.dateTimeService!,
         getScene: () => this.scene,
         stateService: this.stateService!,
         downloadService: this.downloadService!,
@@ -275,11 +276,10 @@ export const App: AppComponent = {
   },
 
   handleTimeChange(newTime: Date) {
-    // Get fixed slider bounds from DateTimeService (using initialTime, not currentTime)
-    const state = this.stateService!.get();
-    const { startTime, endTime } = this.dateTimeService!.calculateSliderBounds(state.initialTime);
+    // Get slider bounds (actual first and last timestep times)
+    const { startTime, endTime } = this.dateTimeService!.getSliderBounds();
 
-    // Clamp time to slider bounds
+    // Clamp time to data window bounds
     const clamped = this.dateTimeService!.clampToFixedBounds(
       newTime,
       startTime,
@@ -507,7 +507,6 @@ export const App: AppComponent = {
 
       m(TimeBarPanel, {
         currentTime: state.currentTime,
-        initialTime: state.initialTime,
         onTimeChange: (time) => this.handleTimeChange(time),
         dateTimeService: this.dateTimeService!
       }),

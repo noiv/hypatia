@@ -82,14 +82,7 @@ export class ConfigService {
       'font-weight: 800; color: darkorange'
     )
 
-    // Log data window configuration
-    const maxRangeDays = config.data.maxRangeDays
-    const currentTime = new Date()
-    const halfWindow = Math.floor(maxRangeDays / 2)
-    const startDate = new Date(currentTime)
-    startDate.setDate(startDate.getDate() - halfWindow)
-    const startDateStr = startDate.toISOString().substring(0, 10)
-    console.log(`ConfigService: Data window: ${startDateStr} + ${maxRangeDays} days`)
+    // Data window will be logged by DateTimeService after latest run is set
 
     return config
   }

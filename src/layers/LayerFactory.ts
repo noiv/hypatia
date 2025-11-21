@@ -56,12 +56,8 @@ export class LayerFactory {
         return GraticuleRenderService.create(layerId);
 
       case 'temp': {
-        // Generate timesteps for the layer (6-hour intervals)
-        const timeSteps = dateTimeService.generateTimeSteps(
-          currentTime,
-          
-          6 // stepHours
-        );
+        // Get timesteps from DateTimeService (generated once during bootstrap)
+        const timeSteps = dateTimeService.getTimeSteps();
 
         // Create layer with services
         const layer = new TempLayer(
@@ -79,12 +75,8 @@ export class LayerFactory {
       }
 
       case 'rain': {
-        // Generate timesteps for the layer (6-hour intervals)
-        const timeSteps = dateTimeService.generateTimeSteps(
-          currentTime,
-          
-          6 // stepHours
-        );
+        // Get timesteps from DateTimeService (generated once during bootstrap)
+        const timeSteps = dateTimeService.getTimeSteps();
 
         // Create layer with services
         const layer = new RainLayer(
@@ -102,12 +94,8 @@ export class LayerFactory {
       }
 
       case 'wind': {
-        // Generate timesteps for the layer (6-hour intervals)
-        const timeSteps = dateTimeService.generateTimeSteps(
-          currentTime,
-          
-          6 // stepHours
-        );
+        // Get timesteps from DateTimeService (generated once during bootstrap)
+        const timeSteps = dateTimeService.getTimeSteps();
 
         // Wind layer doesn't use TextureService (uses WebGPU compute)
         const layer = new WindLayer(
@@ -133,12 +121,8 @@ export class LayerFactory {
       }
 
       case 'pressure': {
-        // Generate timesteps for the layer (6-hour intervals)
-        const timeSteps = dateTimeService.generateTimeSteps(
-          currentTime,
-          
-          6 // stepHours
-        );
+        // Get timesteps from DateTimeService (generated once during bootstrap)
+        const timeSteps = dateTimeService.getTimeSteps();
 
         // Pressure layer is CPU-only (no TextureService needed)
         const layer = new PressureLayer(

@@ -9,17 +9,16 @@ import type { DateTimeService } from '../services/DateTimeService';
 
 export interface TimeBarPanelAttrs {
   currentTime: Date;
-  initialTime: Date;  // Fixed reference time for slider bounds
   onTimeChange: (time: Date) => void;
   dateTimeService: DateTimeService;
 }
 
 export const TimeBarPanel: m.Component<TimeBarPanelAttrs> = {
   view(vnode) {
-    const { currentTime, initialTime, onTimeChange, dateTimeService } = vnode.attrs;
+    const { currentTime, onTimeChange, dateTimeService } = vnode.attrs;
 
-    // Calculate fixed slider bounds from initialTime (never changes during session)
-    const { startTime, endTime } = dateTimeService.calculateSliderBounds(initialTime);
+    // Get slider bounds (actual first and last timestep times)
+    const { startTime, endTime } = dateTimeService.getSliderBounds();
 
     // Calculate slider value (0-1 through the forecast range)
     const rangeProgress = (currentTime.getTime() - startTime.getTime()) /

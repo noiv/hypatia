@@ -18,9 +18,44 @@ import type { ConfigService } from './ConfigService'
 
 export class DateTimeService {
   private maxRangeDays: number
+  private latestRunDate: Date | null = null
+  private timesteps: TimeStep[] = []
 
   constructor(configService: ConfigService) {
     this.maxRangeDays = configService.getHypatiaConfig().data.maxRangeDays
+  }
+
+  /**
+   * Set the latest ECMWF run date (call once during bootstrap)
+   * This becomes the center of the data window calculation
+   * Also generates timesteps for all layers
+   */
+  setLatestRun(runDate: Date): void {
+    this.latestRunDate = runDate
+    // Generate timesteps once (same for all layers)
+    this.timesteps = this.generateTimeStepsInternal(6) // 6-hour intervals
+
+    // Log data window configuration (DateTimeService is single source of truth)
+    const runDateStr = runDate.toISOString().substring(0, 10)
+    console.log(
+      `DateTimeService.init: ${runDateStr}, ${this.maxRangeDays} days, ${this.timesteps.length} steps`
+    )
+  }
+
+  /**
+   * Get the timesteps array (same for all layers)
+   * Timesteps are generated once when setLatestRun() is called
+   */
+  getTimeSteps(): TimeStep[] {
+    return this.timesteps
+  }
+
+  /**
+   * Get the reference date for data window calculation
+   * Returns latest ECMWF run if available, otherwise current wall time
+   */
+  private getDataWindowCenter(): Date {
+    return this.latestRunDate || new Date()
   }
 
   // ============================================================================
@@ -38,6 +73,73 @@ export class DateTimeService {
    * - startTime = 2025-11-02 00:00 UTC
    * - endTime = 2025-11-17 00:00 UTC (15 days after start)
    */
+  /**
+   * Get fixed data window bounds centered on latest ECMWF run
+   *
+   * IMPORTANT: Data window is ALWAYS centered on the latest ECMWF model run day,
+   * NEVER on URL parameters or user-specified time. This ensures the data window
+   * represents actual data availability on the server.
+   *
+   * Data window structure:
+   * - Duration: maxRangeDays (default: 3 days)
+   * - Center: Latest ECMWF run day (or current day if run unknown)
+   * - Start: 00z of (center - floor(maxRangeDays/2))
+   * - End: 18z of (start + maxRangeDays - 1)
+   *
+   * Example with maxRangeDays=3 and latest run on Nov 21:
+   * - Center: Nov 21 (latest-run-day)
+   * - Start: Nov 20 at 00z (Nov 21 - 1 day)
+   * - End: Nov 22 at 18z (Nov 20 + 3 days - 6 hours)
+   * - Total: ~2.75 days of data
+   *
+   * @returns Fixed data window boundaries centered on latest run
+   */
+  /**
+   * Get data window bounds for timestep generation
+   * IMPORTANT: endTime is set to AFTER the last timestep so the generation loop includes it
+   * For UI/slider bounds, use getSliderBounds() instead
+   */
+  getDataWindowBounds(): { startTime: Date; endTime: Date } {
+    const centerDate = this.getDataWindowCenter();
+    const daysBack = Math.floor(this.maxRangeDays / 2);
+
+    // Start: 00z of (latest-run-day - daysBack)
+    const startTime = new Date(centerDate);
+    startTime.setUTCDate(startTime.getUTCDate() - daysBack);
+    startTime.setUTCHours(0, 0, 0, 0);
+
+    // End: Midnight AFTER last day
+    // The loop `while (current < endTime)` needs this to be AFTER 18z to include it
+    // Last actual timestep will be at 18z (6 hours before this endTime)
+    const endTime = new Date(startTime);
+    endTime.setUTCDate(endTime.getUTCDate() + this.maxRangeDays);
+    endTime.setUTCHours(0, 0, 0, 0); // Midnight of (start + maxRangeDays)
+
+    return { startTime, endTime };
+  }
+
+  /**
+   * Get slider/UI bounds (actual first and last timestep times)
+   * Use this for time slider, clamping user input, etc.
+   *
+   * Difference from getDataWindowBounds():
+   * - getDataWindowBounds: endTime is AFTER last timestep (for generation loop)
+   * - getSliderBounds: endTime IS the last timestep (18z)
+   */
+  getSliderBounds(): { startTime: Date; endTime: Date } {
+    const { startTime, endTime } = this.getDataWindowBounds();
+
+    // Last timestep is always 6 hours before the generation endTime
+    const lastTimestep = new Date(endTime);
+    lastTimestep.setUTCHours(lastTimestep.getUTCHours() - 6); // 18z
+
+    return { startTime, endTime: lastTimestep };
+  }
+
+  /**
+   * @deprecated Use getDataWindowBounds() instead
+   * Calculate data window (legacy, uses arbitrary currentTime reference)
+   */
   calculateDataWindow(currentTime: Date): { startTime: Date; endTime: Date } {
     const daysBack = Math.floor(this.maxRangeDays / 2)
 
@@ -52,6 +154,7 @@ export class DateTimeService {
   }
 
   /**
+   * @deprecated Use getDataWindowBounds() instead
    * Calculate slider bounds (data window adjusted for UI)
    * Ends 6 hours earlier than data window to align with last timestep (18z)
    */
@@ -126,28 +229,24 @@ export class DateTimeService {
   }
 
   /**
-   * Generate timesteps for data window
-   *
-   * Creates timesteps centered at currentTime ± (maxRangeDays/2)
-   * This is the SINGLE SOURCE OF TRUTH for timestep generation.
-   * All layers must use the same timesteps generated by bootstrap/app.
-   *
-   * File paths are NOT included - use UrlBuilder to construct URLs when needed.
-   * This keeps DateTimeService focused on time calculations only.
-   *
-   * @param currentTime - Center time (UTC)
-   * @param stepHours - Step size in hours (e.g., 6 for 6-hourly data)
-   * @returns Array of TimeStep objects (date + cycle only)
-   *
-   * Example: currentTime = 2025-11-09 12:00 UTC, maxRangeDays = 15, stepHours = 6
-   * - Generates 60 timesteps (15 days × 4 steps/day)
-   * - Range: 2025-11-02 00z to 2025-11-16 18z
-   * - Returns: [{ date: "20251102", cycle: "00z" }, ...]
+   * @deprecated Use getTimeSteps() instead - timesteps generated once in setLatestRun()
    */
   generateTimeSteps(currentTime: Date, stepHours: number): TimeStep[] {
+    return this.generateTimeStepsInternal(stepHours)
+  }
+
+  /**
+   * Internal: Generate timesteps for data window
+   * Called once during setLatestRun()
+   *
+   * @param stepHours - Step size in hours (6 for 6-hourly data)
+   * @returns Array of TimeStep objects
+   */
+  private generateTimeStepsInternal(stepHours: number): TimeStep[] {
     const steps: TimeStep[] = []
 
-    const { startTime, endTime } = this.calculateDataWindow(currentTime)
+    // Use fixed data window (centered on latest run)
+    const { startTime, endTime } = this.getDataWindowBounds()
 
     // Generate timesteps
     const current = new Date(startTime)
