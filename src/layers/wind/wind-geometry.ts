@@ -276,7 +276,7 @@ export class WindGeometry {
     const material = new LineMaterial({
       linewidth: this.config.lineWidth,
       color: 0xffffff, // White lines
-      vertexColors: false, // Disable vertex colors (used for animation data, not actual colors)
+      vertexColors: false,
       transparent: true,
       opacity: 0.6,
       depthWrite: false,
@@ -286,20 +286,13 @@ export class WindGeometry {
 
     material.resolution.set(window.innerWidth, window.innerHeight);
 
-    // TODO: Add custom uniforms for snake animation
-    // Temporarily disabled due to shader uniform injection issues
-    // (material as any).uniforms = {
-    //   ...material.uniforms,
-    //   animationPhase: { value: 0.0 },
-    //   snakeLength: { value: this.config.snakeLength },
-    //   lineSteps: { value: this.config.lineSteps }
-    // };
-
-    // TODO: Inject snake animation shader
-    // Temporarily disabled - needs proper uniform declaration placement
-    // material.onBeforeCompile = (shader) => {
-    //   ...
-    // };
+    // TODO: Snake animation shader injection fails with LineMaterial
+    // The uniform declarations can't be reliably inserted at global scope
+    // Need to either:
+    // 1. Use raw ShaderMaterial instead of LineMaterial
+    // 2. Find the correct insertion point in LineMaterial's generated shader
+    // 3. Patch three.js LineMaterial to support custom uniforms
+    // For now, render solid white lines
 
     const lines = new LineSegments2(geometry, material);
     group.add(lines);
