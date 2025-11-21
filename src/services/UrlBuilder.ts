@@ -33,19 +33,23 @@ export class UrlBuilder {
   /**
    * Build data URLs for dual-file layers (wind U/V components)
    *
+   * Wind data is stored in separate folders with files named without component suffix:
+   * - U component: /data/wind10m_u/20251109_00z.bin
+   * - V component: /data/wind10m_v/20251109_00z.bin
+   *
    * Example:
    * - timestep: { date: "20251109", cycle: "00z" }
    * - config: { dataBaseUrl: "/data", dataFolder: "wind10m" }
    * - Returns: {
-   *     u: "/data/wind10m/20251109_00z_u.bin",
-   *     v: "/data/wind10m/20251109_00z_v.bin"
+   *     u: "/data/wind10m_u/20251109_00z.bin",
+   *     v: "/data/wind10m_v/20251109_00z.bin"
    *   }
    */
   buildWindUrls(config: LayerUrlConfig, timestep: TimeStep): { u: string; v: string } {
-    const base = `${config.dataBaseUrl}/${config.dataFolder}/${timestep.date}_${timestep.cycle}`;
+    const filename = `${timestep.date}_${timestep.cycle}.bin`;
     return {
-      u: `${base}_u.bin`,
-      v: `${base}_v.bin`,
+      u: `${config.dataBaseUrl}/${config.dataFolder}_u/${filename}`,
+      v: `${config.dataBaseUrl}/${config.dataFolder}_v/${filename}`,
     };
   }
 }

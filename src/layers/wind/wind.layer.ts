@@ -51,8 +51,16 @@ export class WindLayer implements ILayer {
   private downloadService: DownloadService;
   private dateTimeService: DateTimeService;
   private timesteps: TimeStep[] = [];
-  private windDataU: Map<number, Uint16Array> = new Map();
-  private windDataV: Map<number, Uint16Array> = new Map();
+
+  // Event-driven state
+  private timestepAvailable: boolean[] = [];
+
+  // Geometry cache for precomputed wind lines
+  private geometryCache: Map<number, {
+    positions: Float32Array;
+    colors: Float32Array;
+    visibleCount: number;
+  }> = new Map();
 
   // WebGPU
   private device: GPUDevice | null = null;
@@ -78,6 +86,10 @@ export class WindLayer implements ILayer {
   private lastTimeIndex: number = -1;
   private animationPhase: number = 0;
   private updatePromise: Promise<void> | null = null;
+  private precomputePromise: Promise<void> | null = null;
+
+  // Event cleanup
+  private eventCleanup: Array<() => void> = [];
 
   private static readonly LINE_STEPS = 32;
   // STEP_FACTOR defined in shader (0.00045)
@@ -100,6 +112,30 @@ export class WindLayer implements ILayer {
     // Generate uniformly distributed seed points on sphere using Fibonacci lattice
     this.seeds = generateFibonacciSphere(8192, EARTH_RADIUS_UNITS);
 
+    // Debug: expose seeds to window
+    (window as any).__windSeeds = this.seeds;
+
+    // Test cartesianToLatLon transformation for debug
+    (window as any).__testWindCoords = (seed: {x: number, y: number, z: number}) => {
+      const len = Math.sqrt(seed.x**2 + seed.y**2 + seed.z**2);
+      const norm = {x: seed.x/len, y: seed.y/len, z: seed.z/len};
+      const lat = Math.asin(norm.y);
+      let lon = Math.atan2(norm.z, norm.x);
+
+      // Apply rain layer transformation
+      const PI = Math.PI;
+      let u = ((lon - PI/2.0) + PI) / (2.0 * PI);
+      u = 1.0 - u;
+      const lonDeg = u * 360.0 - 180.0;
+      const latDeg = lat * 180.0 / PI;
+
+      // Calculate data indices
+      const dataX = (lonDeg + 180.0) / 0.25;
+      const dataY = (90.0 - latDeg) / 0.25;
+
+      return {latDeg, lonDeg, dataX: Math.floor(dataX), dataY: Math.floor(dataY)};
+    };
+
     // Initialize geometry helper
     const geometryConfig: WindGeometryConfig = {
       lineSteps: WindLayer.LINE_STEPS,
@@ -120,52 +156,185 @@ export class WindLayer implements ILayer {
    * Setup listeners for download events
    */
   private setupDownloadListeners(): void {
-    // For wind layer, we need both U and V components
-    // Downloads are managed by DownloadService but we track data locally
-    this.downloadService.on('timestampLoaded', (event) => {
-      if (event.layerId === 'wind10m_u') {
-        this.windDataU.set(event.timestepIndex, event.data as Uint16Array);
-        this.checkAndUploadWindData();
-      } else if (event.layerId === 'wind10m_v') {
-        this.windDataV.set(event.timestepIndex, event.data as Uint16Array);
-        this.checkAndUploadWindData();
+    const onTimestampLoaded = (event: any) => {
+      if (event.layerId !== 'wind') return;
+
+      const { index, data, priority } = event;
+      console.log(`[wind] Timestamp ${index} loaded, uploading to GPU`);
+
+      // Wind data has { u: Uint16Array, v: Uint16Array } format
+      if (!data || !data.u || !data.v) {
+        console.error(`[wind] Invalid data format for index ${index}`, data);
+        return;
       }
+
+      // Upload to GPU and precompute geometry
+      this.uploadAndPrecomputeTimestep(index, data.u, data.v, priority).catch(err => {
+        console.error(`[wind] Failed to upload/precompute timestep ${index}:`, err);
+      });
+    };
+
+    // Register listener
+    this.downloadService.on('timestampLoaded', onTimestampLoaded);
+
+    // Store cleanup function
+    this.eventCleanup.push(() => {
+      this.downloadService.off('timestampLoaded', onTimestampLoaded);
     });
   }
 
   /**
-   * Check if we have both U and V for any timesteps and upload to GPU
+   * Upload timestep data to GPU and precompute geometry
    */
-  private checkAndUploadWindData(): void {
-    if (!this.device) return;
-
-    // Find timesteps that have both U and V loaded but not yet uploaded
-    for (let i = 0; i < this.timesteps.length; i++) {
-      const hasU = this.windDataU.has(i);
-      const hasV = this.windDataV.has(i);
-      const alreadyUploaded = this.windBuffers.length > i * 2;
-
-      if (hasU && hasV && !alreadyUploaded) {
-        const uData = this.windDataU.get(i)!;
-        const vData = this.windDataV.get(i)!;
-
-        // Convert to ArrayBuffer view for WebGPU
-        const uBuffer = this.device.createBuffer({
-          size: uData.byteLength,
-          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-        });
-        this.device.queue.writeBuffer(uBuffer, 0, uData.buffer, 0, uData.byteLength);
-
-        const vBuffer = this.device.createBuffer({
-          size: vData.byteLength,
-          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-        });
-        this.device.queue.writeBuffer(vBuffer, 0, vData.buffer, 0, vData.byteLength);
-
-        this.windBuffers.push(uBuffer, vBuffer);
-        console.log(`Wind GPU: uploaded timestep ${i}`);
-      }
+  private async uploadAndPrecomputeTimestep(
+    index: number,
+    uData: Uint16Array,
+    vData: Uint16Array,
+    priority: string
+  ): Promise<void> {
+    if (!this.device) {
+      console.warn(`[wind] Cannot upload timestep ${index}: GPU device not initialized`);
+      return;
     }
+
+    // Upload U and V buffers to GPU
+    // CRITICAL: Shader declares buffers as array<u32> (4 bytes per element)
+    // but data is Uint16Array (2 bytes per element). We must convert to match
+    // the shader's expectations, otherwise indices will be off by 2x!
+    const u_u32 = new Uint32Array(uData);
+    const v_u32 = new Uint32Array(vData);
+
+    const uBuffer = this.device.createBuffer({
+      size: u_u32.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(uBuffer, 0, u_u32);
+
+    const vBuffer = this.device.createBuffer({
+      size: v_u32.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(vBuffer, 0, v_u32);
+
+    // Store buffers at correct index (expand array if needed)
+    while (this.windBuffers.length < (index + 1) * 2) {
+      this.windBuffers.push(null as any, null as any);
+    }
+    this.windBuffers[index * 2] = uBuffer;
+    this.windBuffers[index * 2 + 1] = vBuffer;
+
+    // Mark as available
+    this.timestepAvailable[index] = true;
+
+    // Debug: expose data to window for inspection
+    if (!(window as any).__windDebug) {
+      (window as any).__windDebug = {};
+    }
+    (window as any).__windDebug[`u${index}`] = uData;
+    (window as any).__windDebug[`v${index}`] = vData;
+
+    // Log only for critical priority (bootstrap loads)
+    if (priority === 'critical') {
+      const totalBytes = uData.byteLength + vData.byteLength;
+      console.log(`[wind] Uploaded timestep ${index} (${(totalBytes / 1024).toFixed(1)}KB)`);
+      console.log(`[wind] Debug: window.__windDebug.u${index} and .v${index} available for inspection`);
+    }
+
+    // TODO: Precompute geometry for adjacent timesteps
+    // Temporarily disabled due to staging buffer conflicts with doUpdate
+    // The geometry will be computed on-demand during time changes instead
+    //
+    // if (this.lastTimeIndex >= 0 && !this.updatePromise && !this.precomputePromise) {
+    //   const adjacentIndices = this.dateTimeService.getAdjacentIndices(
+    //     this.lastTime || new Date(),
+    //     this.timesteps
+    //   );
+    //   if (adjacentIndices.includes(index)) {
+    //     console.log(`[wind] Precomputing geometry for adjacent timestep ${index}`);
+    //     this.precomputePromise = this.precomputeGeometry(index).finally(() => {
+    //       this.precomputePromise = null;
+    //     });
+    //   }
+    // }
+  }
+
+  /**
+   * Precompute geometry for a single timestep (for caching)
+   */
+  private async precomputeGeometry(index: number): Promise<void> {
+    if (!this.device || !this.pipeline || !this.bindGroupLayout) {
+      console.warn(`[wind] Cannot precompute: GPU not initialized`);
+      return;
+    }
+
+    if (this.windBuffers.length < (index + 1) * 2) {
+      console.warn(`[wind] Cannot precompute index ${index}: buffers not uploaded`);
+      return;
+    }
+
+    const uBuffer = this.windBuffers[index * 2];
+    const vBuffer = this.windBuffers[index * 2 + 1];
+    if (!uBuffer || !vBuffer) {
+      console.warn(`[wind] Cannot precompute index ${index}: buffers are null`);
+      return;
+    }
+
+    if (!this.blendBuffer || !this.seedBuffer || !this.outputBuffer || !this.stagingBuffer) {
+      console.warn(`[wind] Cannot precompute: required buffers not initialized`);
+      return;
+    }
+
+    // Set blend to 0 (no interpolation, just this timestep)
+    this.device.queue.writeBuffer(this.blendBuffer, 0, new Float32Array([0.0]));
+
+    // Create bind group for this timestep (use same buffers for both U/V)
+    const bindGroup = this.device.createBindGroup({
+      layout: this.bindGroupLayout,
+      entries: [
+        { binding: 0, resource: { buffer: this.seedBuffer } },
+        { binding: 1, resource: { buffer: this.outputBuffer } },
+        { binding: 2, resource: { buffer: uBuffer } },
+        { binding: 3, resource: { buffer: vBuffer } },
+        { binding: 4, resource: { buffer: uBuffer } }, // Same for interpolation
+        { binding: 5, resource: { buffer: vBuffer } }, // Same for interpolation
+        { binding: 6, resource: { buffer: this.blendBuffer } },
+      ],
+    });
+
+    // Run compute shader
+    const commandEncoder = this.device.createCommandEncoder();
+    const passEncoder = commandEncoder.beginComputePass();
+    passEncoder.setPipeline(this.pipeline);
+    passEncoder.setBindGroup(0, bindGroup);
+
+    const numWorkgroups = Math.ceil(this.seeds.length / 64);
+    passEncoder.dispatchWorkgroups(numWorkgroups);
+    passEncoder.end();
+
+    const outputSize = this.seeds.length * WindLayer.LINE_STEPS * 4 * 4;
+    commandEncoder.copyBufferToBuffer(this.outputBuffer, 0, this.stagingBuffer, 0, outputSize);
+    this.device.queue.submit([commandEncoder.finish()]);
+
+    // Read back results
+    await this.stagingBuffer.mapAsync(GPUMapMode.READ);
+    const resultData = new Float32Array(this.stagingBuffer.getMappedRange());
+
+    // Copy to cache (make a copy since we'll unmap the buffer)
+    const positions = new Float32Array(resultData.length);
+    positions.set(resultData);
+    this.stagingBuffer.unmap();
+
+    // Generate colors and build geometry arrays (same logic as updateGeometry)
+    const { count } = this.geometry.calculateVisibleSeeds(this.lastCameraPosition);
+
+    // For now, cache the raw vertex data - we'll build geometry on demand
+    this.geometryCache.set(index, {
+      positions,
+      colors: new Float32Array(0), // Will be generated when needed
+      visibleCount: count
+    });
+
+    console.log(`[wind] Precomputed geometry for timestep ${index}`);
   }
 
   /**
@@ -246,23 +415,30 @@ export class WindLayer implements ILayer {
   }
 
   /**
-   * Register with DownloadService and initialize bulk loading
+   * Register with DownloadService and initialize data loading
    */
   async initialize(
     timesteps: TimeStep[],
-    _onProgress?: (loaded: number, total: number) => void
+    currentTime: Date,
+    onProgress?: (loaded: number, total: number) => void
   ): Promise<void> {
     this.timesteps = timesteps;
 
-    // Register both U and V components with DownloadService
-    // Note: Wind layer needs both components, so we register them separately
-    // The DownloadService will handle the actual downloads
+    // Initialize availability tracking
+    this.timestepAvailable = new Array(timesteps.length).fill(false);
 
-    // For now, just store the timesteps
-    // In a full implementation, we'd register with DownloadService here
-    // and the downloads would happen through the event system
+    // Register with DownloadService
+    this.downloadService.registerLayer('wind', timesteps);
 
-    console.log(`Wind layer: registered ${timesteps.length} timesteps`);
+    // Initialize with on-demand strategy (±1 adjacent only during bootstrap)
+    await this.downloadService.initializeLayer(
+      'wind',
+      currentTime,
+      onProgress,
+      'on-demand'  // Bootstrap always uses on-demand mode
+    );
+
+    console.log(`[wind] Initialized with ${timesteps.length} timesteps`);
   }
 
 
@@ -330,6 +506,40 @@ export class WindLayer implements ILayer {
       return;
     }
 
+    // Try to use cached geometry if blend is close to 0 or 1
+    if (blend < 0.01 && this.geometryCache.has(index0)) {
+      const cached = this.geometryCache.get(index0)!;
+      const result = this.geometry.updateGeometry(
+        cached.positions,
+        this.visibleSeeds,
+        this.visibleCount,
+        this.lines,
+        this.group,
+        this.material
+      );
+      this.lines = result.lines;
+      this.material = result.material;
+      console.log(`[wind] Used cached geometry for index ${index0}`);
+      return;
+    }
+
+    if (blend > 0.99 && this.geometryCache.has(index1)) {
+      const cached = this.geometryCache.get(index1)!;
+      const result = this.geometry.updateGeometry(
+        cached.positions,
+        this.visibleSeeds,
+        this.visibleCount,
+        this.lines,
+        this.group,
+        this.material
+      );
+      this.lines = result.lines;
+      this.material = result.material;
+      console.log(`[wind] Used cached geometry for index ${index1}`);
+      return;
+    }
+
+    // No cached geometry available, run full WebGPU compute with interpolation
     const startTime = performance.now();
 
     this.device.queue.writeBuffer(this.blendBuffer, 0, new Float32Array([blend]));
@@ -420,9 +630,31 @@ export class WindLayer implements ILayer {
 
     // Check time change OR camera movement
     if (!this.lastTime || state.time.getTime() !== this.lastTime.getTime() || cameraMoved) {
-      this.updateTimeAsync(state.time, state.camera.position).catch(err => {
-        console.error('Failed to update wind layer:', err);
-      });
+      // Check data availability for interpolation (floor and ceil indices)
+      if (this.timesteps.length > 0) {
+        const timeIndex = this.dateTimeService.timeToIndex(state.time, this.timesteps);
+        const idx1 = Math.floor(timeIndex);
+        const idx2 = Math.min(idx1 + 1, this.timesteps.length - 1);
+
+        const data1 = this.timestepAvailable[idx1] || false;
+        const data2 = this.timestepAvailable[idx2] || false;
+        const hasData = data1 && data2;
+
+        if (hasData) {
+          // Data available, update geometry and show layer
+          this.group.visible = true;
+          this.updateTimeAsync(state.time, state.camera.position).catch(err => {
+            console.error('Failed to update wind layer:', err);
+          });
+        } else {
+          // Data not available, request prioritized download
+          this.downloadService.prioritizeTimestamps('wind', state.time);
+
+          // Hide layer while waiting for data
+          this.group.visible = false;
+        }
+      }
+
       this.lastTime = state.time;
       if (cameraMoved) {
         this.lastCameraPosition.copy(state.camera.position);
@@ -499,7 +731,13 @@ export class WindLayer implements ILayer {
 
   dispose(): void {
     // Cleanup event listeners
-    this.downloadService.off('timestampLoaded', () => {});
+    for (const cleanup of this.eventCleanup) {
+      cleanup();
+    }
+    this.eventCleanup = [];
+
+    // Clear geometry cache
+    this.geometryCache.clear();
 
     if (this.lines) {
       this.lines.geometry.dispose();

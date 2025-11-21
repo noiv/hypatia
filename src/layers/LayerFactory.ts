@@ -112,10 +112,10 @@ export class LayerFactory {
 
         // Initialize GPU resources and timesteps
         await layer.initGPU(renderer);
-        await layer.initialize(timeSteps);
 
-        // Register layer with DownloadService (wind data is fetched as U/V pairs)
-        downloadService.registerLayer(layerId, timeSteps);
+        // Initialize with timesteps and current time
+        // Layer will register with DownloadService internally
+        await layer.initialize(timeSteps, currentTime);
 
         return layer;
       }

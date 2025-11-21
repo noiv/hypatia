@@ -391,11 +391,14 @@ export class DateTimeService {
   getAdjacentIndices(currentTime: Date, timeSteps: TimeStep[]): number[] {
     const fractionalIndex = this.timeToIndex(currentTime, timeSteps)
     const floorIndex = Math.floor(fractionalIndex)
-    const ceilIndex = Math.ceil(fractionalIndex)
+    const ceilIndex = Math.min(Math.ceil(fractionalIndex), timeSteps.length - 1)
 
-    // If exactly on a timestamp, both floor and ceil are the same
+    // Always return both indices for interpolation, even at exact boundaries
+    // This ensures layers can render immediately without waiting for downloads
     if (floorIndex === ceilIndex) {
-      return [floorIndex]
+      // At exact timestamp, return current and next (or current if at end)
+      const nextIndex = Math.min(floorIndex + 1, timeSteps.length - 1)
+      return floorIndex === nextIndex ? [floorIndex] : [floorIndex, nextIndex]
     }
 
     // Otherwise return both for interpolation

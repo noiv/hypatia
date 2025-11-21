@@ -36,7 +36,7 @@
       },
       "description": "Wind speed and direction at 10 meters above ground",
       "ecmwfParams": ["10u", "10v"],
-      "dataFolders": ["wind10m_u", "wind10m_v"],
+      "dataFolders": ["wind10m"],
       "visualization": {
         "colormap": "wind",
         "range": {

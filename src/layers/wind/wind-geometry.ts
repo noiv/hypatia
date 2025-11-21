@@ -275,7 +275,8 @@ export class WindGeometry {
 
     const material = new LineMaterial({
       linewidth: this.config.lineWidth,
-      vertexColors: true,
+      color: 0xffffff, // White lines
+      vertexColors: false, // Disable vertex colors (used for animation data, not actual colors)
       transparent: true,
       opacity: 0.6,
       depthWrite: false,
@@ -285,37 +286,20 @@ export class WindGeometry {
 
     material.resolution.set(window.innerWidth, window.innerHeight);
 
-    // Add custom uniforms for snake animation
-    (material as any).uniforms = {
-      ...material.uniforms,
-      animationPhase: { value: 0.0 },
-      snakeLength: { value: this.config.snakeLength },
-      lineSteps: { value: this.config.lineSteps }
-    };
+    // TODO: Add custom uniforms for snake animation
+    // Temporarily disabled due to shader uniform injection issues
+    // (material as any).uniforms = {
+    //   ...material.uniforms,
+    //   animationPhase: { value: 0.0 },
+    //   snakeLength: { value: this.config.snakeLength },
+    //   lineSteps: { value: this.config.lineSteps }
+    // };
 
-    // Inject snake animation shader
-    material.onBeforeCompile = (shader) => {
-      shader.uniforms.animationPhase = (material as any).uniforms.animationPhase;
-      shader.uniforms.snakeLength = (material as any).uniforms.snakeLength;
-      shader.uniforms.lineSteps = (material as any).uniforms.lineSteps;
-
-      shader.fragmentShader = shader.fragmentShader.replace(
-        'void main() {',
-        `
-        uniform float animationPhase;
-        uniform float snakeLength;
-        uniform float lineSteps;
-        void main() {
-        `
-      );
-
-      if (shader.fragmentShader.includes('gl_FragColor =')) {
-        shader.fragmentShader = shader.fragmentShader.replace(
-          /gl_FragColor = vec4\( diffuseColor\.rgb, alpha \);/,
-          windSnakeShader
-        );
-      }
-    };
+    // TODO: Inject snake animation shader
+    // Temporarily disabled - needs proper uniform declaration placement
+    // material.onBeforeCompile = (shader) => {
+    //   ...
+    // };
 
     const lines = new LineSegments2(geometry, material);
     group.add(lines);
