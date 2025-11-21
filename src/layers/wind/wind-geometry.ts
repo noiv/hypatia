@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
-import windSnakeShader from './wind-snake.glsl?raw';
+// import windSnakeShader from './wind-snake.glsl?raw';  // Currently unused, will be re-enabled later
 
 export interface WindGeometryConfig {
   lineSteps: number;
@@ -170,7 +170,10 @@ export class WindGeometry {
 
         const normalizedIndex = i / totalSegments;
 
-        // Colors encode animation data (normalizedIndex, normalizedOffset, taperFactor)
+        // Colors encode animation data for snake effect
+        // R: normalized segment index (0 to 1 along line)
+        // G: random offset for each line (0 to 1)
+        // B: taper factor for line endings
         colors[colorIdx++] = normalizedIndex;
         colors[colorIdx++] = normalizedOffset;
         colors[colorIdx++] = taperFactor;
@@ -275,8 +278,7 @@ export class WindGeometry {
 
     const material = new LineMaterial({
       linewidth: this.config.lineWidth,
-      color: 0xffffff, // White lines
-      vertexColors: false,
+      vertexColors: true,
       transparent: true,
       opacity: 0.6,
       depthWrite: false,
@@ -286,13 +288,62 @@ export class WindGeometry {
 
     material.resolution.set(window.innerWidth, window.innerHeight);
 
-    // TODO: Snake animation shader injection fails with LineMaterial
-    // The uniform declarations can't be reliably inserted at global scope
-    // Need to either:
-    // 1. Use raw ShaderMaterial instead of LineMaterial
-    // 2. Find the correct insertion point in LineMaterial's generated shader
-    // 3. Patch three.js LineMaterial to support custom uniforms
-    // For now, render solid white lines
+    // Add snake animation uniforms
+    (material as any).uniforms = {
+      ...material.uniforms,
+      animationPhase: { value: 0.0 },
+      snakeLength: { value: this.config.snakeLength },
+      lineSteps: { value: this.config.lineSteps }
+    };
+
+    // Inject snake animation shader
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.animationPhase = (material as any).uniforms.animationPhase;
+      shader.uniforms.snakeLength = (material as any).uniforms.snakeLength;
+      shader.uniforms.lineSteps = (material as any).uniforms.lineSteps;
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        'void main() {',
+        `
+        uniform float animationPhase;
+        uniform float snakeLength;
+        uniform float lineSteps;
+        void main() {
+        `
+      );
+
+      if (shader.fragmentShader.includes('gl_FragColor =')) {
+        shader.fragmentShader = shader.fragmentShader.replace(
+          /gl_FragColor = vec4\( diffuseColor\.rgb, alpha \);/,
+          `
+          // Extract segment data from diffuseColor (RGB channels)
+          float normalizedIndex = diffuseColor.r;
+          float normalizedOffset = diffuseColor.g;
+          float taperFactor = diffuseColor.b;
+
+          // Calculate snake animation
+          float cycleLength = lineSteps + snakeLength;
+          float segmentIndex = normalizedIndex * (lineSteps - 1.0);
+          float randomOffset = normalizedOffset * cycleLength;
+          float snakeHead = mod(animationPhase + randomOffset, cycleLength);
+          float distanceFromHead = segmentIndex - snakeHead;
+
+          if (distanceFromHead < -snakeLength) {
+            distanceFromHead += cycleLength;
+          }
+
+          float segmentOpacity = 0.0;
+          if (distanceFromHead >= -snakeLength && distanceFromHead <= 0.0) {
+            float positionInSnake = (distanceFromHead + snakeLength) / snakeLength;
+            segmentOpacity = positionInSnake;
+          }
+
+          float finalAlpha = alpha * segmentOpacity * taperFactor;
+          gl_FragColor = vec4( vec3(1.0), finalAlpha );
+          `
+        );
+      }
+    };
 
     const lines = new LineSegments2(geometry, material);
     group.add(lines);
