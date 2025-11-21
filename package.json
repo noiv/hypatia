@@ -1,6 +1,6 @@
 {
   "name": "hypatia",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Interactive weather visualization with minute-accurate interpolation",
   "type": "module",
   "scripts": {
