@@ -334,7 +334,7 @@ export function sanitizeUrlState(
   // Fill in time
   const time = partial.time || getDefaultTime(defaultTimeMode);
   if (!partial.time) {
-    changes.push(`dt: (empty) → ${time.toISOString()}`);
+    changes.push('dt');
   }
 
   // Fill in camera position
@@ -353,8 +353,7 @@ export function sanitizeUrlState(
       z: position.z,
       distance
     };
-    const altitude = distanceToAltitude(distance);
-    changes.push(`camera: (empty) → lat=${lat.toFixed(2)}, lon=${lon.toFixed(2)}, alt=${altitude.toFixed(0)}m`);
+    changes.push('camera');
   } else {
     camera = partial.camera!;
   }
@@ -362,9 +361,8 @@ export function sanitizeUrlState(
   // Fill in layers (validate and filter invalid layer IDs)
   let layers: LayerId[];
   if (partial.layers) {
-    // Get valid layer IDs from config
-    const layersConfig = configService.getLayersConfig();
-    const validLayerIds = new Set(layersConfig.layers.map(l => l.id as LayerId));
+    // Get valid layer IDs from hypatia config (includes both data and render-only layers)
+    const validLayerIds = new Set(hypatiaConfig.layers.all);
 
     // Filter to only valid layer IDs
     const validLayers = partial.layers.filter((layer): layer is LayerId =>
@@ -381,12 +379,12 @@ export function sanitizeUrlState(
     layers = validLayers.length > 0 ? validLayers : defaultLayers as LayerId[];
   } else {
     layers = defaultLayers as LayerId[];
-    changes.push(`layers: (empty) → [${layers.join(', ')}]`);
+    changes.push('layers');
   }
 
   // Log changes if any
   if (changes.length > 0) {
-    console.log('UrlService: Filled missing URL params -', changes.join(' | '));
+    console.log('UrlService.sanitized:', changes.join(', '));
   }
 
   const completeState: AppUrlState = {

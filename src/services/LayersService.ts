@@ -74,8 +74,6 @@ export class LayersService {
     // Initialize layer state from config
     const layerConfigs = configService.getLayers()
     this.layerState = new LayerState(layerConfigs)
-
-    console.log('[LayersService] Initialized')
   }
 
   /**
@@ -110,7 +108,7 @@ export class LayersService {
    */
   registerLayer(layerId: LayerId, layer: ILayer, isDataLayer: boolean = false): void {
     if (this.layers.has(layerId)) {
-      console.warn(`[LayersService] Layer ${layerId} already registered, skipping`)
+      console.warn(`LayersService: Layer ${layerId} already registered, skipping`)
       return
     }
 
@@ -142,10 +140,6 @@ export class LayersService {
         this.downloadService.off('downloadProgress', progressListener)
       })
     }
-
-    console.log(
-      `[LayersService] Registered ${layerId} (${isDataLayer ? 'data layer' : 'render layer'})`
-    )
   }
 
   /**
@@ -161,11 +155,12 @@ export class LayersService {
     }
 
     const nonDataLayers = this._configService.getNonDataLayers()
+    const createdLayers: LayerId[] = []
 
     for (const layerId of layerIds) {
       // Skip if already created
       if (this.layers.has(layerId)) {
-        console.log(`[LayersService] Layer ${layerId} already exists, skipping`)
+        console.log(`LayersService: Layer ${layerId} already exists, skipping`)
         continue
       }
 
@@ -190,7 +185,12 @@ export class LayersService {
       // Add to Scene (both ILayer and sceneObject)
       this.scene.addLayer(layerId, layer, layer.getSceneObject())
 
-      console.log(`[LayersService] Created layer: ${layerId}`)
+      createdLayers.push(layerId)
+    }
+
+    // Log all created layers at once
+    if (createdLayers.length > 0) {
+      console.log(`LayersService.created: ${createdLayers.join(', ')}`)
     }
   }
 
@@ -214,12 +214,12 @@ export class LayersService {
       // Check if layer already initialized in DownloadService
       const timestepCount = this.downloadService.getTimestepCount(layerId)
       if (timestepCount === 0) {
-        console.log(`[LayersService] Initializing data for ${layerId}`)
+        console.log(`LayersService: Initializing data for ${layerId}`)
 
         // Need to register timesteps - this would normally be done by the layer itself
         // For now, we'll just log a warning
         console.warn(
-          `[LayersService] Layer ${layerId} needs timesteps registered before toggle. This should be done during layer creation.`
+          `LayersService: Layer ${layerId} needs timesteps registered before toggle. This should be done during layer creation.`
         )
       } else {
         // Data already registered, load based on download mode
@@ -236,8 +236,6 @@ export class LayersService {
     // Update visibility
     metadata.isVisible = visible
     metadata.layer.setVisible(visible)
-
-    console.log(`[LayersService] ${layerId} visibility: ${visible}`)
   }
 
   /**
@@ -252,7 +250,7 @@ export class LayersService {
     if (metadata.layer.setOpacity) {
       metadata.layer.setOpacity(opacity)
     } else {
-      console.warn(`[LayersService] Layer ${layerId} does not support opacity`)
+      console.warn(`LayersService: Layer ${layerId} does not support opacity`)
     }
   }
 
@@ -401,7 +399,7 @@ export class LayersService {
     if (metadata.isDataLayer) {
       this.downloadService.clearLayer(layerId)
       metadata.loadProgress = 0
-      console.log(`[LayersService] Cleared data for ${layerId}`)
+      console.log(`LayersService: Cleared data for ${layerId}`)
     }
   }
 
@@ -425,7 +423,7 @@ export class LayersService {
     // Remove from registry
     this.layers.delete(layerId)
 
-    console.log(`[LayersService] Unregistered ${layerId}`)
+    console.log(`LayersService: Unregistered ${layerId}`)
   }
 
   /**
@@ -470,6 +468,6 @@ export class LayersService {
 
     this.layers.clear()
 
-    console.log('[LayersService] Disposed')
+    console.log('LayersService: Disposed')
   }
 }

@@ -60,8 +60,6 @@ export class TempLayer implements ILayer {
     this.textureService = textureService
     this.dateTimeService = dateTimeService
 
-    console.log(`[temp2m] Constructing layer with ${timeSteps.length} timesteps`)
-
     // Initialize availability tracking
     this.timestepAvailable = new Array(timeSteps.length).fill(false)
 
@@ -212,9 +210,6 @@ export class TempLayer implements ILayer {
     const shouldBeVisible = this.userRequestedVisible && hasData
 
     if (this.mesh.visible !== shouldBeVisible) {
-      console.log(
-        `[temp2m] Visibility: ${this.mesh.visible} -> ${shouldBeVisible} | idx=${index.toFixed(2)} [${idx1}:${data1}, ${idx2}:${data2}]`
-      )
       this.mesh.visible = shouldBeVisible
     }
   }

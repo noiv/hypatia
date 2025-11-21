@@ -167,8 +167,6 @@ export class DownloadService {
       stateMap.set(i, { status: 'empty' })
     }
     this.timestamps.set(layerId, stateMap)
-
-    console.log(`[DownloadService] Registered ${layerId} with ${timeSteps.length} timesteps`)
   }
 
   /**

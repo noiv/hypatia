@@ -59,8 +59,6 @@ export class RainLayer implements ILayer {
     this.textureService = textureService
     this.dateTimeService = dateTimeService
 
-    console.log(`[precipitation] Constructing layer with ${timeSteps.length} timesteps`)
-
     // Initialize availability tracking
     this.timestepAvailable = new Array(timeSteps.length).fill(false)
 
@@ -185,9 +183,6 @@ export class RainLayer implements ILayer {
     const shouldBeVisible = this.userRequestedVisible && hasData
 
     if (this.mesh.visible !== shouldBeVisible) {
-      console.log(
-        `[precipitation] Visibility: ${this.mesh.visible} -> ${shouldBeVisible} | idx=${index.toFixed(2)} [${idx1}:${data1}, ${idx2}:${data2}]`
-      )
       this.mesh.visible = shouldBeVisible
     }
   }

@@ -95,7 +95,7 @@ export class Scene {
    */
   start(): void {
     if (!this.animationId) {
-      console.log('[Scene] Starting animation loop');
+      console.log('Scene.animate');
       this.animate();
     }
   }
@@ -146,7 +146,6 @@ export class Scene {
     this.layers.set(layerId, layer);
     // Add THREE.js object to scene
     this.scene.add(sceneObject);
-    console.log(`[Scene] Added layer ${layerId} to THREE.js scene`);
   }
 
   /**

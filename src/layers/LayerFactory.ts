@@ -163,26 +163,4 @@ export class LayerFactory {
         throw new Error(`Unknown layer: ${_exhaustive}`);
     }
   }
-
-  /**
-   * Get list of all available layer IDs
-   */
-  static getAllLayerIds(): LayerId[] {
-    return ['earth', 'sun', 'graticule', 'temp', 'rain', 'wind', 'pressure', 'text'];
-  }
-
-  /**
-   * Get default layers that should be created on startup
-   * Returns empty array - all layers are optional in dev mode
-   */
-  static getDefaultLayers(): LayerId[] {
-    return [];
-  }
-
-  /**
-   * Get optional layers that can be toggled by user
-   */
-  static getOptionalLayers(): LayerId[] {
-    return ['earth', 'sun', 'graticule', 'temp', 'rain', 'wind', 'pressure', 'text'];
-  }
 }

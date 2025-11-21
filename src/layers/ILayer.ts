@@ -62,11 +62,17 @@ export interface ILayer {
  * Uses urlKey as the canonical identifier (matches URL params and folder names)
  */
 export type LayerId =
+  // Cubemaps
   | 'earth'
+  // Decoration layers
   | 'sun'
   | 'graticule'
-  | 'temp'          // was 'temp'
-  | 'rain'          // was 'rain'
-  | 'wind'          // was 'wind'
-  | 'pressure'      // was 'pressure'
-  | 'text';
+  | 'text'
+  // Data layers
+  | 'temp'
+  | 'wind'
+  | 'rain'
+  | 'pressure'
+  | 'humidity'
+  | 'clouds'
+  | 'waves';

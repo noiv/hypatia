@@ -89,7 +89,7 @@ export class ConfigService {
     const startDate = new Date(currentTime)
     startDate.setDate(startDate.getDate() - halfWindow)
     const startDateStr = startDate.toISOString().substring(0, 10)
-    console.log(`[ConfigService] Data window: ${startDateStr} + ${maxRangeDays} days`)
+    console.log(`ConfigService: Data window: ${startDateStr} + ${maxRangeDays} days`)
 
     return config
   }
@@ -159,10 +159,10 @@ export class ConfigService {
 
       const options: UserOptions = await response.json()
       this.userOptions = options
-      console.log('[ConfigService] User options loaded:', options)
+      console.log('ConfigService: User options loaded:', options)
       return options
     } catch (error) {
-      console.warn('[ConfigService] Failed to load user options, using defaults:', error)
+      console.warn('ConfigService: Failed to load user options, using defaults:', error)
       this.userOptions = DEFAULT_USER_OPTIONS
       return DEFAULT_USER_OPTIONS
     }
@@ -316,10 +316,11 @@ export class ConfigService {
 
   /**
    * Get non-data layer IDs (layers without ECMWF parameters)
-   * These are render-only layers: earth, sun, graticule, text
+   * These are render-only layers: cubemaps + decoration
    */
   getNonDataLayers(): string[] {
-    return ['earth', 'sun', 'graticule', 'text']
+    const config = this.getHypatiaConfig()
+    return [...config.layers.cubemaps, ...config.layers.decoration]
   }
 
   // ============================================================================

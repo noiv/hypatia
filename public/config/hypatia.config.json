@@ -19,6 +19,11 @@
     "defaultAltitude": 20000000,
     "defaultLayers": ["earth", "sun", "graticule"]
   },
+  "layers": {
+    "cubemaps": ["earth"],
+    "decoration": ["sun", "graticule", "text"],
+    "all": ["earth", "sun", "graticule", "text", "temp", "wind", "rain", "pressure", "humidity", "clouds", "waves"]
+  },
   "camera": {
     "minDistance": 1.157,
     "maxDistance": 10.0,

@@ -193,7 +193,7 @@ export class AppBootstrapService {
 
         // Merge into Set to deduplicate
         const allLayers = new Set<LayerId>([...alwaysCreateLayers, ...urlLayerIds]);
-        console.log('[SCENE] Creating layers:', Array.from(allLayers));
+        console.log('Scene.creating:', Array.from(allLayers).join(', '));
 
         // Create all layers via LayersService
         const currentTime = app.stateService.getCurrentTime();
@@ -205,14 +205,13 @@ export class AppBootstrapService {
           if (metadata) {
             metadata.isVisible = true;
             metadata.layer.setVisible(true);
-            console.log(`[LayersService] ${layerId} visibility: true`);
           }
         }
 
         // Force one render frame to upload empty textures to GPU
         // This ensures __webglTexture exists for texSubImage3D in LOAD_LAYER_DATA
         scene.renderFrame();
-        console.log('[SCENE] Forced render to upload empty textures to GPU');
+        console.log('Scene.rendered: 1 frame');
       }
     },
 
@@ -245,7 +244,6 @@ export class AppBootstrapService {
           const layerId = app.configService.urlKeyToLayerId(urlKey) as LayerId;
           layersToLoad.push(layerId);
         }
-        console.log('[LOAD_LAYER_DATA] Layers with data to load:', layersToLoad);
 
         // Filter to only data layers (layers were already created in SCENE step)
         const dataLayersToLoad = layersToLoad.filter(layerId =>
@@ -253,11 +251,10 @@ export class AppBootstrapService {
         );
 
         if (dataLayersToLoad.length === 0) {
-          console.log('[LOAD_LAYER_DATA] No data layers to load');
           return;
         }
 
-        console.log('[LOAD_LAYER_DATA] Data layers:', dataLayersToLoad);
+        console.log('Bootstrap.data:', dataLayersToLoad.join(', '));
 
         // Use DownloadService for progressive loading
         console.log('[LOAD_LAYER_DATA] Using DownloadService for progressive loading');
@@ -344,8 +341,6 @@ export class AppBootstrapService {
 
         // Set it on the actual app component via setter
         app.setAppService(appService);
-
-        console.log('[CREATE_APP_SERVICE] AppService created');
       }
     },
 

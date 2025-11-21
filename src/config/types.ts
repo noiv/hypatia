@@ -4,6 +4,8 @@
  * TypeScript types matching the JSON config schemas
  */
 
+import type { LayerId } from '../layers/ILayer';
+
 export interface HypatiaConfig {
   app: {
     name: string;
@@ -22,7 +24,12 @@ export interface HypatiaConfig {
     maxZoom: number;
     minZoom: number;
     defaultAltitude: number;
-    defaultLayers: string[];
+    defaultLayers: LayerId[];
+  };
+  layers: {
+    cubemaps: LayerId[];
+    decoration: LayerId[];
+    all: LayerId[];
   };
   camera: {
     minDistance: number;
