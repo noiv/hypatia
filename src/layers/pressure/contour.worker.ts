@@ -14,6 +14,9 @@ interface WorkerMessage {
   timeSteps: Array<{ date: string; cycle: string }>;
   dataBaseUrl: string;
   dataFolder: string;
+  // Optional: pre-loaded decoded data from DownloadService
+  dataA?: Float32Array;
+  dataB?: Float32Array;
 }
 
 interface WorkerResponse {
@@ -387,15 +390,15 @@ async function getPressureGrid(
  * Worker message handler
  */
 self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
-  const { stepA, blend, isobarLevels, timestamp, timeSteps, dataBaseUrl, dataFolder } = e.data;
+  const { stepA, blend, isobarLevels, timestamp, timeSteps, dataBaseUrl, dataFolder, dataA, dataB } = e.data;
 
   try {
-    // Load adjacent timesteps (from cache or network)
     const t1 = performance.now();
-    const [pressureA, pressureB] = await Promise.all([
-      getPressureGrid(stepA, timeSteps, dataBaseUrl, dataFolder),
-      getPressureGrid(stepA + 1, timeSteps, dataBaseUrl, dataFolder)
-    ]);
+
+    // Use provided data if available (from DownloadService), otherwise fetch
+    const pressureA = dataA || await getPressureGrid(stepA, timeSteps, dataBaseUrl, dataFolder);
+    const pressureB = dataB || await getPressureGrid(stepA + 1, timeSteps, dataBaseUrl, dataFolder);
+
     const t2 = performance.now();
 
     // Interpolate pressure field

@@ -48,7 +48,7 @@ export class PressureLayer implements ILayer {
 
   // Timesteps and data
   private timesteps: TimeStep[] = [];
-  private loadedData = new Map<number, ArrayBuffer>();
+  private loadedData = new Map<number, Float32Array>();
   private lastTime?: Date;
 
   constructor(
@@ -92,13 +92,63 @@ export class PressureLayer implements ILayer {
   }
 
   /**
+   * Decode FP16 to Float32
+   */
+  private decodeFP16(binary: number): number {
+    const sign = (binary & 0x8000) >> 15;
+    let exponent = (binary & 0x7C00) >> 10;
+    let fraction = binary & 0x03FF;
+
+    if (exponent === 0) {
+      if (fraction === 0) return sign ? -0 : 0;
+      return (sign ? -1 : 1) * Math.pow(2, -14) * (fraction / 1024);
+    }
+
+    if (exponent === 0x1F) {
+      return fraction ? NaN : sign ? -Infinity : Infinity;
+    }
+
+    exponent -= 15;
+    fraction /= 1024;
+    return (sign ? -1 : 1) * Math.pow(2, exponent) * (1 + fraction);
+  }
+
+  /**
+   * Decode Uint16Array (FP16) to Float32Array
+   */
+  private decodeGrid(fp16Data: Uint16Array): Float32Array {
+    const float32Data = new Float32Array(fp16Data.length);
+    for (let i = 0; i < fp16Data.length; i++) {
+      float32Data[i] = this.decodeFP16(fp16Data[i]);
+    }
+    return float32Data;
+  }
+
+  /**
    * Setup listeners for download events
    */
   private setupDownloadListeners(): void {
     this.downloadService.on('timestampLoaded', (event) => {
       if (event.layerId === this.layerId) {
-        this.loadedData.set(event.timestepIndex, event.data);
-        console.log(`[PressureLayer] Loaded timestep ${event.timestepIndex}`);
+        const { index, data } = event;
+
+        // Extract Uint16Array from event (might be wrapped in object)
+        const layerData = data instanceof Uint16Array ? data : data?.data;
+        if (!layerData) {
+          console.error(`[PressureLayer] Invalid data format for index ${index}`);
+          return;
+        }
+
+        // Decode FP16 → Float32 once in main thread
+        const decodedData = this.decodeGrid(layerData);
+
+        // Store decoded Float32Array
+        this.loadedData.set(index, decodedData);
+
+        // Re-trigger rendering with current time if we have a lastTime
+        if (this.lastTime) {
+          this.updateTime(this.lastTime);
+        }
       }
     });
   }
@@ -126,10 +176,11 @@ export class PressureLayer implements ILayer {
   private setTimeIndex(index: number): void {
     // Extract integer and fractional parts
     const stepA = Math.floor(index);
+    const stepB = Math.min(stepA + 1, this.timesteps.length - 1); // Clamp to last timestep
     const blend = index - stepA;
 
     // Clear geometry if out of valid range
-    if (stepA < 0 || stepA >= this.timesteps.length - 1) {
+    if (stepA < 0 || stepA >= this.timesteps.length) {
       this.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
       this.geometry.computeBoundingSphere();
       return;
@@ -137,7 +188,7 @@ export class PressureLayer implements ILayer {
 
     // Check if we have the required data loaded
     const hasStepA = this.loadedData.has(stepA);
-    const hasStepB = this.loadedData.has(stepA + 1);
+    const hasStepB = this.loadedData.has(stepB);
 
     if (!hasStepA || !hasStepB) {
       // Data not yet loaded, clear geometry
@@ -147,13 +198,13 @@ export class PressureLayer implements ILayer {
     }
 
     // Request contours from worker
-    this.requestContours(stepA, blend);
+    this.requestContours(stepA, stepB, blend);
   }
 
   /**
    * Request contour generation from worker
    */
-  private requestContours(stepA: number, blend: number): void {
+  private requestContours(stepA: number, stepB: number, blend: number): void {
     // Create timestamp for stale response detection
     const timestamp = Date.now();
     this.currentRequestTimestamp = timestamp;
@@ -166,6 +217,7 @@ export class PressureLayer implements ILayer {
     const hypatiaConfig = this.configService.getHypatiaConfig();
 
     // Send request to worker with loaded data
+    // Note: Using structured clone (not transfer) so data stays in main thread cache
     this.worker.postMessage({
       stepA,
       blend,
@@ -174,14 +226,10 @@ export class PressureLayer implements ILayer {
       timeSteps: this.timesteps,
       dataBaseUrl: hypatiaConfig.data.dataBaseUrl,
       dataFolder: layer.dataFolders[0] || this.layerId,
-      // Pass the actual data to the worker
+      // Pass decoded Float32Array to worker (structured clone, ~2-4ms overhead)
       dataA: this.loadedData.get(stepA),
-      dataB: this.loadedData.get(stepA + 1)
-    }, [
-      // Transfer ownership of buffers to worker (zero-copy)
-      this.loadedData.get(stepA)!,
-      this.loadedData.get(stepA + 1)!
-    ]);
+      dataB: this.loadedData.get(stepB)
+    });
   }
 
   /**

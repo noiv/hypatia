@@ -289,11 +289,8 @@ export const App: AppComponent = {
     this.stateService!.setCurrentTime(clamped);
     this.scene?.updateTime(clamped);
 
-    // Prioritize timestamps for progressive loading
-    const weatherLayers: LayerId[] = ['temp', 'rain'];
-    for (const layerId of weatherLayers) {
-      this.downloadService!.prioritizeTimestamps(layerId, clamped);
-    }
+    // Prioritize timestamps for all visible data layers
+    this.layersService?.prioritizeDownloads(clamped);
 
     this.appService!.updateUrl();
     m.redraw();

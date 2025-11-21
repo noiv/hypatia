@@ -86,9 +86,11 @@ export const LayersPanel: m.Component<LayersPanelAttrs> = {
       const state = layerStates.get(layerId);
       const isActive = state?.created && state?.visible;
 
-      // Check if this is a weather layer that uses progressive loading
-      const weatherLayers: LayerId[] = ['temp', 'rain'];
-      const hasProgressCanvas = weatherLayers.includes(layerId);
+      // Check if this is a data layer (not render-only) that uses progressive loading
+      // Data layers: temp, rain, wind, pressure, humidity, clouds, waves
+      // Render-only layers: earth, sun, graticule, text
+      const renderOnlyLayers: LayerId[] = ['earth', 'sun', 'graticule', 'text'];
+      const hasProgressCanvas = !renderOnlyLayers.includes(layerId);
 
       const button = m('button.btn', {
         class: isActive ? 'active' : '',

@@ -245,9 +245,10 @@ export class AppBootstrapService {
           layersToLoad.push(layerId);
         }
 
-        // Filter to only data layers (layers were already created in SCENE step)
+        // Filter to only data layers (layers with ECMWF data, not render-only layers)
+        const nonDataLayers = app.configService.getNonDataLayers();
         const dataLayersToLoad = layersToLoad.filter(layerId =>
-          layerId === 'temp' || layerId === 'rain'
+          !nonDataLayers.includes(layerId)
         );
 
         if (dataLayersToLoad.length === 0) {

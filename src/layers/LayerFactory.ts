@@ -148,6 +148,9 @@ export class LayerFactory {
           configService
         );
 
+        // Initialize with timesteps
+        layer.initialize(timeSteps);
+
         // Register with DownloadService for event-driven loading
         downloadService.registerLayer(layerId, timeSteps);
 
