@@ -86,7 +86,7 @@ export class WindLayer implements ILayer {
   private lastTimeIndex: number = -1;
   private animationPhase: number = 0;
   private updatePromise: Promise<void> | null = null;
-  private precomputePromise: Promise<void> | null = null;
+  // private precomputePromise: Promise<void> | null = null;  // Currently unused
 
   // Event cleanup
   private eventCleanup: Array<() => void> = [];
@@ -201,8 +201,13 @@ export class WindLayer implements ILayer {
     // CRITICAL: Shader declares buffers as array<u32> (4 bytes per element)
     // but data is Uint16Array (2 bytes per element). We must convert to match
     // the shader's expectations, otherwise indices will be off by 2x!
-    const u_u32 = new Uint32Array(uData);
-    const v_u32 = new Uint32Array(vData);
+    // Create Uint32Array with same length as Uint16Array and copy values
+    const u_u32 = new Uint32Array(uData.length);
+    const v_u32 = new Uint32Array(vData.length);
+    for (let i = 0; i < uData.length; i++) {
+      u_u32[i] = uData[i];
+      v_u32[i] = vData[i];
+    }
 
     const uBuffer = this.device.createBuffer({
       size: u_u32.byteLength,
@@ -260,7 +265,9 @@ export class WindLayer implements ILayer {
 
   /**
    * Precompute geometry for a single timestep (for caching)
+   * Currently disabled due to staging buffer conflicts
    */
+  // @ts-ignore - Currently unused, will be re-enabled later
   private async precomputeGeometry(index: number): Promise<void> {
     if (!this.device || !this.pipeline || !this.bindGroupLayout) {
       console.warn(`[wind] Cannot precompute: GPU not initialized`);

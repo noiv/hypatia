@@ -45,7 +45,14 @@ export function raycastObject(
  * @returns {lat, lon} in degrees
  */
 export function cartesianToLatLon(point: THREE.Vector3): { lat: number; lon: number } {
-  const lat = Math.asin(point.y) * (180 / Math.PI);
-  const lon = Math.atan2(point.z, point.x) * (180 / Math.PI);
+  const normalized = point.clone().normalize();
+
+  // Calculate latitude from Y coordinate
+  const lat = Math.asin(normalized.y) * (180 / Math.PI);
+
+  // Calculate longitude using atan2(x, z) to match coordinates.ts
+  // This ensures consistency across the application
+  const lon = Math.atan2(normalized.x, normalized.z) * (180 / Math.PI);
+
   return { lat, lon };
 }
