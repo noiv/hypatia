@@ -123,7 +123,9 @@ export const LayersPanel: m.Component<LayersPanelAttrs> = {
           class: textEnabled ? 'active' : '',
           'data-layer': 'text',
           onclick: () => onTextToggle()
-        }, 'Text Labels')
+        }, 'Text Labels'),
+        // Debug layer (only in non-production, added at runtime)
+        renderLayerButton('debug')
       ])
     ]);
   }

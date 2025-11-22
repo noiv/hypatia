@@ -74,6 +74,18 @@ export class ConfigService {
     }
 
     const config: HypatiaConfig = await response.json()
+
+    // Add debug layer in non-production environments
+    const isProduction = window.location.hostname === 'hypatia.earth'
+    if (!isProduction) {
+      if (!config.layers.decoration.includes('debug')) {
+        config.layers.decoration.push('debug')
+      }
+      if (!config.visualization.defaultLayers.includes('debug')) {
+        config.visualization.defaultLayers.push('debug')
+      }
+    }
+
     this.hypatiaConfig = config
 
     // Log build version info

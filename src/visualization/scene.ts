@@ -78,9 +78,7 @@ export class Scene {
     const ambient = new THREE.AmbientLight(0x404040, 0.4);
     this.scene.add(ambient);
 
-    // Add axes helpers
-    this.addAxesHelpers();
-
+    // Note: Debug axes are now handled by DebugRenderService layer (dev only)
     // Note: Mouse/click/wheel event listeners are managed by App component
     // ViewportControlsService handles all input and camera controls
 
@@ -159,42 +157,6 @@ export class Scene {
     return this.layers.get(layerId);
   }
 
-  private addAxesHelpers() {
-    // North Pole axis (red line from center to top)
-    const northPoleGeometry = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(0, 1.5, 0)
-    ]);
-    const northPoleLine = new THREE.Line(
-      northPoleGeometry,
-      new THREE.LineBasicMaterial({ color: 0xff0000 })
-    );
-    this.scene.add(northPoleLine);
-
-    // South Pole axis (blue line from center to bottom)
-    const southPoleGeometry = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(0, -1.5, 0)
-    ]);
-    const southPoleLine = new THREE.Line(
-      southPoleGeometry,
-      new THREE.LineBasicMaterial({ color: 0x0000ff })
-    );
-    this.scene.add(southPoleLine);
-
-    // Prime Meridian at 0° lon, 0° lat (green line through entire sphere)
-    // +Z direction: 0° lon, 0° lat
-    // -Z direction: 180° lon, 0° lat (dateline)
-    const primeMeridianGeometry = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0, -1.2), // Through to 180° lon
-      new THREE.Vector3(0, 0, 1.2)   // To 0° lon
-    ]);
-    const primeMeridianLine = new THREE.Line(
-      primeMeridianGeometry,
-      new THREE.LineBasicMaterial({ color: 0x00ff00 })
-    );
-    this.scene.add(primeMeridianLine);
-  }
 
   onWindowResize = () => {
     const canvas = this.renderer.domElement;

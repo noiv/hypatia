@@ -8,6 +8,7 @@ import { EarthRenderService } from './earth/earth.render-service';
 import { SunRenderService } from './sun/sun.render-service';
 import { GraticuleRenderService } from './graticule/graticule.render-service';
 import { TextRenderService } from './text/text.render-service';
+import { DebugRenderService } from './debug/debug.render-service';
 
 // New event-driven layers
 import { TempLayer } from './temp/temp.layer';
@@ -143,6 +144,9 @@ export class LayerFactory {
 
       case 'text':
         return TextRenderService.create(layerId);
+
+      case 'debug':
+        return DebugRenderService.create(layerId);
 
       case 'humidity':
       case 'clouds':

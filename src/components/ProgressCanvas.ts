@@ -36,7 +36,8 @@ const LAYER_COLORS: Record<LayerId, string> = {
   earth: '#4a69bd',      // Blue (unused)
   sun: '#feca57',        // Yellow (unused)
   graticule: '#ffffff',  // White (unused)
-  text: '#ffffff'        // White (unused)
+  text: '#ffffff',       // White (unused)
+  debug: '#ff00ff'       // Magenta (dev only, unused)
 };
 
 const CANVAS_HEIGHT = 2; // pixels

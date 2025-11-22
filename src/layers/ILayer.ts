@@ -75,4 +75,6 @@ export type LayerId =
   | 'pressure'
   | 'humidity'
   | 'clouds'
-  | 'waves';
+  | 'waves'
+  // Debug layer (dev only)
+  | 'debug';
