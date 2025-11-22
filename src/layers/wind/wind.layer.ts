@@ -40,6 +40,7 @@ export class WindLayer implements ILayer {
   private lastTime?: Date;
   private lastDistance?: number;
   private lastCameraPosition: THREE.Vector3 = new THREE.Vector3();
+  private isLayerVisible: boolean = false; // Track intended visibility state
 
   // Performance mode: 'linesegments2' or 'custom'
   private static readonly USE_CUSTOM_GEOMETRY = false;
@@ -622,8 +623,9 @@ export class WindLayer implements ILayer {
         const hasData = data1 && data2;
 
         if (hasData) {
-          // Data available, update geometry and show layer
-          this.group.visible = true;
+          // Data available, update geometry
+          // Only show if layer is supposed to be visible
+          this.group.visible = this.isLayerVisible;
           this.updateTimeAsync(state.time, state.camera.position).catch(err => {
             console.error('Failed to update wind layer:', err);
           });
@@ -631,7 +633,7 @@ export class WindLayer implements ILayer {
           // Data not available, request prioritized download
           this.downloadService.prioritizeTimestamps('wind', state.time);
 
-          // Hide layer while waiting for data
+          // Hide layer while waiting for data (always hide if no data)
           this.group.visible = false;
         }
       }
@@ -671,6 +673,7 @@ export class WindLayer implements ILayer {
   }
 
   setVisible(visible: boolean): void {
+    this.isLayerVisible = visible;
     this.group.visible = visible;
   }
 

@@ -225,6 +225,7 @@ export class SunRenderService implements ILayer {
     // Create group containing sun and light
     this.group = new THREE.Group();
     this.group.name = 'SunRenderService';
+    this.group.visible = false; // Start hidden by default, will be shown if in URL
     this.group.add(this.sun.getGroup());
     this.group.add(this.sun.getLight());
     this.group.add(this.sun.getLight().target);

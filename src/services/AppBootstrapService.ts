@@ -191,7 +191,7 @@ export class AppBootstrapService {
           }
         }
 
-        // Always create sun, graticule, text (truly non-data layers)
+        // Always create sun, graticule, text (decoration layers - no data)
         // Earth should only be created if in URL (it downloads images)
         const alwaysCreateLayers: LayerId[] = ['sun', 'graticule', 'text'];
 
@@ -203,7 +203,17 @@ export class AppBootstrapService {
         const currentTime = app.stateService.getCurrentTime();
         await app.layersService.createLayers(Array.from(allLayers), currentTime);
 
-        // Set visibility for URL layers (data will be loaded in LOAD_LAYER_DATA step)
+        // Set visibility based on URL - only URL layers should be visible
+        // First hide all layers
+        for (const layerId of allLayers) {
+          const metadata = app.layersService.getMetadata(layerId);
+          if (metadata) {
+            metadata.isVisible = false;
+            metadata.layer.setVisible(false);
+          }
+        }
+
+        // Then show only the ones in URL
         for (const layerId of urlLayerIds) {
           const metadata = app.layersService.getMetadata(layerId);
           if (metadata) {
