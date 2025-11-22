@@ -1,5 +1,7 @@
 {
+  "$schema": "./text.config.schema.json",
   "updateOrder": 100,
+  "renderOrder": 2000,
   "font": {
     "url": "/fonts/inter-regular.ttf",
     "fallback": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Arial, sans-serif"

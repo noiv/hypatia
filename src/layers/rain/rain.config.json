@@ -1,5 +1,7 @@
 {
+  "$schema": "./rain.config.schema.json",
   "updateOrder": 5,
+  "renderOrder": 2,
   "geometry": {
     "widthSegments": 180,
     "heightSegments": 90
@@ -15,14 +17,14 @@
     "polygonOffsetUnits": -2.0
   },
   "palette": [
-    { "threshold": 0.0004, "color": [0.04, 0.24, 0.59], "alpha": 0.55 },
-    { "threshold": 0.0007, "color": [0.11, 0.30, 0.62], "alpha": 0.65 },
-    { "threshold": 0.0013, "color": [0.18, 0.36, 0.66], "alpha": 0.75 },
-    { "threshold": 0.0024, "color": [0.25, 0.43, 0.70], "alpha": 0.80 },
-    { "threshold": 0.0042, "color": [0.32, 0.49, 0.74], "alpha": 0.85 },
-    { "threshold": 0.0076, "color": [0.39, 0.55, 0.77], "alpha": 0.90 },
-    { "threshold": 0.0136, "color": [0.47, 0.62, 0.81], "alpha": 0.95 },
-    { "threshold": null, "color": [1.00, 1.00, 1.00], "alpha": 1.00 }
+    { "threshold": 0.0004, "color": { "r": 0.04, "g": 0.24, "b": 0.59 }, "alpha": 0.55 },
+    { "threshold": 0.0007, "color": { "r": 0.11, "g": 0.30, "b": 0.62 }, "alpha": 0.65 },
+    { "threshold": 0.0013, "color": { "r": 0.18, "g": 0.36, "b": 0.66 }, "alpha": 0.75 },
+    { "threshold": 0.0024, "color": { "r": 0.25, "g": 0.43, "b": 0.70 }, "alpha": 0.80 },
+    { "threshold": 0.0042, "color": { "r": 0.32, "g": 0.49, "b": 0.74 }, "alpha": 0.85 },
+    { "threshold": 0.0076, "color": { "r": 0.39, "g": 0.55, "b": 0.77 }, "alpha": 0.90 },
+    { "threshold": 0.0136, "color": { "r": 0.47, "g": 0.62, "b": 0.81 }, "alpha": 0.95 },
+    { "threshold": null, "color": { "r": 1.00, "g": 1.00, "b": 1.00 }, "alpha": 1.00 }
   ],
   "discardThreshold": 0.00005
 }

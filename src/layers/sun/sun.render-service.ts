@@ -231,13 +231,15 @@ export class SunRenderService implements ILayer {
 
     // Atmosphere shader - disabled by default (not ready)
     if (enableAtmosphere) {
+      const { physical, geometry: geometryConfig, visual } = ATMOSPHERE_CONFIG;
+
       // Calculate atmosphere radius in scene units
-      const radius = EARTH_RADIUS_UNITS * (ATMOSPHERE_CONFIG.physical.atmosphereRadius / ATMOSPHERE_CONFIG.physical.planetRadius);
+      const radius = EARTH_RADIUS_UNITS * (physical.atmosphereRadius / physical.planetRadius);
 
       const geometry = new THREE.SphereGeometry(
         radius,
-        ATMOSPHERE_CONFIG.geometry.widthSegments,
-        ATMOSPHERE_CONFIG.geometry.heightSegments
+        geometryConfig.widthSegments,
+        geometryConfig.heightSegments
       );
 
       // Create shader material with atmospheric scattering
@@ -247,24 +249,27 @@ export class SunRenderService implements ILayer {
           viewPosition: { value: new THREE.Vector3(0, 0, 10) },
           planetRadius: { value: EARTH_RADIUS_UNITS },
           atmosphereRadius: { value: radius },
-          rayleighCoefficient: { value: new THREE.Vector3(...ATMOSPHERE_CONFIG.physical.rayleighCoefficient) },
-          mieCoefficient: { value: ATMOSPHERE_CONFIG.physical.mieCoefficient },
-          rayleighScaleHeight: { value: ATMOSPHERE_CONFIG.physical.rayleighScaleHeight / ATMOSPHERE_CONFIG.physical.planetRadius * EARTH_RADIUS_UNITS },
-          mieScaleHeight: { value: ATMOSPHERE_CONFIG.physical.mieScaleHeight / ATMOSPHERE_CONFIG.physical.planetRadius * EARTH_RADIUS_UNITS },
-          mieDirection: { value: ATMOSPHERE_CONFIG.physical.mieDirection },
-          sunIntensity: { value: ATMOSPHERE_CONFIG.physical.sunIntensity },
-          exposure: { value: ATMOSPHERE_CONFIG.visual.exposure }
+          rayleighCoefficient: { value: new THREE.Vector3(physical.rayleighCoefficient.r, physical.rayleighCoefficient.g, physical.rayleighCoefficient.b) },
+          mieCoefficient: { value: physical.mieCoefficient },
+          rayleighScaleHeight: { value: physical.rayleighScaleHeight / physical.planetRadius * EARTH_RADIUS_UNITS },
+          mieScaleHeight: { value: physical.mieScaleHeight / physical.planetRadius * EARTH_RADIUS_UNITS },
+          mieDirection: { value: physical.mieDirection },
+          sunIntensity: { value: physical.sunIntensity },
+          exposure: { value: visual.exposure }
         },
         vertexShader: this.getVertexShader(),
         fragmentShader: this.getFragmentShader(),
         transparent: true,
-        side: THREE.BackSide,
+        side: THREE.FrontSide, // Changed from BackSide to render outer surface
         depthWrite: false,
+        depthTest: true, // Ensure depth testing is enabled
         blending: THREE.AdditiveBlending
       });
 
       this.atmosphereMesh = new THREE.Mesh(geometry, this.atmosphereMaterial);
       this.atmosphereMesh.name = 'atmosphere';
+      this.atmosphereMesh.renderOrder = -1; // Render before Earth (which has default 0)
+      this.atmosphereMesh.position.set(0, 0, 0); // Center at Earth's position
       this.group.add(this.atmosphereMesh);
     }
   }
@@ -278,9 +283,7 @@ export class SunRenderService implements ILayer {
     const sun = new Sun();
     sun.updatePosition(currentTime);
     const layer = new SunRenderService(layerId, sun, enableAtmosphere);
-    if (layer.atmosphereMesh) {
-      layer.setSunPosition(sun.getGroup().position);
-    }
+    layer.setSunPosition(sun.getGroup().position);
     return layer;
   }
 
@@ -293,18 +296,16 @@ export class SunRenderService implements ILayer {
     // Check time change
     if (!this.lastTime || state.time.getTime() !== this.lastTime.getTime()) {
       this.sun.updatePosition(state.time);
-      if (this.atmosphereMesh) {
-        this.setSunPosition(this.sun.sprite.position);
-      }
+      this.setSunPosition(this.sun.sprite.position);
       this.lastTime = state.time;
     }
 
     // Check camera position change for atmosphere shader
-    if (this.atmosphereMaterial?.uniforms.viewPosition) {
-      if (!this.lastCameraPosition || !this.lastCameraPosition.equals(state.camera.position)) {
+    if (this.atmosphereMaterial && (!this.lastCameraPosition || !this.lastCameraPosition.equals(state.camera.position))) {
+      if (this.atmosphereMaterial.uniforms.viewPosition) {
         this.atmosphereMaterial.uniforms.viewPosition.value.copy(state.camera.position);
-        this.lastCameraPosition = state.camera.position.clone();
       }
+      this.lastCameraPosition = state.camera.position.clone();
     }
   }
 
@@ -494,17 +495,38 @@ export class SunRenderService implements ILayer {
 
         // Calculate fresnel-like falloff (more visible at edges)
         float rim = 1.0 - abs(dot(viewDir, surfaceNormal));
-        rim = pow(rim, 3.0); // Sharper falloff
+        rim = pow(rim, 2.0); // Adjusted falloff for better visibility
 
         // Sun direction influence (brighter on sun-facing side)
         vec3 sunDir = normalize(sunPosition);
         float sunDot = dot(surfaceNormal, sunDir);
-        float sunInfluence = max(0.0, sunDot * 0.5 + 0.5); // 0.5 to 1.0 range
 
-        // Blue atmospheric color, modulated by sun
-        vec3 atmosphereColor = vec3(0.4, 0.6, 1.0) * (0.5 + sunInfluence * 0.5);
+        // Sharp transition from day to night
+        // sunDot > 0: day side (facing sun)
+        // sunDot < 0: night side (facing away)
+        float dayFactor = max(0.0, sunDot); // 0 on night side, up to 1 on day side
 
-        gl_FragColor = vec4(atmosphereColor, rim * 0.6);
+        // Add slight twilight zone for realism
+        float twilightWidth = 0.2;
+        float twilight = smoothstep(-twilightWidth, twilightWidth, sunDot);
+
+        // Combine day factor with rim effect
+        // Day side: full rim effect * day brightness
+        // Night side: much dimmer or invisible
+        float atmosphereIntensity = rim * twilight;
+
+        // Blue atmospheric color with sun-based tinting
+        vec3 dayColor = vec3(0.4, 0.6, 1.0); // Blue sky color
+        vec3 sunsetColor = vec3(1.0, 0.6, 0.3); // Orange/red for terminator
+
+        // Mix colors based on sun angle
+        float sunsetFactor = (1.0 - abs(sunDot)) * twilight; // Stronger at terminator
+        vec3 atmosphereColor = mix(dayColor, sunsetColor, sunsetFactor * 0.5);
+
+        // Final alpha: combine rim effect with sun illumination
+        float finalAlpha = atmosphereIntensity * 0.8; // Max 80% opacity
+
+        gl_FragColor = vec4(atmosphereColor * twilight, finalAlpha);
       }
     `;
   }

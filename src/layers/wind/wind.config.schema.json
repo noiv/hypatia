@@ -1,0 +1,140 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Wind Layer Configuration",
+  "description": "Configuration for wind flow visualization with animated streamlines",
+  "type": "object",
+  "properties": {
+    "updateOrder": {
+      "type": "integer",
+      "description": "Layer update priority (lower numbers update first)"
+    },
+    "seeds": {
+      "type": "object",
+      "description": "Particle seed configuration for wind streamlines",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "description": "Number of wind particles/streamlines. Higher = denser but more GPU load",
+          "minimum": 1000,
+          "maximum": 50000
+        }
+      },
+      "required": ["count"]
+    },
+    "geometry": {
+      "type": "object",
+      "description": "Streamline geometry configuration",
+      "properties": {
+        "lineSteps": {
+          "type": "integer",
+          "description": "Number of segments per streamline. Higher = smoother curves but more memory",
+          "minimum": 8,
+          "maximum": 128
+        },
+        "lineWidth": {
+          "type": "number",
+          "description": "Base width of streamlines in pixels",
+          "minimum": 0.5,
+          "maximum": 10
+        },
+        "taperSegments": {
+          "type": "integer",
+          "description": "Number of segments used for line tapering/fading effect",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "snakeLength": {
+          "type": "integer",
+          "description": "Length of animated 'snake' effect along streamlines",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "useCustomGeometry": {
+          "type": "boolean",
+          "description": "Use custom geometry implementation (experimental performance mode)"
+        },
+        "segmentsPerLine": {
+          "type": "integer",
+          "description": "Subdivision segments for smooth line curves",
+          "minimum": 5,
+          "maximum": 100
+        }
+      },
+      "required": ["lineSteps", "lineWidth", "taperSegments", "snakeLength"]
+    },
+    "material": {
+      "type": "object",
+      "description": "THREE.js material settings for wind streamlines",
+      "properties": {
+        "opacity": {
+          "type": "number",
+          "description": "Overall opacity of wind streamlines (0 = transparent, 1 = opaque)",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "depthWrite": {
+          "type": "boolean",
+          "description": "Whether to write to depth buffer (false for transparency)"
+        },
+        "depthTest": {
+          "type": "boolean",
+          "description": "Whether to test depth (true = can be hidden behind globe)"
+        },
+        "alphaToCoverage": {
+          "type": "boolean",
+          "description": "Improve anti-aliasing for transparent lines (may affect performance)"
+        },
+        "transparent": {
+          "type": "boolean",
+          "description": "Whether material supports transparency"
+        }
+      },
+      "required": ["opacity", "depthWrite", "depthTest", "transparent"]
+    },
+    "animation": {
+      "type": "object",
+      "description": "Animation settings for wind flow",
+      "properties": {
+        "speed": {
+          "type": "number",
+          "description": "Animation speed multiplier. Higher = faster particle movement",
+          "minimum": 0.1,
+          "maximum": 100
+        }
+      },
+      "required": ["speed"]
+    },
+    "lineWidthScaling": {
+      "type": "object",
+      "description": "Distance-based line width scaling for better visibility",
+      "properties": {
+        "minDistance": {
+          "type": "number",
+          "description": "Minimum camera distance for width scaling to apply",
+          "minimum": 0.5,
+          "maximum": 5
+        },
+        "maxDistance": {
+          "type": "number",
+          "description": "Maximum camera distance for width scaling",
+          "minimum": 5,
+          "maximum": 50
+        },
+        "minWidth": {
+          "type": "number",
+          "description": "Line width at minimum distance (close view)",
+          "minimum": 0.1,
+          "maximum": 10
+        },
+        "maxWidth": {
+          "type": "number",
+          "description": "Line width at maximum distance (far view)",
+          "minimum": 0.01,
+          "maximum": 1
+        }
+      },
+      "required": ["minDistance", "maxDistance", "minWidth", "maxWidth"]
+    }
+  },
+  "required": ["updateOrder", "seeds", "geometry", "material", "animation", "lineWidthScaling"]
+}

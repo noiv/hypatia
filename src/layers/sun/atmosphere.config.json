@@ -1,13 +1,14 @@
 {
+  "$schema": "./atmosphere.config.schema.json",
   "updateOrder": 2,
   "geometry": {
-    "widthSegments": 64,
-    "heightSegments": 32
+    "widthSegments": 128,
+    "heightSegments": 64
   },
   "physical": {
     "planetRadius": 6371000,
     "atmosphereRadius": 6471000,
-    "rayleighCoefficient": [0.0000055, 0.000013, 0.0000224],
+    "rayleighCoefficient": { "r": 0.0000055, "g": 0.000013, "b": 0.0000224 },
     "rayleighScaleHeight": 8000,
     "mieCoefficient": 0.000021,
     "mieScaleHeight": 1200,
@@ -21,5 +22,22 @@
   "quality": {
     "primarySamples": 16,
     "secondarySamples": 8
+  },
+  "material": {
+    "side": "FrontSide",
+    "depthWrite": false,
+    "depthTest": true,
+    "blending": "AdditiveBlending",
+    "transparent": true,
+    "renderOrder": -1
+  },
+  "shader": {
+    "enabled": true,
+    "rimFalloffExponent": 2.0,
+    "twilightWidth": 0.2,
+    "dayColor": { "r": 0.4, "g": 0.6, "b": 1.0 },
+    "sunsetColor": { "r": 1.0, "g": 0.6, "b": 0.3 },
+    "sunsetMixFactor": 0.5,
+    "maxOpacity": 0.8
   }
 }

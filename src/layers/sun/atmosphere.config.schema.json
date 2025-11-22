@@ -1,0 +1,190 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Atmosphere Configuration",
+  "description": "Configuration for atmospheric scattering shader and rendering",
+  "type": "object",
+  "properties": {
+    "updateOrder": {
+      "type": "integer",
+      "description": "Layer update priority order (lower numbers update first)"
+    },
+    "geometry": {
+      "type": "object",
+      "description": "Sphere geometry tessellation settings for smooth atmosphere rendering",
+      "properties": {
+        "widthSegments": {
+          "type": "integer",
+          "description": "Horizontal divisions of the sphere (longitude). Higher = smoother but more GPU intensive. Recommended: 64-256",
+          "minimum": 16,
+          "maximum": 512
+        },
+        "heightSegments": {
+          "type": "integer",
+          "description": "Vertical divisions of the sphere (latitude). Higher = smoother edges. Recommended: 32-128",
+          "minimum": 8,
+          "maximum": 256
+        }
+      }
+    },
+    "physical": {
+      "type": "object",
+      "description": "Physical atmospheric scattering parameters based on real-world values",
+      "properties": {
+        "planetRadius": {
+          "type": "number",
+          "description": "Planet radius in meters. Earth = 6,371,000m"
+        },
+        "atmosphereRadius": {
+          "type": "number",
+          "description": "Outer atmosphere boundary in meters. Typically 100km above surface (6,471,000m for Earth)"
+        },
+        "rayleighCoefficient": {
+          "type": "array",
+          "description": "Rayleigh scattering coefficients [R, G, B] for small particles (air molecules). Controls blue sky color",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "rayleighScaleHeight": {
+          "type": "number",
+          "description": "Altitude in meters where Rayleigh scattering density drops to 1/e (≈37%). Earth ≈ 8000m"
+        },
+        "mieCoefficient": {
+          "type": "number",
+          "description": "Mie scattering strength for larger particles (aerosols, dust). Creates haze and sun halos"
+        },
+        "mieScaleHeight": {
+          "type": "number",
+          "description": "Altitude in meters where Mie scattering density drops to 1/e. Earth ≈ 1200m (lower than Rayleigh)"
+        },
+        "mieDirection": {
+          "type": "number",
+          "description": "Mie phase function anisotropy 'g' parameter (-1 to 1). Positive = forward scattering. 0.758 = realistic Earth value",
+          "minimum": -1,
+          "maximum": 1
+        },
+        "sunIntensity": {
+          "type": "number",
+          "description": "Sun brightness multiplier. Higher values = brighter atmosphere. Default: 22.0"
+        }
+      }
+    },
+    "visual": {
+      "type": "object",
+      "description": "Visual rendering adjustments",
+      "properties": {
+        "altitudeKm": {
+          "type": "number",
+          "description": "View altitude in kilometers for atmospheric calculations (currently unused)"
+        },
+        "exposure": {
+          "type": "number",
+          "description": "HDR exposure control. Higher = brighter overall rendering. Default: 1.0",
+          "minimum": 0.1,
+          "maximum": 10
+        }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "description": "Ray marching quality settings (for full scattering shader, currently unused)",
+      "properties": {
+        "primarySamples": {
+          "type": "integer",
+          "description": "Number of samples along view ray through atmosphere. Higher = better quality, slower render",
+          "minimum": 4,
+          "maximum": 64
+        },
+        "secondarySamples": {
+          "type": "integer",
+          "description": "Number of samples along sun ray for each primary sample. Higher = better shadows",
+          "minimum": 2,
+          "maximum": 32
+        }
+      }
+    },
+    "material": {
+      "type": "object",
+      "description": "THREE.js material settings for atmosphere mesh",
+      "properties": {
+        "side": {
+          "type": "string",
+          "enum": ["FrontSide", "BackSide", "DoubleSide"],
+          "description": "Which side of sphere to render. FrontSide = outer surface"
+        },
+        "depthWrite": {
+          "type": "boolean",
+          "description": "Whether to write to depth buffer (false for transparency)"
+        },
+        "depthTest": {
+          "type": "boolean",
+          "description": "Whether to test depth (true = can be hidden behind planet)"
+        },
+        "blending": {
+          "type": "string",
+          "enum": ["NoBlending", "NormalBlending", "AdditiveBlending"],
+          "description": "Blending mode. AdditiveBlending creates glow effect"
+        },
+        "transparent": {
+          "type": "boolean",
+          "description": "Whether material supports transparency"
+        },
+        "renderOrder": {
+          "type": "integer",
+          "description": "Render order (-1 = before Earth, positive = after)"
+        }
+      }
+    },
+    "shader": {
+      "type": "object",
+      "description": "Atmosphere shader visual parameters",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether atmosphere shader is enabled"
+        },
+        "rimFalloffExponent": {
+          "type": "number",
+          "description": "Exponent for rim lighting falloff (1-5, higher = sharper edge)",
+          "minimum": 0.5,
+          "maximum": 5
+        },
+        "twilightWidth": {
+          "type": "number",
+          "description": "Width of twilight transition zone (0.1-0.5)",
+          "minimum": 0.05,
+          "maximum": 0.5
+        },
+        "dayColor": {
+          "type": "array",
+          "description": "RGB color for daytime atmosphere [R, G, B] (0-1 range)",
+          "items": {"type": "number", "minimum": 0, "maximum": 1},
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "sunsetColor": {
+          "type": "array",
+          "description": "RGB color for sunset/terminator [R, G, B] (0-1 range)",
+          "items": {"type": "number", "minimum": 0, "maximum": 1},
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "sunsetMixFactor": {
+          "type": "number",
+          "description": "How much sunset color mixes in at terminator (0-1)",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "maxOpacity": {
+          "type": "number",
+          "description": "Maximum opacity of atmosphere (0-1)",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    }
+  },
+  "required": ["geometry", "physical", "visual"]
+}

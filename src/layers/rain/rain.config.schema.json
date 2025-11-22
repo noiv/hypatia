@@ -1,0 +1,110 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Rain/Precipitation Layer Configuration",
+  "description": "Configuration for precipitation rate visualization layer",
+  "type": "object",
+  "properties": {
+    "updateOrder": {
+      "type": "integer",
+      "description": "Layer update priority (lower numbers update first)"
+    },
+    "renderOrder": {
+      "type": "integer",
+      "description": "Render order (higher renders on top)"
+    },
+    "geometry": {
+      "type": "object",
+      "description": "Sphere geometry settings",
+      "properties": {
+        "widthSegments": {
+          "type": "integer",
+          "description": "Horizontal segments for sphere smoothness",
+          "minimum": 32,
+          "maximum": 512
+        },
+        "heightSegments": {
+          "type": "integer",
+          "description": "Vertical segments for sphere smoothness",
+          "minimum": 16,
+          "maximum": 256
+        }
+      },
+      "required": ["widthSegments", "heightSegments"]
+    },
+    "visual": {
+      "type": "object",
+      "description": "Visual rendering settings",
+      "properties": {
+        "altitudeKm": {
+          "type": "number",
+          "description": "Altitude above surface in kilometers (11km = cloud level)",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "opacity": {
+          "type": "number",
+          "description": "Overall layer opacity",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "dayNightFactor": {
+          "type": "number",
+          "description": "Day/night shading factor (0 = no shading)",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "depth": {
+      "type": "object",
+      "description": "Depth buffer settings to prevent z-fighting",
+      "properties": {
+        "polygonOffset": {
+          "type": "boolean",
+          "description": "Enable polygon offset"
+        },
+        "polygonOffsetFactor": {
+          "type": "number",
+          "description": "Polygon offset factor (negative = closer to camera)"
+        },
+        "polygonOffsetUnits": {
+          "type": "number",
+          "description": "Polygon offset units"
+        }
+      }
+    },
+    "palette": {
+      "type": "array",
+      "description": "Color palette for rain intensity levels",
+      "items": {
+        "type": "object",
+        "properties": {
+          "threshold": {
+            "type": "number",
+            "description": "Rain rate threshold in kg/m²/s"
+          },
+          "color": {
+            "type": "array",
+            "description": "RGB color [R, G, B] in 0-1 range",
+            "items": {"type": "number", "minimum": 0, "maximum": 1},
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "hex": {
+            "type": "string",
+            "description": "Hex color for reference",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          }
+        },
+        "required": ["threshold", "color"]
+      }
+    },
+    "discardThreshold": {
+      "type": "number",
+      "description": "Minimum rain rate to display (below this = transparent)",
+      "minimum": 0,
+      "maximum": 0.01
+    }
+  },
+  "required": ["updateOrder", "renderOrder", "geometry", "visual"]
+}

@@ -1,0 +1,44 @@
+{
+  "$schema": "./sun.config.schema.json",
+  "updateOrder": 2,
+  "sprite": {
+    "textureUrl": "/textures/lensflare/lensflare0.png",
+    "distanceFromEarth": 500,
+    "mainScale": 15,
+    "renderOrder": 999
+  },
+  "glow": {
+    "baseRenderOrder": 1000,
+    "layers": [
+      {
+        "scale": 20,
+        "color": "#ffffff",
+        "opacity": 1.0
+      },
+      {
+        "scale": 12,
+        "color": "#ffffff",
+        "opacity": 0.9
+      },
+      {
+        "scale": 8,
+        "color": "#ffffcc",
+        "opacity": 0.8
+      },
+      {
+        "scale": 4,
+        "color": "#ffffee",
+        "opacity": 0.9
+      }
+    ]
+  },
+  "lighting": {
+    "intensity": 2.0
+  },
+  "material": {
+    "blending": "AdditiveBlending",
+    "depthWrite": false,
+    "depthTest": true,
+    "transparent": true
+  }
+}

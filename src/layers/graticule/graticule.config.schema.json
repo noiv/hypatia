@@ -1,0 +1,98 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Graticule Layer Configuration",
+  "description": "Configuration for latitude/longitude grid lines on the globe",
+  "type": "object",
+  "properties": {
+    "updateOrder": {
+      "type": "integer",
+      "description": "Layer update priority (lower numbers update first)"
+    },
+    "visual": {
+      "type": "object",
+      "description": "Visual appearance settings for graticule lines",
+      "properties": {
+        "color": {
+          "type": "integer",
+          "description": "Color of grid lines as decimal number (0x444444 = 4473924)",
+          "minimum": 0,
+          "maximum": 16777215
+        },
+        "opacity": {
+          "type": "number",
+          "description": "Opacity of grid lines (0 = transparent, 1 = opaque)",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "radius": {
+          "type": "number",
+          "description": "Radius multiplier from Earth surface (1.01 = slightly above surface)",
+          "minimum": 1,
+          "maximum": 1.5
+        },
+        "renderOrder": {
+          "type": "integer",
+          "description": "Render order (higher = renders on top of other layers)"
+        }
+      },
+      "required": ["color", "opacity", "radius", "renderOrder"]
+    },
+    "line": {
+      "type": "object",
+      "description": "Line geometry and material settings",
+      "properties": {
+        "width": {
+          "type": "number",
+          "description": "Line width in pixels",
+          "minimum": 0.5,
+          "maximum": 5
+        },
+        "segmentsPerLine": {
+          "type": "integer",
+          "description": "Number of segments per line for smooth curves. Higher = smoother",
+          "minimum": 5,
+          "maximum": 100
+        },
+        "depthTest": {
+          "type": "boolean",
+          "description": "Whether lines are hidden behind the globe (true = realistic)"
+        },
+        "depthWrite": {
+          "type": "boolean",
+          "description": "Whether to write to depth buffer (false for transparency)"
+        }
+      },
+      "required": ["width", "segmentsPerLine", "depthTest", "depthWrite"]
+    },
+    "lod": {
+      "type": "array",
+      "description": "Level of Detail settings based on camera distance",
+      "items": {
+        "type": "object",
+        "properties": {
+          "maxDistance": {
+            "type": ["number", "null"],
+            "description": "Maximum camera distance for this LOD level (null = infinite)",
+            "minimum": 0
+          },
+          "latStep": {
+            "type": "integer",
+            "description": "Degrees between latitude lines (10 = every 10 degrees)",
+            "minimum": 5,
+            "maximum": 90
+          },
+          "lonStep": {
+            "type": "integer",
+            "description": "Degrees between longitude lines (10 = every 10 degrees)",
+            "minimum": 5,
+            "maximum": 90
+          }
+        },
+        "required": ["maxDistance", "latStep", "lonStep"]
+      },
+      "minItems": 1,
+      "maxItems": 10
+    }
+  },
+  "required": ["updateOrder", "visual", "line", "lod"]
+}

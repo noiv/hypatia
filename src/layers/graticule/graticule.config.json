@@ -1,9 +1,17 @@
 {
+  "$schema": "./graticule.config.schema.json",
   "updateOrder": 3,
   "visual": {
     "color": 4473924,
     "opacity": 0.3,
-    "radius": 1.01
+    "radius": 1.01,
+    "renderOrder": 1000
+  },
+  "line": {
+    "width": 1,
+    "segmentsPerLine": 20,
+    "depthTest": true,
+    "depthWrite": false
   },
   "lod": [
     { "maxDistance": 1.5, "latStep": 10, "lonStep": 10 },

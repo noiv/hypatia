@@ -1,5 +1,7 @@
 {
+  "$schema": "./earth.config.schema.json",
   "updateOrder": 1,
+  "renderOrder": 0,
   "geometry": {
     "segments": 16
   },

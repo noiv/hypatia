@@ -1,0 +1,117 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Sun Layer Configuration",
+  "description": "Configuration for sun sprite, glow effects, and directional lighting",
+  "type": "object",
+  "properties": {
+    "updateOrder": {
+      "type": "integer",
+      "description": "Layer update priority (lower numbers update first)"
+    },
+    "sprite": {
+      "type": "object",
+      "description": "Main sun sprite configuration",
+      "properties": {
+        "textureUrl": {
+          "type": "string",
+          "description": "Path to sun sprite texture image"
+        },
+        "distanceFromEarth": {
+          "type": "number",
+          "description": "Distance from Earth center in scene units",
+          "minimum": 100,
+          "maximum": 1000
+        },
+        "mainScale": {
+          "type": "number",
+          "description": "Scale factor for main sun sprite",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "renderOrder": {
+          "type": "integer",
+          "description": "Render order for main sprite (higher renders on top)"
+        }
+      },
+      "required": ["textureUrl", "distanceFromEarth", "mainScale", "renderOrder"]
+    },
+    "glow": {
+      "type": "object",
+      "description": "Multi-layered glow effect configuration",
+      "properties": {
+        "baseRenderOrder": {
+          "type": "integer",
+          "description": "Base render order for glow layers (increments for each layer)"
+        },
+        "layers": {
+          "type": "array",
+          "description": "Glow layers from outer to inner",
+          "items": {
+            "type": "object",
+            "properties": {
+              "scale": {
+                "type": "number",
+                "description": "Scale factor for this glow layer (larger = outer glow)",
+                "minimum": 1,
+                "maximum": 50
+              },
+              "color": {
+                "type": "string",
+                "description": "Hex color for this glow layer (e.g., '#ffffff')",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              },
+              "opacity": {
+                "type": "number",
+                "description": "Opacity for this glow layer (0 = transparent, 1 = opaque)",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": ["scale", "color", "opacity"]
+          },
+          "minItems": 1,
+          "maxItems": 10
+        }
+      },
+      "required": ["baseRenderOrder", "layers"]
+    },
+    "lighting": {
+      "type": "object",
+      "description": "Directional light settings for scene illumination",
+      "properties": {
+        "intensity": {
+          "type": "number",
+          "description": "Light intensity (1.0 = normal, 2.0 = bright)",
+          "minimum": 0,
+          "maximum": 10
+        }
+      },
+      "required": ["intensity"]
+    },
+    "material": {
+      "type": "object",
+      "description": "THREE.js material settings for sun sprites",
+      "properties": {
+        "blending": {
+          "type": "string",
+          "enum": ["NoBlending", "NormalBlending", "AdditiveBlending", "SubtractiveBlending", "MultiplyBlending"],
+          "description": "Blending mode for sprites. AdditiveBlending creates glow effect"
+        },
+        "depthWrite": {
+          "type": "boolean",
+          "description": "Whether to write to depth buffer (false for transparent objects)"
+        },
+        "depthTest": {
+          "type": "boolean",
+          "description": "Whether to test depth (true = hidden behind other objects)"
+        },
+        "transparent": {
+          "type": "boolean",
+          "description": "Whether material supports transparency"
+        }
+      },
+      "required": ["blending", "depthWrite", "depthTest", "transparent"]
+    }
+  },
+  "required": ["updateOrder", "sprite", "glow", "lighting", "material"]
+}

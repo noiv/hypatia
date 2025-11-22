@@ -1,5 +1,7 @@
 {
+  "$schema": "./pressure.config.schema.json",
   "updateOrder": 7,
+  "renderOrder": 3,
   "grid": {
     "width": 181,
     "height": 91,

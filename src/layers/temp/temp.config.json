@@ -1,18 +1,20 @@
 {
+  "$schema": "./temp.config.schema.json",
   "updateOrder": 4,
+  "renderOrder": 1,
   "tempRange": {
     "min": -30,
     "max": 40
   },
   "palette": [
-    { "temp": -30, "color": [0.667, 0.400, 0.667], "hex": "#aa66aa" },
-    { "temp": -20, "color": [0.808, 0.608, 0.898], "hex": "#ce9be5" },
-    { "temp": -10, "color": [0.463, 0.808, 0.886], "hex": "#76cee2" },
-    { "temp":   0, "color": [0.424, 0.937, 0.424], "hex": "#6cef6c" },
-    { "temp":  10, "color": [0.929, 0.976, 0.424], "hex": "#edf96c" },
-    { "temp":  20, "color": [1.000, 0.733, 0.333], "hex": "#ffbb55" },
-    { "temp":  30, "color": [0.984, 0.396, 0.306], "hex": "#fb654e" },
-    { "temp":  40, "color": [0.800, 0.251, 0.251], "hex": "#cc4040" }
+    { "temp": -30, "color": { "r": 0.667, "g": 0.400, "b": 0.667 }, "hex": "#aa66aa" },
+    { "temp": -20, "color": { "r": 0.808, "g": 0.608, "b": 0.898 }, "hex": "#ce9be5" },
+    { "temp": -10, "color": { "r": 0.463, "g": 0.808, "b": 0.886 }, "hex": "#76cee2" },
+    { "temp":   0, "color": { "r": 0.424, "g": 0.937, "b": 0.424 }, "hex": "#6cef6c" },
+    { "temp":  10, "color": { "r": 0.929, "g": 0.976, "b": 0.424 }, "hex": "#edf96c" },
+    { "temp":  20, "color": { "r": 1.000, "g": 0.733, "b": 0.333 }, "hex": "#ffbb55" },
+    { "temp":  30, "color": { "r": 0.984, "g": 0.396, "b": 0.306 }, "hex": "#fb654e" },
+    { "temp":  40, "color": { "r": 0.800, "g": 0.251, "b": 0.251 }, "hex": "#cc4040" }
   ],
   "visual": {
     "opacity": 0.8,

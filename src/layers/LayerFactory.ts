@@ -51,7 +51,7 @@ export class LayerFactory {
         return EarthRenderService.create(layerId, preloadedImages);
 
       case 'sun':
-        return SunRenderService.create(layerId, currentTime, false); // Atmosphere shader disabled (not ready)
+        return SunRenderService.create(layerId, currentTime, true); // Atmosphere shader ENABLED for testing
 
       case 'graticule':
         return GraticuleRenderService.create(layerId);

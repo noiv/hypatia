@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Earth Layer Configuration",
+  "description": "Configuration for Earth globe rendering with basemap textures",
+  "type": "object",
+  "properties": {
+    "updateOrder": {
+      "type": "integer",
+      "description": "Layer update priority (lower numbers update first)"
+    },
+    "renderOrder": {
+      "type": "integer",
+      "description": "Render order (0 = base layer)"
+    },
+    "geometry": {
+      "type": "object",
+      "description": "Sphere geometry settings",
+      "properties": {
+        "segments": {
+          "type": "integer",
+          "description": "Number of segments for sphere (both width and height)",
+          "minimum": 8,
+          "maximum": 64
+        }
+      },
+      "required": ["segments"]
+    },
+    "visual": {
+      "type": "object",
+      "description": "Visual effects settings",
+      "properties": {
+        "dayNightFactor": {
+          "type": "number",
+          "description": "How much to darken the night side (0 = no darkening, 1 = black)",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "dayNightSharpness": {
+          "type": "number",
+          "description": "Sharpness of terminator line (higher = sharper transition)",
+          "minimum": 1,
+          "maximum": 20
+        }
+      }
+    },
+    "basemaps": {
+      "type": "object",
+      "description": "Available basemap texture sets",
+      "properties": {
+        "sets": {
+          "type": "array",
+          "description": "List of available basemap sets",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Unique identifier for this basemap set"
+              },
+              "name": {
+                "type": "string",
+                "description": "Display name for UI"
+              },
+              "day": {
+                "type": "string",
+                "description": "Path to daytime texture"
+              },
+              "night": {
+                "type": "string",
+                "description": "Path to nighttime texture (city lights)"
+              }
+            },
+            "required": ["id", "name", "day", "night"]
+          }
+        }
+      }
+    }
+  },
+  "required": ["updateOrder", "renderOrder", "geometry", "visual", "basemaps"]
+}

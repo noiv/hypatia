@@ -242,6 +242,7 @@ import type * as THREE from 'three';
 
 export interface EarthConfig {
   updateOrder: number;
+  renderOrder: number;
   geometry: {
     segments: number;
   };
@@ -251,21 +252,25 @@ export interface EarthConfig {
   };
   basemaps: {
     sets: Array<{
+      id?: string;
       name: string;
-      path: string;
+      path?: string;
+      day?: string;
+      night?: string;
     }>;
   };
 }
 
 export interface Temp2mConfig {
   updateOrder: number;
+  renderOrder: number;
   tempRange: {
     min: number;
     max: number;
   };
   palette: Array<{
     temp: number;
-    color: [number, number, number];
+    color: { r: number; g: number; b: number };
     hex: string;
   }>;
   visual: {
@@ -285,6 +290,33 @@ export interface Temp2mConfig {
   };
 }
 
+export interface SunConfig {
+  updateOrder: number;
+  sprite: {
+    textureUrl: string;
+    distanceFromEarth: number;
+    mainScale: number;
+    renderOrder: number;
+  };
+  glow: {
+    baseRenderOrder: number;
+    layers: Array<{
+      scale: number;
+      color: string;
+      opacity: number;
+    }>;
+  };
+  lighting: {
+    intensity: number;
+  };
+  material: {
+    blending: string;
+    depthWrite: boolean;
+    depthTest: boolean;
+    transparent: boolean;
+  };
+}
+
 export interface AtmosphereConfig {
   updateOrder: number;
   geometry: {
@@ -294,7 +326,7 @@ export interface AtmosphereConfig {
   physical: {
     planetRadius: number;
     atmosphereRadius: number;
-    rayleighCoefficient: [number, number, number];
+    rayleighCoefficient: { r: number; g: number; b: number };
     rayleighScaleHeight: number;
     mieCoefficient: number;
     mieScaleHeight: number;
@@ -309,6 +341,23 @@ export interface AtmosphereConfig {
     primarySamples: number;
     secondarySamples: number;
   };
+  material: {
+    side: string;
+    depthWrite: boolean;
+    depthTest: boolean;
+    blending: string;
+    transparent: boolean;
+    renderOrder: number;
+  };
+  shader: {
+    enabled: boolean;
+    rimFalloffExponent: number;
+    twilightWidth: number;
+    dayColor: { r: number; g: number; b: number };
+    sunsetColor: { r: number; g: number; b: number };
+    sunsetMixFactor: number;
+    maxOpacity: number;
+  };
 }
 
 export interface GraticuleConfig {
@@ -317,6 +366,13 @@ export interface GraticuleConfig {
     color: number;
     opacity: number;
     radius: number;
+    renderOrder: number;
+  };
+  line: {
+    width: number;
+    segmentsPerLine: number;
+    depthTest: boolean;
+    depthWrite: boolean;
   };
   lod: Array<{
     maxDistance: number | null;
@@ -327,6 +383,7 @@ export interface GraticuleConfig {
 
 export interface PrecipitationConfig {
   updateOrder: number;
+  renderOrder: number;
   geometry: {
     widthSegments: number;
     heightSegments: number;
@@ -343,7 +400,7 @@ export interface PrecipitationConfig {
   };
   palette: Array<{
     threshold: number | null;
-    color: [number, number, number];
+    color: { r: number; g: number; b: number };
     alpha: number;
   }>;
   discardThreshold: number;
@@ -376,6 +433,7 @@ export interface PressureConfig {
 
 export interface TextConfig {
   updateOrder: number;
+  renderOrder: number;
   font: {
     url: string;
     fallback: string;
@@ -420,4 +478,31 @@ export interface TextConfig {
 
 export interface Wind10mConfig {
   updateOrder: number;
+  seeds: {
+    count: number;
+  };
+  geometry: {
+    lineSteps: number;
+    lineWidth: number;
+    taperSegments: number;
+    snakeLength: number;
+    useCustomGeometry: boolean;
+    segmentsPerLine: number;
+  };
+  material: {
+    opacity: number;
+    depthWrite: boolean;
+    depthTest: boolean;
+    alphaToCoverage: boolean;
+    transparent: boolean;
+  };
+  animation: {
+    speed: number;
+  };
+  lineWidthScaling: {
+    minDistance: number;
+    maxDistance: number;
+    minWidth: number;
+    maxWidth: number;
+  };
 }

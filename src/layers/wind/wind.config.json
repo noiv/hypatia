@@ -1,3 +1,31 @@
 {
-  "updateOrder": 6
+  "$schema": "./wind.config.schema.json",
+  "updateOrder": 6,
+  "seeds": {
+    "count": 8192
+  },
+  "geometry": {
+    "lineSteps": 32,
+    "lineWidth": 2.0,
+    "taperSegments": 4,
+    "snakeLength": 10,
+    "useCustomGeometry": false,
+    "segmentsPerLine": 20
+  },
+  "material": {
+    "opacity": 0.6,
+    "depthWrite": false,
+    "depthTest": true,
+    "alphaToCoverage": false,
+    "transparent": true
+  },
+  "animation": {
+    "speed": 20.0
+  },
+  "lineWidthScaling": {
+    "minDistance": 1.157,
+    "maxDistance": 10.0,
+    "minWidth": 2.0,
+    "maxWidth": 0.02
+  }
 }

@@ -1,0 +1,124 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Temperature Layer Configuration",
+  "description": "Configuration for temperature visualization layer with color mapping",
+  "type": "object",
+  "properties": {
+    "updateOrder": {
+      "type": "integer",
+      "description": "Layer update priority (lower numbers update first)"
+    },
+    "renderOrder": {
+      "type": "integer",
+      "description": "Render order (higher renders on top)"
+    },
+    "tempRange": {
+      "type": "object",
+      "description": "Temperature range for color mapping in Celsius",
+      "properties": {
+        "min": {
+          "type": "number",
+          "description": "Minimum temperature in color scale (°C)"
+        },
+        "max": {
+          "type": "number",
+          "description": "Maximum temperature in color scale (°C)"
+        }
+      },
+      "required": ["min", "max"]
+    },
+    "palette": {
+      "type": "array",
+      "description": "Color palette mapping temperatures to RGB colors",
+      "items": {
+        "type": "object",
+        "properties": {
+          "temp": {
+            "type": "number",
+            "description": "Temperature value in Celsius"
+          },
+          "color": {
+            "type": "array",
+            "description": "RGB color values [R, G, B] in 0-1 range",
+            "items": {"type": "number", "minimum": 0, "maximum": 1},
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "hex": {
+            "type": "string",
+            "description": "Hex color representation for reference",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          }
+        },
+        "required": ["temp", "color"]
+      }
+    },
+    "visual": {
+      "type": "object",
+      "description": "Visual rendering settings",
+      "properties": {
+        "opacity": {
+          "type": "number",
+          "description": "Layer opacity (0 = transparent, 1 = opaque)",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "altitudeKm": {
+          "type": "number",
+          "description": "Altitude above surface in kilometers",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "dayNightFactor": {
+          "type": "number",
+          "description": "How much to darken night side (0 = no darkening, 1 = full dark)",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "dayNightSharpness": {
+          "type": "number",
+          "description": "Sharpness of day/night transition (higher = sharper)",
+          "minimum": 1,
+          "maximum": 20
+        }
+      }
+    },
+    "depth": {
+      "type": "object",
+      "description": "Depth buffer and polygon offset settings",
+      "properties": {
+        "polygonOffset": {
+          "type": "boolean",
+          "description": "Enable polygon offset to prevent z-fighting"
+        },
+        "polygonOffsetFactor": {
+          "type": "number",
+          "description": "Polygon offset factor"
+        },
+        "polygonOffsetUnits": {
+          "type": "number",
+          "description": "Polygon offset units"
+        }
+      }
+    },
+    "geometry": {
+      "type": "object",
+      "description": "Sphere geometry settings",
+      "properties": {
+        "widthSegments": {
+          "type": "integer",
+          "description": "Horizontal segments (longitude)",
+          "minimum": 32,
+          "maximum": 512
+        },
+        "heightSegments": {
+          "type": "integer",
+          "description": "Vertical segments (latitude)",
+          "minimum": 16,
+          "maximum": 256
+        }
+      }
+    }
+  },
+  "required": ["updateOrder", "renderOrder", "tempRange", "palette"]
+}
