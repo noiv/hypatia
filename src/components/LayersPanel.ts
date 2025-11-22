@@ -34,20 +34,6 @@ export interface LayersPanelAttrs {
   onProgressCanvasCreated: ((layerId: LayerId, canvas: HTMLCanvasElement) => void) | undefined;
 }
 
-const LAYER_DISPLAY_NAMES: Record<LayerId, string> = {
-  earth: 'Earth',
-  sun: 'Sun',
-  graticule: 'Graticule',
-  temp: 'Temperature',
-  rain: 'Rain',
-  wind: 'Wind',
-  pressure: 'Pressure',
-  humidity: 'Humidity',
-  clouds: 'Clouds',
-  waves: 'Waves',
-  text: 'Text'
-};
-
 export const LayersPanel: m.Component<LayersPanelAttrs> = {
   view(vnode) {
     const {
@@ -71,11 +57,15 @@ export const LayersPanel: m.Component<LayersPanelAttrs> = {
       const decorationLayers = [...config.layers.cubemaps, ...config.layers.decoration];
       const hasProgressCanvas = !decorationLayers.includes(layerId);
 
+      // Get layer label from config
+      const layerConfig = vnode.attrs.configService.getLayerById(layerId);
+      const layerLabel = layerConfig?.label?.short || layerId;
+
       const button = m('button.btn', {
         class: `${isActive ? 'active' : ''} ${hasProgressCanvas ? 'data-layer' : 'decoration-layer'}`.trim(),
         'data-layer': layerId,
         onclick: () => onLayerToggle(layerId)
-      }, LAYER_DISPLAY_NAMES[layerId]);
+      }, layerLabel);
 
       // Always render progress canvas for data layers (acts as bottom border)
       if (hasProgressCanvas) {
