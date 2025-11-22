@@ -173,7 +173,7 @@ export const App: AppComponent = {
       onTimeChange: (newTime) => this.handleTimeChange(newTime),
       onCameraChange: () => this.appService!.updateUrl(),
       getCurrentTime: () => this.stateService!.getCurrentTime()
-    }, this.configService, this.dateTimeService);
+    }, this.configService!, this.dateTimeService);
 
     // Register event handlers
     this.eventService!.register(window, 'keydown', this.eventService!.handleKeydown as EventListener);

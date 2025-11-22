@@ -229,26 +229,25 @@ export class ConfigService {
 
   /**
    * Update a user option at runtime
+   * Supports: 'timeServer.enabled', 'atmosphere.enabled', etc.
    */
-  setUserOption(key: string, value: any): void {
+  setUserOption(key: string, value: boolean | string): void {
     if (!this.userOptions) {
       throw new Error('User options not loaded. Call loadAll() first.')
     }
 
-    // Simple deep set for nested properties
-    const keys = key.split('.')
-    let current: any = this.userOptions
-
-    for (let i = 0; i < keys.length - 1; i++) {
-      const k = keys[i]!
-      if (!(k in current)) {
-        current[k] = {}
-      }
-      current = current[k]
+    // Type-safe approach for known paths
+    if (key === 'timeServer.enabled' && typeof value === 'boolean') {
+      this.userOptions.timeServer.enabled = value
+    } else if (key === 'timeServer.comment' && typeof value === 'string') {
+      this.userOptions.timeServer.comment = value
+    } else if (key === 'atmosphere.enabled' && typeof value === 'boolean') {
+      this.userOptions.atmosphere.enabled = value
+    } else if (key === 'atmosphere.comment' && typeof value === 'string') {
+      this.userOptions.atmosphere.comment = value
+    } else {
+      throw new Error(`Unknown user option key: ${key}`)
     }
-
-    const lastKey = keys[keys.length - 1]!
-    current[lastKey] = value
   }
 
   // ============================================================================

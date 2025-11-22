@@ -321,7 +321,7 @@ export class WindLayer implements ILayer {
   /**
    * Initialize WebGPU compute pipeline
    */
-  async initGPU(_renderer: any): Promise<void> {
+  async initGPU(): Promise<void> {
     // WebGPU guaranteed to be available (checked during bootstrap)
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) {
@@ -689,9 +689,6 @@ export class WindLayer implements ILayer {
     // No-op
   }
 
-  setTextService(_textService: any): void {
-    // No-op
-  }
 
   updateTextEnabled(_enabled: boolean): void {
     // No-op

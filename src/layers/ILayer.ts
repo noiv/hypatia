@@ -12,7 +12,8 @@ import type { AnimationState } from '../visualization/IAnimationState';
  */
 export interface LayerConfig {
   updateOrder: number;
-  [key: string]: any; // Allow additional config properties
+  // Removed index signature - each layer has its own specific config type
+  // Layers will use their specific config interfaces that extend this base
 }
 
 /**

@@ -289,9 +289,6 @@ export class PressureLayer implements ILayer {
     // No-op - pressure layer doesn't use lighting
   }
 
-  setTextService(_textService: any): void {
-    // No-op - pressure layer doesn't produce text
-  }
 
   updateTextEnabled(_enabled: boolean): void {
     // No-op - pressure layer doesn't produce text

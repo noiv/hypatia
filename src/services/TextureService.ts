@@ -83,6 +83,7 @@ export class TextureService {
     this.updateTextureData(texture, sliceData, sliceIndex)
 
     // Direct GPU update using texSubImage3D
+    // QC-OK: THREE.js internal API - renderer.properties returns internal WebGL state
     const properties = this.renderer.properties.get(texture) as any
     this.gl.bindTexture(this.gl.TEXTURE_3D, properties.__webglTexture)
 
@@ -139,6 +140,7 @@ export class TextureService {
    * @returns true if texture is on GPU
    */
   isTextureOnGPU(texture: THREE.Data3DTexture): boolean {
+    // QC-OK: THREE.js internal API - checking if WebGL texture has been created
     const properties = this.renderer.properties.get(texture) as any
     return properties.__webglTexture !== undefined && properties.__webglTexture !== null
   }

@@ -1,4 +1,3 @@
-import type * as THREE from 'three';
 import type { ILayer, LayerId } from './ILayer';
 import type { DownloadService } from '../services/DownloadService';
 import type { TextureService } from '../services/TextureService';
@@ -33,7 +32,6 @@ export class LayerFactory {
    * @param configService - ConfigService for layer configuration
    * @param currentTime - Current simulation time
    * @param preloadedImages - Optional preloaded Earth basemap images
-   * @param renderer - Optional WebGL renderer (required for wind layer WebGPU)
    * @returns Promise resolving to ILayer instance
    */
   static async create(
@@ -43,8 +41,7 @@ export class LayerFactory {
     dateTimeService: DateTimeService,
     configService: ConfigService,
     currentTime: Date,
-    preloadedImages?: Map<string, HTMLImageElement>,
-    renderer?: THREE.WebGLRenderer
+    preloadedImages?: Map<string, HTMLImageElement>
   ): Promise<ILayer> {
     switch (layerId) {
       case 'earth':
@@ -107,12 +104,8 @@ export class LayerFactory {
         );
 
         // Initialize WebGPU (requires renderer check)
-        if (!renderer) {
-          throw new Error('Wind layer requires WebGL renderer for WebGPU initialization');
-        }
-
         // Initialize GPU resources and timesteps
-        await layer.initGPU(renderer);
+        await layer.initGPU();
 
         // Initialize with timesteps and current time
         // Layer will register with DownloadService internally

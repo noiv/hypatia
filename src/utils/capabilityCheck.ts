@@ -5,11 +5,7 @@
  */
 
 // Extend Navigator interface for WebGPU
-declare global {
-  interface Navigator {
-    gpu?: any; // WebGPU API
-  }
-}
+// WebGPU types are provided by @webgpu/types package
 
 export interface CapabilityCheckResult {
   supported: boolean;
@@ -68,7 +64,7 @@ export function checkBrowserCapabilities(): CapabilityCheckResult {
 
     // Try to request adapter for detailed info
     if (VERBOSE_LOGGING) {
-      navigator.gpu.requestAdapter().then((adapter: any) => {
+      navigator.gpu.requestAdapter().then((adapter) => {
         if (adapter) {
           console.log('WebGPU adapter available');
           console.log('   Adapter info:', {

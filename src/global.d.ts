@@ -21,6 +21,11 @@ declare global {
   // WebGPU types are provided by @webgpu/types package (included in tsconfig.json)
   // No need to declare them here
 
+  // Extend Mithril with our custom method
+  namespace m {
+    function buildQueryString(obj: Record<string, string>): string;
+  }
+
   // Stats.js library (loaded via script tag)
   class Stats {
     constructor();
@@ -35,8 +40,10 @@ declare global {
   namespace THREE {
     interface WebGLRenderer {
       properties: {
+        // QC-OK: THREE.js internal - accepts any THREE.Object3D/Texture/Material
         get(object: any): {
           __webglTexture?: WebGLTexture;
+          // QC-OK: THREE.js stores various internal WebGL properties dynamically
           [key: string]: any;
         };
       };

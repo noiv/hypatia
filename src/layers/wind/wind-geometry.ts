@@ -14,6 +14,15 @@ import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeome
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 // import windSnakeShader from './wind-snake.glsl?raw';  // Currently unused, will be re-enabled later
 
+// Extended LineMaterial with custom uniforms for wind animation
+interface WindLineMaterial extends LineMaterial {
+  uniforms: LineMaterial['uniforms'] & {
+    animationPhase: { value: number };
+    snakeLength: { value: number };
+    lineSteps: { value: number };
+  };
+}
+
 export interface WindGeometryConfig {
   lineSteps: number;
   lineWidth: number;
@@ -271,7 +280,7 @@ export class WindGeometry {
     positions: Float32Array | number[],
     colors: Float32Array | number[],
     group: THREE.Group
-  ): { lines: LineSegments2, material: LineMaterial } {
+  ): { lines: LineSegments2, material: WindLineMaterial } {
     const geometry = new LineSegmentsGeometry();
     geometry.setPositions(positions);
     geometry.setColors(colors);
@@ -284,12 +293,12 @@ export class WindGeometry {
       depthWrite: false,
       depthTest: true,
       alphaToCoverage: false
-    });
+    }) as WindLineMaterial;
 
     material.resolution.set(window.innerWidth, window.innerHeight);
 
     // Add snake animation uniforms
-    (material as any).uniforms = {
+    material.uniforms = {
       ...material.uniforms,
       animationPhase: { value: 0.0 },
       snakeLength: { value: this.config.snakeLength },
@@ -298,9 +307,9 @@ export class WindGeometry {
 
     // Inject snake animation shader
     material.onBeforeCompile = (shader) => {
-      shader.uniforms.animationPhase = (material as any).uniforms.animationPhase;
-      shader.uniforms.snakeLength = (material as any).uniforms.snakeLength;
-      shader.uniforms.lineSteps = (material as any).uniforms.lineSteps;
+      shader.uniforms.animationPhase = material.uniforms.animationPhase;
+      shader.uniforms.snakeLength = material.uniforms.snakeLength;
+      shader.uniforms.lineSteps = material.uniforms.lineSteps;
 
       shader.fragmentShader = shader.fragmentShader.replace(
         'void main() {',
@@ -370,7 +379,7 @@ export class WindGeometry {
    */
   updateLineWidth(
     cameraDistance: number,
-    material: LineMaterial | THREE.ShaderMaterial | null
+    material: WindLineMaterial | THREE.ShaderMaterial | null
   ): void {
     if (!material) return;
 

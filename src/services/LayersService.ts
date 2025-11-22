@@ -172,8 +172,7 @@ export class LayersService {
         this._dateTimeService,
         this._configService,
         currentTime,
-        this.scene.getPreloadedImages?.() || undefined,
-        this.scene.getRenderer?.() || undefined
+        this.scene.getPreloadedImages?.() || undefined
       )
 
       // Determine if data layer

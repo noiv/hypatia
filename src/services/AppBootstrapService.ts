@@ -50,7 +50,7 @@ export interface AppInstance {
   stateService: AppStateService;
   layersService: LayersService;
   downloadService: DownloadService;
-  setAppService: (service: any) => void; // Setter for AppService
+  setAppService: (service: import('../services/AppService').AppService) => void; // Setter for AppService
   isBootstrapping: () => boolean; // Function that returns current bootstrap state
 }
 

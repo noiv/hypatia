@@ -8,6 +8,8 @@ import type { SunRenderService } from '../layers/sun/sun.render-service';
 import { TextRenderService } from '../layers/text/text.render-service';
 import { updateProgressCanvas } from '../components/ProgressCanvas';
 import type { DownloadService } from '../services/DownloadService';
+import type { ConfigService } from '../services/ConfigService';
+import type { DateTimeService } from '../services/DateTimeService';
 import * as perform from '../utils/performance';
 import { mouseToNDC, raycastObject, cartesianToLatLon } from '../utils/raycasting';
 
@@ -105,7 +107,7 @@ export class Scene {
   /**
    * Create viewport controls service (called after Scene construction)
    */
-  createViewportControls(callbacks: ViewportControlsCallbacks, configService: any, dateTimeService?: any): ViewportControlsService {
+  createViewportControls(callbacks: ViewportControlsCallbacks, configService: ConfigService, dateTimeService?: DateTimeService): ViewportControlsService {
     this.viewportControls = new ViewportControlsService(
       this.camera,
       this,
