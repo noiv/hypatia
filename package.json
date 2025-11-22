@@ -1,6 +1,6 @@
 {
   "name": "hypatia",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Interactive weather visualization with minute-accurate interpolation",
   "type": "module",
   "scripts": {
@@ -17,7 +17,8 @@
     "quality:full": "tsx scripts/check-code-quality.ts",
     "quality:report": "grep -r 'QC-OK\\|SAFE:\\|quality-check-exempt' src/ || echo 'No exemptions found'",
     "predeploy": "npm run quality",
-    "prebuild": "npm run quality"
+    "prebuild": "npm run quality",
+    "deploy:beta": "cd ../server/scripts && ./build-beta.sh && ./deploy-beta.sh"
   },
   "dependencies": {
     "@tweenjs/tween.js": "^25.0.0",
