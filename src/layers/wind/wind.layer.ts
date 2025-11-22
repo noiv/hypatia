@@ -678,9 +678,8 @@ export class WindLayer implements ILayer {
     return this.group;
   }
 
-  setResolution(width: number, height: number): void {
-    this.geometry.setResolution(width, height, this.material);
-  }
+  // Removed setResolution - not needed since line width scales with distance
+  // LineMaterial's screen-space consistency conflicts with our distance-based scaling
 
   updateDistance(distance: number): void {
     this.geometry.updateLineWidth(distance, this.material);

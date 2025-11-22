@@ -168,11 +168,8 @@ export class Scene {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
 
-    // Update Line2 material resolution for wind layer
-    const windLayer = this.layers.get('wind');
-    if (windLayer && 'setResolution' in windLayer && typeof (windLayer as any).setResolution === 'function') {
-      (windLayer as any).setResolution(width, height);
-    }
+    // Wind layer no longer needs resolution updates
+    // Line width is controlled by camera distance, not screen-space calculations
   };
 
   onMouseDown = (_e: MouseEvent) => {
@@ -294,8 +291,8 @@ export class Scene {
    */
   setBasemapBlend(blend: number) {
     const earthLayer = this.layers.get('earth') as EarthRenderService | undefined;
-    if (earthLayer) {
-      (earthLayer as any).setBlend(blend);
+    if (earthLayer && 'setBlend' in earthLayer) {
+      earthLayer.setBlend(blend);
     }
   }
 

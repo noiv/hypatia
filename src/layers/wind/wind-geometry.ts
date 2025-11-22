@@ -394,23 +394,7 @@ export class WindGeometry {
     }
   }
 
-  /**
-   * Update resolution for responsive line rendering
-   */
-  setResolution(
-    width: number,
-    height: number,
-    material: LineMaterial | THREE.ShaderMaterial | null
-  ): void {
-    if (!material) return;
-
-    if (this.config.useCustomGeometry) {
-      const shaderMat = material as THREE.ShaderMaterial;
-      if (shaderMat.uniforms && shaderMat.uniforms.resolution) {
-        shaderMat.uniforms.resolution.value.set(width, height);
-      }
-    } else {
-      (material as LineMaterial).resolution.set(width, height);
-    }
-  }
+  // Removed setResolution - not needed for distance-based line scaling
+  // Resolution updates were for maintaining constant pixel width,
+  // but we want lines to scale with distance instead
 }
