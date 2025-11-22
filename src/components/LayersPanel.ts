@@ -11,6 +11,7 @@ import { ProgressCanvas } from './ProgressCanvas';
 import type { LayerId } from '../layers/ILayer';
 import type { LayerRenderState } from '../config/types';
 import type { DownloadService } from '../services/DownloadService';
+import type { ConfigService } from '../services/ConfigService';
 
 export interface LayersPanelAttrs {
   // Layer states
@@ -25,8 +26,9 @@ export interface LayersPanelAttrs {
   blend: number;
   onBlendChange: (blend: number) => void;
 
-  // Services (optional for backward compatibility)
-  downloadService?: DownloadService;
+  // Services
+  downloadService: DownloadService;
+  configService: ConfigService;
 }
 
 const LAYER_DISPLAY_NAMES: Record<LayerId, string> = {
@@ -37,6 +39,9 @@ const LAYER_DISPLAY_NAMES: Record<LayerId, string> = {
   rain: 'Rain',
   wind: 'Wind',
   pressure: 'Pressure',
+  humidity: 'Humidity',
+  clouds: 'Clouds',
+  waves: 'Waves',
   text: 'Text'
 };
 
@@ -47,16 +52,14 @@ export const LayersPanel: m.Component<LayersPanelAttrs> = {
   oninit(vnode) {
     // Subscribe to download service events to trigger redraws
     const downloadService = vnode.attrs.downloadService;
-    if (downloadService) {
-      const handleDownloadEvent = () => m.redraw();
+    const handleDownloadEvent = () => m.redraw();
 
-      // Store handler for cleanup
-      eventHandlers.set(vnode.state, handleDownloadEvent);
+    // Store handler for cleanup
+    eventHandlers.set(vnode.state, handleDownloadEvent);
 
-      // Listen to download progress events
-      downloadService.on('progress', handleDownloadEvent);
-      downloadService.on('timestampLoaded', handleDownloadEvent);
-    }
+    // Listen to download progress events
+    downloadService.on('progress', handleDownloadEvent);
+    downloadService.on('timestampLoaded', handleDownloadEvent);
   },
 
   onremove(vnode) {
@@ -64,7 +67,7 @@ export const LayersPanel: m.Component<LayersPanelAttrs> = {
     const downloadService = vnode.attrs.downloadService;
     const handleDownloadEvent = eventHandlers.get(vnode.state);
 
-    if (downloadService && handleDownloadEvent) {
+    if (handleDownloadEvent) {
       downloadService.off('progress', handleDownloadEvent);
       downloadService.off('timestampLoaded', handleDownloadEvent);
       eventHandlers.delete(vnode.state);
@@ -86,11 +89,12 @@ export const LayersPanel: m.Component<LayersPanelAttrs> = {
       const state = layerStates.get(layerId);
       const isActive = state?.created && state?.visible;
 
-      // Check if this is a data layer (not render-only) that uses progressive loading
+      // Check if this is a data layer (not decoration) that uses progressive loading
+      // Decoration layers (cubemaps + decoration): earth, sun, graticule, text
       // Data layers: temp, rain, wind, pressure, humidity, clouds, waves
-      // Render-only layers: earth, sun, graticule, text
-      const renderOnlyLayers: LayerId[] = ['earth', 'sun', 'graticule', 'text'];
-      const hasProgressCanvas = !renderOnlyLayers.includes(layerId);
+      const config = vnode.attrs.configService.getHypatiaConfig();
+      const decorationLayers = [...config.layers.cubemaps, ...config.layers.decoration];
+      const hasProgressCanvas = !decorationLayers.includes(layerId);
 
       const button = m('button.btn', {
         class: isActive ? 'active' : '',
@@ -98,27 +102,22 @@ export const LayersPanel: m.Component<LayersPanelAttrs> = {
       }, LAYER_DISPLAY_NAMES[layerId]);
 
       if (hasProgressCanvas && isActive) {
-        if (downloadService) {
-          const totalTimestamps = downloadService.getTimestepCount(layerId);
-          const loadedIndices = downloadService.getLoadedIndices(layerId);
-          const loadingIndex = downloadService.getLoadingIndex(layerId);
-          const failedIndices = downloadService.getFailedIndices(layerId);
+        const totalTimestamps = downloadService.getTimestepCount(layerId);
+        const loadedIndices = downloadService.getLoadedIndices(layerId);
+        const loadingIndex = downloadService.getLoadingIndex(layerId);
+        const failedIndices = downloadService.getFailedIndices(layerId);
 
-          return m('div.layer-button-wrapper', [
-            button,
-            m(ProgressCanvas, {
-              layerId,
-              totalTimestamps,
-              loadedIndices,
-              loadingIndex,
-              failedIndices,
-              layerColor: '#ff6b35' // Will use proper color from config later
-            })
-          ]);
-        } else {
-          // DownloadService not available
-          return button;
-        }
+        return m('div.layer-button-wrapper', [
+          button,
+          m(ProgressCanvas, {
+            layerId,
+            totalTimestamps,
+            loadedIndices,
+            loadingIndex,
+            failedIndices,
+            layerColor: '#ff6b35' // Will use proper color from config later
+          })
+        ]);
       }
 
       return button;

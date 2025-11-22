@@ -11,6 +11,7 @@ export interface AnimationState {
   // Time data
   readonly time: Date;
   readonly deltaTime: number;  // seconds since last frame
+  readonly wallTime: number;   // performance.now() - for animations independent of simulation time
 
   // Camera data
   readonly camera: {

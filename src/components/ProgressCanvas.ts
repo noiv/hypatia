@@ -27,6 +27,9 @@ const LAYER_COLORS: Record<LayerId, string> = {
   rain: '#4ecdc4',       // Cyan
   wind: '#95e1d3',       // Light teal
   pressure: '#f38181',   // Light red
+  humidity: '#a29bfe',   // Purple
+  clouds: '#dfe6e9',     // Light gray
+  waves: '#0984e3',      // Blue
   earth: '#4a69bd',      // Blue (unused)
   sun: '#feca57',        // Yellow (unused)
   graticule: '#ffffff',  // White (unused)
@@ -106,14 +109,7 @@ export const ProgressCanvas: m.Component<ProgressCanvasAttrs> = {
 
     return m('canvas.progress-canvas', {
       width: buttonWidth,
-      height: CANVAS_HEIGHT,
-      style: {
-        display: 'block',
-        width: '100%',
-        height: `${CANVAS_HEIGHT}px`,
-        marginTop: '2px',
-        imageRendering: 'pixelated' // Crisp rendering for small segments
-      }
+      height: CANVAS_HEIGHT
     });
   }
 };

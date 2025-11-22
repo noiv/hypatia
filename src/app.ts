@@ -498,7 +498,8 @@ export const App: AppComponent = {
           this.stateService!.setBlend(newBlend);
           this.scene?.setBasemapBlend(newBlend);
         },
-        ...(this.downloadService && { downloadService: this.downloadService })
+        downloadService: this.downloadService!,
+        configService: this.configService!
       } satisfies LayersPanelAttrs),
 
       m(TimeCirclePanel, {

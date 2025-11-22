@@ -144,6 +144,11 @@ export class LayerFactory {
       case 'text':
         return TextRenderService.create(layerId);
 
+      case 'humidity':
+      case 'clouds':
+      case 'waves':
+        throw new Error(`Layer not yet implemented: ${layerId}`);
+
       default:
         // TypeScript exhaustiveness check
         const _exhaustive: never = layerId;

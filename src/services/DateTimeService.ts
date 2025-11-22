@@ -231,7 +231,7 @@ export class DateTimeService {
   /**
    * @deprecated Use getTimeSteps() instead - timesteps generated once in setLatestRun()
    */
-  generateTimeSteps(currentTime: Date, stepHours: number): TimeStep[] {
+  generateTimeSteps(_currentTime: Date, stepHours: number): TimeStep[] {
     return this.generateTimeStepsInternal(stepHours)
   }
 

@@ -119,7 +119,7 @@ export class PressureLayer implements ILayer {
   private decodeGrid(fp16Data: Uint16Array): Float32Array {
     const float32Data = new Float32Array(fp16Data.length);
     for (let i = 0; i < fp16Data.length; i++) {
-      float32Data[i] = this.decodeFP16(fp16Data[i]);
+      float32Data[i] = this.decodeFP16(fp16Data[i]!);
     }
     return float32Data;
   }
@@ -218,6 +218,14 @@ export class PressureLayer implements ILayer {
 
     // Send request to worker with loaded data
     // Note: Using structured clone (not transfer) so data stays in main thread cache
+    const dataA = this.loadedData.get(stepA);
+    const dataB = this.loadedData.get(stepB);
+
+    if (!dataA || !dataB) {
+      console.error('[PressureLayer] Missing data for contour generation');
+      return;
+    }
+
     this.worker.postMessage({
       stepA,
       blend,
@@ -227,8 +235,8 @@ export class PressureLayer implements ILayer {
       dataBaseUrl: hypatiaConfig.data.dataBaseUrl,
       dataFolder: layer.dataFolders[0] || this.layerId,
       // Pass decoded Float32Array to worker (structured clone, ~2-4ms overhead)
-      dataA: this.loadedData.get(stepA),
-      dataB: this.loadedData.get(stepB)
+      dataA,
+      dataB
     });
   }
 

@@ -205,8 +205,8 @@ export class WindLayer implements ILayer {
     const u_u32 = new Uint32Array(uData.length);
     const v_u32 = new Uint32Array(vData.length);
     for (let i = 0; i < uData.length; i++) {
-      u_u32[i] = uData[i];
-      v_u32[i] = vData[i];
+      u_u32[i] = uData[i] ?? 0;
+      v_u32[i] = vData[i] ?? 0;
     }
 
     const uBuffer = this.device.createBuffer({

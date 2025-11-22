@@ -256,6 +256,7 @@ export class Scene {
     const animState: AnimationState = {
       time: this.currentTime,
       deltaTime,
+      wallTime: currentTime,
       camera: {
         position: this.camera.position,
         distance,
