@@ -261,7 +261,7 @@ export class SunRenderService implements ILayer {
         vertexShader: this.getVertexShader(),
         fragmentShader: this.getFragmentShader(),
         transparent: true,
-        side: THREE.FrontSide, // Changed from BackSide to render outer surface
+        side: THREE.FrontSide, // Render outside of sphere
         depthWrite: false,
         depthTest: true, // Ensure depth testing is enabled
         blending: THREE.AdditiveBlending
@@ -490,44 +490,35 @@ export class SunRenderService implements ILayer {
       }
 
       void main() {
-        // Calculate view direction and position relative to planet center
         vec3 viewDir = normalize(viewPosition - vWorldPosition);
         vec3 surfaceNormal = normalize(vWorldPosition);
-
-        // Calculate fresnel-like falloff (more visible at edges)
-        float rim = 1.0 - abs(dot(viewDir, surfaceNormal));
-        rim = pow(rim, 2.0); // Adjusted falloff for better visibility
-
-        // Sun direction influence (brighter on sun-facing side)
         vec3 sunDir = normalize(sunPosition);
+
+        // Softer rim falloff
+        float rim = 1.0 - abs(dot(viewDir, surfaceNormal));
+        rim = pow(rim, 4.5); // Softer edge
+
+        // Sun illumination with twilight zone
         float sunDot = dot(surfaceNormal, sunDir);
+        float twilight = smoothstep(-0.2, 0.2, sunDot);
 
-        // Sharp transition from day to night
-        // sunDot > 0: day side (facing sun)
-        // sunDot < 0: night side (facing away)
-        float dayFactor = max(0.0, sunDot); // 0 on night side, up to 1 on day side
+        // Atmospheric color
+        vec3 dayColor = vec3(0.4, 0.6, 1.0);
+        vec3 sunsetColor = vec3(1.0, 0.5, 0.2);
+        float sunsetFactor = pow(1.0 - abs(sunDot), 1.5) * twilight;
+        vec3 atmosphereColor = mix(dayColor, sunsetColor, sunsetFactor * 0.8);
 
-        // Add slight twilight zone for realism
-        float twilightWidth = 0.2;
-        float twilight = smoothstep(-twilightWidth, twilightWidth, sunDot);
+        // Add base atmospheric layer (blue covers more of planet)
+        float baseAtmosphere = twilight * 0.65; // Even stronger base layer
+        float rimIntensity = rim * twilight * 0.5;
 
-        // Combine day factor with rim effect
-        // Day side: full rim effect * day brightness
-        // Night side: much dimmer or invisible
-        float atmosphereIntensity = rim * twilight;
+        // Combine base layer + rim glow
+        float totalIntensity = baseAtmosphere + rimIntensity;
 
-        // Blue atmospheric color with sun-based tinting
-        vec3 dayColor = vec3(0.4, 0.6, 1.0); // Blue sky color
-        vec3 sunsetColor = vec3(1.0, 0.6, 0.3); // Orange/red for terminator
+        // More consistent opacity across atmosphere depth
+        float alpha = (baseAtmosphere * 0.7) + (rim * twilight * 0.4);
 
-        // Mix colors based on sun angle
-        float sunsetFactor = (1.0 - abs(sunDot)) * twilight; // Stronger at terminator
-        vec3 atmosphereColor = mix(dayColor, sunsetColor, sunsetFactor * 0.5);
-
-        // Final alpha: combine rim effect with sun illumination
-        float finalAlpha = atmosphereIntensity * 0.8; // Max 80% opacity
-
-        gl_FragColor = vec4(atmosphereColor * twilight, finalAlpha);
+        gl_FragColor = vec4(atmosphereColor * totalIntensity, alpha);
       }
     `;
   }
