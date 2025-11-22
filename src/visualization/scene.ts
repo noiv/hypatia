@@ -22,8 +22,8 @@ export class Scene {
   private animationId: number | null = null;
   private raycaster: THREE.Raycaster;
   private lastFrameTime: number = performance.now();
-  private stats: any;
-  private perform: any;
+  private stats: Stats | null = null;
+  private perform = perform;
   private performanceElement: HTMLElement | null = null;
   private textEnabled: boolean = false;
   private progressCanvases: Map<LayerId, HTMLCanvasElement> = new Map();
@@ -197,7 +197,7 @@ export class Scene {
    */
 
   private animate = () => {
-    this.stats.begin();
+    this.stats?.begin();
     this.perform.done('fps')
     this.perform.start('fps')
     this.perform.start('frame')
@@ -246,7 +246,7 @@ export class Scene {
     this.renderer.render(this.scene, this.camera);
     this.perform.done('render');
 
-    this.stats.end();
+    this.stats?.end();
     this.perform.done('frame');
 
     // Update performance display directly (no Mithril redraw)

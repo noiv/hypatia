@@ -15,7 +15,7 @@
 
 import type { ILayer, LayerId } from '../layers/ILayer'
 import type { AnimationState } from '../visualization/IAnimationState'
-import type { DownloadService } from './DownloadService'
+import type { DownloadService, DownloadProgressEvent } from './DownloadService'
 import type { ConfigService } from './ConfigService'
 import type { DateTimeService } from './DateTimeService'
 import type { TextureService } from './TextureService'
@@ -124,7 +124,7 @@ export class LayersService {
 
     // If it's a data layer, listen to download progress
     if (isDataLayer) {
-      const progressListener = (event: any) => {
+      const progressListener = (event: DownloadProgressEvent) => {
         if (event.layerId === layerId) {
           const metadata = this.layers.get(layerId)
           if (metadata) {

@@ -18,7 +18,7 @@
 
 import type { ILayer, LayerId } from '../ILayer';
 import type { AnimationState } from '../../visualization/IAnimationState';
-import type { DownloadService } from '../../services/DownloadService';
+import type { DownloadService, TimestampLoadedEvent } from '../../services/DownloadService';
 import type { DateTimeService } from '../../services/DateTimeService';
 import * as THREE from 'three';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
@@ -69,7 +69,7 @@ export class WindLayer implements ILayer {
   private seedBuffer: GPUBuffer | null = null;
   private outputBuffer: GPUBuffer | null = null;
   private stagingBuffer: GPUBuffer | null = null;
-  private windBuffers: GPUBuffer[] = [];
+  private windBuffers: (GPUBuffer | null)[] = [];
   private blendBuffer: GPUBuffer | null = null;
 
   // Bind group cache: key = "index0-index1", value = bind group
@@ -112,29 +112,6 @@ export class WindLayer implements ILayer {
     // Generate uniformly distributed seed points on sphere using Fibonacci lattice
     this.seeds = generateFibonacciSphere(8192, EARTH_RADIUS_UNITS);
 
-    // Debug: expose seeds to window
-    (window as any).__windSeeds = this.seeds;
-
-    // Test cartesianToLatLon transformation for debug
-    (window as any).__testWindCoords = (seed: {x: number, y: number, z: number}) => {
-      const len = Math.sqrt(seed.x**2 + seed.y**2 + seed.z**2);
-      const norm = {x: seed.x/len, y: seed.y/len, z: seed.z/len};
-      const lat = Math.asin(norm.y);
-      let lon = Math.atan2(norm.z, norm.x);
-
-      // Apply rain layer transformation
-      const PI = Math.PI;
-      let u = ((lon - PI/2.0) + PI) / (2.0 * PI);
-      u = 1.0 - u;
-      const lonDeg = u * 360.0 - 180.0;
-      const latDeg = lat * 180.0 / PI;
-
-      // Calculate data indices
-      const dataX = (lonDeg + 180.0) / 0.25;
-      const dataY = (90.0 - latDeg) / 0.25;
-
-      return {latDeg, lonDeg, dataX: Math.floor(dataX), dataY: Math.floor(dataY)};
-    };
 
     // Initialize geometry helper
     const geometryConfig: WindGeometryConfig = {
@@ -156,13 +133,17 @@ export class WindLayer implements ILayer {
    * Setup listeners for download events
    */
   private setupDownloadListeners(): void {
-    const onTimestampLoaded = (event: any) => {
+    const onTimestampLoaded = (event: TimestampLoadedEvent) => {
       if (event.layerId !== 'wind') return;
 
       const { index, data, priority } = event;
       console.log(`[wind] Timestamp ${index} loaded, uploading to GPU`);
 
       // Wind data has { u: Uint16Array, v: Uint16Array } format
+      if (data instanceof Uint16Array) {
+        console.error(`[wind] Unexpected data format for index ${index} - expected u/v components`);
+        return;
+      }
       if (!data || !data.u || !data.v) {
         console.error(`[wind] Invalid data format for index ${index}`, data);
         return;
@@ -223,7 +204,7 @@ export class WindLayer implements ILayer {
 
     // Store buffers at correct index (expand array if needed)
     while (this.windBuffers.length < (index + 1) * 2) {
-      this.windBuffers.push(null as any, null as any);
+      this.windBuffers.push(null, null);
     }
     this.windBuffers[index * 2] = uBuffer;
     this.windBuffers[index * 2 + 1] = vBuffer;
@@ -231,18 +212,11 @@ export class WindLayer implements ILayer {
     // Mark as available
     this.timestepAvailable[index] = true;
 
-    // Debug: expose data to window for inspection
-    if (!(window as any).__windDebug) {
-      (window as any).__windDebug = {};
-    }
-    (window as any).__windDebug[`u${index}`] = uData;
-    (window as any).__windDebug[`v${index}`] = vData;
 
     // Log only for critical priority (bootstrap loads)
     if (priority === 'critical') {
       const totalBytes = uData.byteLength + vData.byteLength;
       console.log(`[wind] Uploaded timestep ${index} (${(totalBytes / 1024).toFixed(1)}KB)`);
-      console.log(`[wind] Debug: window.__windDebug.u${index} and .v${index} available for inspection`);
     }
 
     // TODO: Precompute geometry for adjacent timesteps
@@ -784,7 +758,7 @@ export class WindLayer implements ILayer {
       this.visibleStagingBuffer = null;
     }
     for (const buffer of this.windBuffers) {
-      buffer.destroy();
+      buffer?.destroy();
     }
     this.windBuffers = [];
   }

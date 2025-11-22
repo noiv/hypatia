@@ -17,7 +17,7 @@ import { TEMP_CONFIG } from '../../config'
 import type { TimeStep } from '../../config/types'
 import type { ILayer, LayerId } from '../ILayer'
 import type { AnimationState } from '../../visualization/IAnimationState'
-import type { DownloadService } from '../../services/DownloadService'
+import type { DownloadService, TimestampLoadedEvent } from '../../services/DownloadService'
 import type { TextureService } from '../../services/TextureService'
 import type { DateTimeService } from '../../services/DateTimeService'
 
@@ -111,21 +111,20 @@ export class TempLayer implements ILayer {
    * Set up event listeners for DownloadService
    */
   private setupDownloadListeners(): void {
-    const onTimestampLoaded = (event: any) => {
+    const onTimestampLoaded = (event: TimestampLoadedEvent) => {
       if (event.layerId !== this.layerId) return
 
       const { index, data } = event
       console.log(`[temp2m] Timestamp ${index} loaded, updating texture`)
 
-      // Extract Uint16Array from data (might be wrapped in object for wind)
-      const layerData = data instanceof Uint16Array ? data : data.data
-      if (!layerData) {
+      // Temp layer always receives Uint16Array directly
+      if (!(data instanceof Uint16Array)) {
         console.error(`[temp2m] Invalid data format for index ${index}`)
         return
       }
 
       // Update texture slice using TextureService
-      this.textureService.updateTextureSlice(this.dataTexture, layerData, index)
+      this.textureService.updateTextureSlice(this.dataTexture, data, index)
 
       // Mark as available
       this.timestepAvailable[index] = true

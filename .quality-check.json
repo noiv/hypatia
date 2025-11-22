@@ -1,0 +1,66 @@
+{
+  "$schema": "./.quality-check.schema.json",
+  "checks": {
+    "typescript": {
+      "enabled": true,
+      "strict": false
+    },
+    "typeAssertions": {
+      "enabled": true,
+      "allowAny": false,
+      "allowUnknown": true,
+      "allowDoubleAssertion": false,
+      "excludeFiles": [
+        "**/__tests__/**",
+        "**/*.test.ts",
+        "**/*.spec.ts",
+        "src/services/TextureService.ts"
+      ]
+    },
+    "jsonValidation": {
+      "enabled": true,
+      "validateAgainstSchema": true
+    },
+    "codeSmells": {
+      "enabled": true,
+      "console": {
+        "enabled": true,
+        "excludeFiles": [
+          "src/config/loader.ts",
+          "src/main.ts"
+        ],
+        "allowInDevelopment": true
+      },
+      "debugger": {
+        "enabled": true,
+        "severity": "error"
+      },
+      "todoComments": {
+        "enabled": true,
+        "severity": "info"
+      },
+      "tsSuppressions": {
+        "enabled": true,
+        "severity": "error",
+        "allowTsExpectError": true,
+        "allowTsIgnore": false,
+        "allowTsNocheck": false
+      }
+    },
+    "complexity": {
+      "enabled": false,
+      "maxCyclomaticComplexity": 10,
+      "maxFileLength": 500,
+      "maxFunctionLength": 50
+    }
+  },
+  "thresholds": {
+    "maxErrors": 0,
+    "maxWarnings": 300,
+    "maxAnyUsage": 100,
+    "maxConsoleStatements": 200
+  },
+  "reportFormat": "summary",
+  "failOnError": true,
+  "failOnWarning": false
+}

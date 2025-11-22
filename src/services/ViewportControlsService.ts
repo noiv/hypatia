@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import * as TWEEN from '@tweenjs/tween.js';
 import type { Scene } from '../visualization/scene';
+import type { HypatiaConfig } from '../config/types';
 import { mouseToNDC, raycastObject } from '../utils/raycasting';
 import type { ConfigService } from './ConfigService';
 import type { DateTimeService } from './DateTimeService';
@@ -32,7 +33,7 @@ export class ViewportControlsService {
   private scene: Scene;
   private callbacks: ViewportControlsCallbacks;
   private raycaster: THREE.Raycaster;
-  private config: any;
+  private config: HypatiaConfig['camera'];
   private configService: ConfigService;
 
   // Spherical coordinates for camera position
@@ -55,7 +56,7 @@ export class ViewportControlsService {
   private gestureTimeout: number | null = null;
 
   // Tween animation state
-  private activeTween: TWEEN.Tween<any> | null = null;
+  private activeTween: TWEEN.Tween<{ theta: number; phi: number; distance: number }> | null = null;
 
   // Double-tap detection for touch devices
   private lastTapTime: number = 0;

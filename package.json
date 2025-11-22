@@ -11,7 +11,13 @@
     "type-check": "tsc --noEmit",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest --coverage"
+    "test:coverage": "vitest --coverage",
+    "quality": "./scripts/check-quality-with-exemptions.sh",
+    "quality:strict": "./scripts/check-quality.sh",
+    "quality:full": "tsx scripts/check-code-quality.ts",
+    "quality:report": "grep -r 'QC-OK\\|SAFE:\\|quality-check-exempt' src/ || echo 'No exemptions found'",
+    "predeploy": "npm run quality",
+    "prebuild": "npm run quality"
   },
   "dependencies": {
     "@tweenjs/tween.js": "^25.0.0",

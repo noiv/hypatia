@@ -227,10 +227,7 @@ export class AppBootstrapService {
         const LOAD_LAYER_DATA_START = 40;
         const LOAD_LAYER_DATA_RANGE = 55; // 40-95%
 
-        // Track progress messages for debugging
-        (window as any).__progressMessages = [];
         const captureProgress = (msg: BootstrapStepProgress) => {
-          (window as any).__progressMessages.push({ ...msg, timestamp: Date.now() });
           if (onProgress) onProgress(msg);
         };
 

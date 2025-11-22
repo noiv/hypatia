@@ -121,6 +121,7 @@ export class TextureService {
     sliceData: Uint16Array | Float32Array,
     sliceIndex: number
   ): void {
+    // QC-OK: WebGL texture data can be Uint16Array or Float32Array, TypeScript types are incomplete
     const texData = texture.image.data as unknown as Uint16Array | Float32Array
     const sliceSize = texture.image.width * texture.image.height
     const offset = sliceIndex * sliceSize
