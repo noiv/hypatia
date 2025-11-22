@@ -4,6 +4,33 @@ import { ATMOSPHERE_CONFIG } from '../../config';
 import type { ILayer, LayerId } from '../ILayer';
 import type { AnimationState } from '../../visualization/IAnimationState';
 
+// Sun configuration constants
+const SUN_CONFIG = {
+  // Astronomical constants
+  AXIAL_TILT_DEGREES: 23.45,
+  SOLSTICE_OFFSET_DAYS: 10,
+  DEGREES_PER_HOUR: 15,
+  MS_PER_DAY: 86400000,
+
+  // Visual appearance
+  TEXTURE_PATH: '/textures/lensflare/lensflare0.png',
+  DISTANCE_FROM_EARTH: 500,
+  MAIN_SPRITE_SCALE: 15,
+  MAIN_SPRITE_RENDER_ORDER: 999,
+  GLOW_SPRITE_BASE_RENDER_ORDER: 1000,
+
+  // Glow layers (scale, color, opacity)
+  GLOW_LAYERS: [
+    { scale: 20, color: 0xffffff, opacity: 1.0 },   // Large outer glow
+    { scale: 12, color: 0xffffff, opacity: 0.9 },   // Medium glow
+    { scale: 8,  color: 0xffffcc, opacity: 0.8 },   // Warm inner glow
+    { scale: 4,  color: 0xffffee, opacity: 0.9 }    // Bright core
+  ] as const,
+
+  // Lighting
+  LIGHT_INTENSITY: 2
+} as const;
+
 /**
  * Calculate sun position for given time
  * Returns unit vector pointing toward sun from Earth center
@@ -11,18 +38,18 @@ import type { AnimationState } from '../../visualization/IAnimationState';
 function calculateSunPosition(time: Date): THREE.Vector3 {
   // Get day of year (1-365/366) - UTC only
   const startOfYear = new Date(Date.UTC(time.getUTCFullYear(), 0, 1));
-  const dayOfYear = Math.floor((time.getTime() - startOfYear.getTime()) / 86400000) + 1;
+  const dayOfYear = Math.floor((time.getTime() - startOfYear.getTime()) / SUN_CONFIG.MS_PER_DAY) + 1;
   const daysInYear = isLeapYear(time.getUTCFullYear()) ? 366 : 365;
 
   // Calculate solar declination (tilt of Earth's axis)
-  // -23.45° at winter solstice, +23.45° at summer solstice
-  const declination = -23.45 * Math.cos(2 * Math.PI * (dayOfYear + 10) / daysInYear);
+  const declination = -SUN_CONFIG.AXIAL_TILT_DEGREES * Math.cos(
+    2 * Math.PI * (dayOfYear + SUN_CONFIG.SOLSTICE_OFFSET_DAYS) / daysInYear
+  );
   const declinationRad = (declination * Math.PI) / 180;
 
   // Calculate hour angle (Earth's rotation)
-  // 0° at solar noon, 360° in 24 hours
   const hours = time.getUTCHours() + time.getUTCMinutes() / 60 + time.getUTCSeconds() / 3600;
-  const hourAngle = (hours - 12) * 15; // 15° per hour
+  const hourAngle = (hours - 12) * SUN_CONFIG.DEGREES_PER_HOUR;
   const hourAngleRad = (hourAngle * Math.PI) / 180;
 
   // Convert to Cartesian coordinates
@@ -43,27 +70,70 @@ function isLeapYear(year: number): boolean {
 }
 
 /**
- * Sun - Sun mesh and lighting
+ * Sun - Camera-facing sprite with lighting
+ * Layered sprites create bright glow effect
  */
 class Sun {
-  public mesh: THREE.Mesh;
+  public sprite: THREE.Sprite;
   private light: THREE.DirectionalLight;
+  private group: THREE.Group;
+  private glowSprites: THREE.Sprite[] = [];
 
   constructor() {
-    // Sun mesh (larger sphere for visibility at distance)
-    const geometry = new THREE.SphereGeometry(5, 32, 32);
-    const material = new THREE.MeshBasicMaterial({
-      color: 0xffff00
+    const textureLoader = new THREE.TextureLoader();
+    this.group = new THREE.Group();
+    this.group.name = 'SunGroup';
+
+    // Create main sun sprite (always faces camera)
+    const sunTexture = textureLoader.load(SUN_CONFIG.TEXTURE_PATH);
+    const spriteMaterial = new THREE.SpriteMaterial({
+      map: sunTexture,
+      color: 0xffffff,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      depthTest: true
     });
 
-    this.mesh = new THREE.Mesh(geometry, material);
-    this.mesh.name = 'Sun';
+    this.sprite = new THREE.Sprite(spriteMaterial);
+    this.sprite.scale.set(SUN_CONFIG.MAIN_SPRITE_SCALE, SUN_CONFIG.MAIN_SPRITE_SCALE, 1);
+    this.sprite.name = 'Sun';
+    this.sprite.renderOrder = SUN_CONFIG.MAIN_SPRITE_RENDER_ORDER;
+    this.group.add(this.sprite);
 
-    // Directional light for illumination (stronger for longer distance)
-    this.light = new THREE.DirectionalLight(0xffffff, 2);
+    // Add layered glow sprites for bright effect (all at same position)
+    for (const layer of SUN_CONFIG.GLOW_LAYERS) {
+      this.createGlowSprite(textureLoader, layer.scale, layer.color, layer.opacity);
+    }
 
-    // Initial position
-    this.updatePosition(new Date());
+    // Directional light for illumination
+    this.light = new THREE.DirectionalLight(0xffffff, SUN_CONFIG.LIGHT_INTENSITY);
+
+    // Initial position (will be set by updatePosition)
+  }
+
+  private createGlowSprite(loader: THREE.TextureLoader, scale: number, color: number, opacity: number) {
+    const texture = loader.load(SUN_CONFIG.TEXTURE_PATH);
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      color: new THREE.Color(color),
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      depthTest: true,
+      opacity: opacity
+    });
+
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(scale, scale, 1);
+    sprite.renderOrder = SUN_CONFIG.GLOW_SPRITE_BASE_RENDER_ORDER + this.glowSprites.length;
+
+    this.glowSprites.push(sprite);
+    this.group.add(sprite);
+  }
+
+  getGroup(): THREE.Group {
+    return this.group;
   }
 
   /**
@@ -77,7 +147,7 @@ class Sun {
    * Get sun direction as a normalized vector
    */
   getDirection(): THREE.Vector3 {
-    return this.mesh.position.clone().normalize();
+    return this.sprite.position.clone().normalize();
   }
 
   /**
@@ -87,17 +157,22 @@ class Sun {
   updatePosition(time: Date) {
     const pos = calculateSunPosition(time);
 
-    // Position sun at very large distance to minimize perspective distortion
-    // Sun should appear circular, not warped by perspective
-    const distance = 500;
-    this.mesh.position.set(
-      pos.x * distance,
-      pos.y * distance,
-      pos.z * distance
+    // Position sun at very large distance
+    const sunPos = new THREE.Vector3(
+      pos.x * SUN_CONFIG.DISTANCE_FROM_EARTH,
+      pos.y * SUN_CONFIG.DISTANCE_FROM_EARTH,
+      pos.z * SUN_CONFIG.DISTANCE_FROM_EARTH
     );
 
+    this.sprite.position.copy(sunPos);
+
+    // Position all glow sprites at same location
+    for (const glow of this.glowSprites) {
+      glow.position.copy(sunPos);
+    }
+
     // Update light position to match sun
-    this.light.position.copy(this.mesh.position);
+    this.light.position.copy(sunPos);
 
     // Light points toward Earth (origin)
     this.light.target.position.set(0, 0, 0);
@@ -107,12 +182,20 @@ class Sun {
    * Clean up resources
    */
   dispose() {
-    if (this.mesh.geometry) {
-      this.mesh.geometry.dispose();
+    // Dispose glow sprites
+    for (const glow of this.glowSprites) {
+      if (glow.material.map) {
+        glow.material.map.dispose();
+      }
+      glow.material.dispose();
     }
 
-    if (this.mesh.material) {
-      const material = this.mesh.material as THREE.Material;
+    // Dispose main sprite
+    if (this.sprite.material) {
+      const material = this.sprite.material as THREE.SpriteMaterial;
+      if (material.map) {
+        material.map.dispose();
+      }
       material.dispose();
     }
 
@@ -139,10 +222,10 @@ export class SunRenderService implements ILayer {
   private constructor(_layerId: LayerId, sun: Sun, enableAtmosphere: boolean = false) {
     this.sun = sun;
 
-    // Create group containing sun, light, and optionally atmosphere
+    // Create group containing sun and light
     this.group = new THREE.Group();
     this.group.name = 'SunRenderService';
-    this.group.add(this.sun.mesh);
+    this.group.add(this.sun.getGroup());
     this.group.add(this.sun.getLight());
     this.group.add(this.sun.getLight().target);
 
@@ -196,7 +279,7 @@ export class SunRenderService implements ILayer {
     sun.updatePosition(currentTime);
     const layer = new SunRenderService(layerId, sun, enableAtmosphere);
     if (layer.atmosphereMesh) {
-      layer.setSunPosition(sun.mesh.position);
+      layer.setSunPosition(sun.getGroup().position);
     }
     return layer;
   }
@@ -211,7 +294,7 @@ export class SunRenderService implements ILayer {
     if (!this.lastTime || state.time.getTime() !== this.lastTime.getTime()) {
       this.sun.updatePosition(state.time);
       if (this.atmosphereMesh) {
-        this.setSunPosition(this.sun.mesh.position);
+        this.setSunPosition(this.sun.sprite.position);
       }
       this.lastTime = state.time;
     }
