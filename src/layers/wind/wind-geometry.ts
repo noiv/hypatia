@@ -317,7 +317,28 @@ export class WindGeometry {
         uniform float animationPhase;
         uniform float snakeLength;
         uniform float lineSteps;
+
+        // For view-angle calculation
+        varying vec3 vWorldPos;
+
         void main() {
+        `
+      );
+
+      // Add world position to vertex shader
+      shader.vertexShader = shader.vertexShader.replace(
+        'void main() {',
+        `
+        varying vec3 vWorldPos;
+        void main() {
+        `
+      );
+
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <fog_vertex>',
+        `
+        #include <fog_vertex>
+        vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
         `
       );
 
@@ -347,7 +368,38 @@ export class WindGeometry {
             segmentOpacity = positionInSnake;
           }
 
-          float finalAlpha = alpha * segmentOpacity * taperFactor;
+          // EXPERIMENTAL: Horizon-based wind line fading
+          // Problem: When wind lines are tangent to the sphere and point toward the camera,
+          // they appear as bright dots/spots against the background instead of lines.
+          // This happens at the horizon (visible edge of Earth from camera's perspective).
+          //
+          // Solution attempt: Fade out wind lines that are near the horizon.
+          // The horizon forms a circle on the sphere where view rays are tangent.
+          //
+          // Math:
+          // - toPoint: normalized vector from camera to wind line point
+          // - pointOnSphere: normalized position (same as surface normal)
+          // - When dot(toPoint, pointOnSphere) = 0, the view is tangent (at horizon)
+          // - When dot(toPoint, pointOnSphere) = 1, looking straight at the point
+          //
+          // Status: INCOMPLETE - The effect is not working as expected.
+          // The fading either affects too much (whole hemisphere) or is not visible.
+          // Needs further investigation into the shader coordinate systems and
+          // how LineMaterial/LineSegments2 handles fragment positions.
+
+          vec3 toPoint = normalize(vWorldPos - cameraPosition);
+          vec3 pointOnSphere = normalize(vWorldPos);
+          float tangentDot = abs(dot(toPoint, pointOnSphere));
+
+          // Band width controls how far from horizon the fade extends
+          // 0.1 = ~6 degrees, 0.3 = ~17 degrees from horizon
+          float bandWidth = 0.3;
+          float viewAngleFade = smoothstep(0.0, bandWidth, tangentDot);
+
+          // Cube for sharper transition (more aggressive fade)
+          viewAngleFade = viewAngleFade * viewAngleFade * viewAngleFade;
+
+          float finalAlpha = alpha * segmentOpacity * taperFactor * viewAngleFade;
           gl_FragColor = vec4( vec3(1.0), finalAlpha );
           `
         );
