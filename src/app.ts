@@ -272,6 +272,9 @@ export const App: AppComponent = {
     this.layersService!.setServices(this.scene, this.textureService);
 
     this.stateService!.setScene(this.scene);
+
+    // Inject DownloadService into Scene for progress canvas updates
+    this.scene.setDownloadService(this.downloadService!);
     return this.scene;
   },
 
@@ -499,7 +502,10 @@ export const App: AppComponent = {
           this.scene?.setBasemapBlend(newBlend);
         },
         downloadService: this.downloadService!,
-        configService: this.configService!
+        configService: this.configService!,
+        onProgressCanvasCreated: (layerId, canvas) => {
+          this.scene?.setProgressCanvas(layerId, canvas);
+        }
       } satisfies LayersPanelAttrs),
 
       m(TimeCirclePanel, {

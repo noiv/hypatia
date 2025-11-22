@@ -119,9 +119,11 @@ html, body {
 .btn {
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.3);
+  border-bottom: none; /* Progress canvas acts as bottom border for data layers */
+  border-left: 4px solid rgba(255, 255, 255, 0.3); /* Default left border */
   color: white;
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: 0 23px 0 0; /* Only top-right rounded */
   cursor: pointer;
   font-size: 13px;
   backdrop-filter: blur(10px);
@@ -129,8 +131,14 @@ html, body {
   width: 100%;
   text-align: left;
   text-decoration: none;
-  margin-bottom: 8px;
+  margin-bottom: 0; /* No margin, canvas provides spacing */
   font-family: inherit;
+}
+
+/* Decoration layers (no progress canvas) need bottom border */
+.btn.decoration-layer {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  margin-bottom: 8px; /* Spacing to next button */
 }
 
 .btn:hover {
@@ -138,8 +146,7 @@ html, body {
 }
 
 .btn.active {
-  background: rgba(100, 200, 100, 0.3);
-  border-color: rgba(100, 200, 100, 0.6);
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .btn:disabled {
@@ -147,13 +154,30 @@ html, body {
   cursor: not-allowed;
 }
 
-/* Progress canvas below layer buttons */
+/* Layer-specific active border colors */
+.btn.active[data-layer="temp"] { border-left-color: #ff6b35; }
+.btn.active[data-layer="rain"] { border-left-color: #4ecdc4; }
+.btn.active[data-layer="wind"] { border-left-color: #95e1d3; }
+.btn.active[data-layer="pressure"] { border-left-color: #f38181; }
+.btn.active[data-layer="humidity"] { border-left-color: #a29bfe; }
+.btn.active[data-layer="clouds"] { border-left-color: #dfe6e9; }
+.btn.active[data-layer="waves"] { border-left-color: #0984e3; }
+.btn.active[data-layer="earth"] { border-left-color: #4a69bd; }
+.btn.active[data-layer="sun"] { border-left-color: #feca57; }
+.btn.active[data-layer="graticule"] { border-left-color: #ffffff; }
+.btn.active[data-layer="text"] { border-left-color: #ffffff; }
+
+/* Layer button wrapper (button + progress canvas) */
+.layer-button-wrapper {
+  margin-bottom: 8px; /* Spacing to next button */
+}
+
+/* Progress canvas as bottom border of layer buttons */
 .progress-canvas {
   display: block;
   width: 100%;
   height: 2px;
-  margin-top: 2px;
-  margin-bottom: 4px;
+  margin: 0; /* No margin, wrapper handles spacing */
   image-rendering: pixelated; /* Crisp rendering for small segments */
 }
 

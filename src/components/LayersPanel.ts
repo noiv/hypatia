@@ -29,6 +29,9 @@ export interface LayersPanelAttrs {
   // Services
   downloadService: DownloadService;
   configService: ConfigService;
+
+  // Canvas registration callback
+  onProgressCanvasCreated: ((layerId: LayerId, canvas: HTMLCanvasElement) => void) | undefined;
 }
 
 const LAYER_DISPLAY_NAMES: Record<LayerId, string> = {
@@ -45,35 +48,7 @@ const LAYER_DISPLAY_NAMES: Record<LayerId, string> = {
   text: 'Text'
 };
 
-// Event handlers stored per component instance
-const eventHandlers = new WeakMap<any, () => void>();
-
 export const LayersPanel: m.Component<LayersPanelAttrs> = {
-  oninit(vnode) {
-    // Subscribe to download service events to trigger redraws
-    const downloadService = vnode.attrs.downloadService;
-    const handleDownloadEvent = () => m.redraw();
-
-    // Store handler for cleanup
-    eventHandlers.set(vnode.state, handleDownloadEvent);
-
-    // Listen to download progress events
-    downloadService.on('progress', handleDownloadEvent);
-    downloadService.on('timestampLoaded', handleDownloadEvent);
-  },
-
-  onremove(vnode) {
-    // Cleanup event listener
-    const downloadService = vnode.attrs.downloadService;
-    const handleDownloadEvent = eventHandlers.get(vnode.state);
-
-    if (handleDownloadEvent) {
-      downloadService.off('progress', handleDownloadEvent);
-      downloadService.off('timestampLoaded', handleDownloadEvent);
-      eventHandlers.delete(vnode.state);
-    }
-  },
-
   view(vnode) {
     const {
       layerStates,
@@ -97,15 +72,18 @@ export const LayersPanel: m.Component<LayersPanelAttrs> = {
       const hasProgressCanvas = !decorationLayers.includes(layerId);
 
       const button = m('button.btn', {
-        class: isActive ? 'active' : '',
+        class: `${isActive ? 'active' : ''} ${hasProgressCanvas ? 'data-layer' : 'decoration-layer'}`.trim(),
+        'data-layer': layerId,
         onclick: () => onLayerToggle(layerId)
       }, LAYER_DISPLAY_NAMES[layerId]);
 
-      if (hasProgressCanvas && isActive) {
-        const totalTimestamps = downloadService.getTimestepCount(layerId);
-        const loadedIndices = downloadService.getLoadedIndices(layerId);
+      // Always render progress canvas for data layers (acts as bottom border)
+      if (hasProgressCanvas) {
+        // Get download state (will be empty/zero for non-activated layers)
+        const totalTimestamps = downloadService.getTimestepCount(layerId) || 0;
+        const loadedIndices = downloadService.getLoadedIndices(layerId) || new Set();
         const loadingIndex = downloadService.getLoadingIndex(layerId);
-        const failedIndices = downloadService.getFailedIndices(layerId);
+        const failedIndices = downloadService.getFailedIndices(layerId) || new Set();
 
         return m('div.layer-button-wrapper', [
           button,
@@ -115,11 +93,13 @@ export const LayersPanel: m.Component<LayersPanelAttrs> = {
             loadedIndices,
             loadingIndex,
             failedIndices,
-            layerColor: '#ff6b35' // Will use proper color from config later
+            layerColor: '#ff6b35', // Will use proper color from config later
+            onCanvasCreated: vnode.attrs.onProgressCanvasCreated
           })
         ]);
       }
 
+      // Non-data layers (earth, sun, graticule, text)
       return button;
     };
 
@@ -149,8 +129,9 @@ export const LayersPanel: m.Component<LayersPanelAttrs> = {
       // Text overlay
       m('div.layer-group', [
         m('h4', 'Overlays'),
-        m('button.btn', {
+        m('button.btn.decoration-layer', {
           class: textEnabled ? 'active' : '',
+          'data-layer': 'text',
           onclick: () => onTextToggle()
         }, 'Text Labels')
       ])

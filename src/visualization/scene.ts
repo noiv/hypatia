@@ -6,6 +6,8 @@ import type { AnimationState } from './IAnimationState';
 import type { EarthRenderService } from '../layers/earth/earth.render-service';
 import type { SunRenderService } from '../layers/sun/sun.render-service';
 import { TextRenderService } from '../layers/text/text.render-service';
+import { updateProgressCanvas } from '../components/ProgressCanvas';
+import type { DownloadService } from '../services/DownloadService';
 import * as perform from '../utils/performance';
 import { mouseToNDC, raycastObject, cartesianToLatLon } from '../utils/raycasting';
 
@@ -24,6 +26,8 @@ export class Scene {
   private perform: any;
   private performanceElement: HTMLElement | null = null;
   private textEnabled: boolean = false;
+  private progressCanvases: Map<LayerId, HTMLCanvasElement> = new Map();
+  private downloadService: DownloadService | null = null;
 
   constructor(canvas: HTMLCanvasElement, initialTime?: Date, preloadedImages?: Map<string, HTMLImageElement>) {
     this.preloadedImages = preloadedImages;
@@ -287,6 +291,9 @@ export class Scene {
     if (this.performanceElement) {
       this.performanceElement.textContent = this.perform.line();
     }
+
+    // Update progress canvases directly (no Mithril redraw)
+    this.updateProgressCanvases(currentTime);
   };
 
   /**
@@ -505,6 +512,45 @@ export class Scene {
    */
   setPerformanceElement(element: HTMLElement): void {
     this.performanceElement = element;
+  }
+
+  /**
+   * Set download service for progress canvas updates
+   */
+  setDownloadService(downloadService: DownloadService): void {
+    this.downloadService = downloadService;
+  }
+
+  /**
+   * Register a progress canvas for direct updates in animate() loop
+   */
+  setProgressCanvas(layerId: LayerId, canvas: HTMLCanvasElement): void {
+    this.progressCanvases.set(layerId, canvas);
+  }
+
+  /**
+   * Update all progress canvases with current download state
+   * Called from animate() loop with wallTime for pulsing animations
+   */
+  private updateProgressCanvases(wallTime: number): void {
+    if (!this.downloadService) return;
+
+    this.progressCanvases.forEach((canvas, layerId) => {
+      const totalTimestamps = this.downloadService!.getTimestepCount(layerId);
+      const loadedIndices = this.downloadService!.getLoadedIndices(layerId);
+      const loadingIndex = this.downloadService!.getLoadingIndex(layerId);
+      const failedIndices = this.downloadService!.getFailedIndices(layerId);
+
+      updateProgressCanvas(
+        canvas,
+        layerId,
+        totalTimestamps,
+        loadedIndices,
+        loadingIndex,
+        failedIndices,
+        wallTime
+      );
+    });
   }
 
   /**
